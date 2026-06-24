@@ -1,0 +1,29 @@
+{
+  "name": "azimuth-perfumers",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "pnpm --filter @azimuth/db generate",
+    "db:migrate": "pnpm --filter @azimuth/db migrate",
+    "db:studio": "pnpm --filter @azimuth/db studio"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "turbo": "^2.10.0",
+    "typescript": "^5.7.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ]
+  }
+}
