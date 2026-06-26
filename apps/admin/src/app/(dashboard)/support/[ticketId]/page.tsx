@@ -1,0 +1,374 @@
+"use client";
+
+import { use, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, Send } from "lucide-react";
+import { toast } from "sonner";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { trpc } from "@/lib/trpc";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatDateTime(d: Date | string) {
+  return new Date(d).toLocaleString("en-IN", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  open: "default",
+  awaiting_admin: "destructive",
+  awaiting_user: "secondary",
+  resolved: "secondary",
+  closed: "outline",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  open: "Open", awaiting_admin: "Needs response",
+  awaiting_user: "Awaiting user", resolved: "Resolved", closed: "Closed",
+};
+
+// ── Action dialog ─────────────────────────────────────────────────────────────
+
+function ActionDialog({
+  ticketId,
+  action,
+  open,
+  onOpenChange,
+}: {
+  ticketId: string;
+  action: "refund" | "return" | "exchange" | "close";
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const [note, setNote] = useState("");
+  const [returnReason, setReturnReason] = useState("Customer requested return");
+  const utils = trpc.useUtils();
+
+  const act = trpc.ticket.adminAction.useMutation({
+    onSuccess: async (data) => {
+      toast.success(data.detail);
+      await utils.ticket.get.invalidate({ ticketId });
+      onOpenChange(false);
+      setNote("");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const TITLE: Record<string, string> = {
+    refund: "Process Refund",
+    return: "Schedule Return Pickup",
+    exchange: "Schedule Return + Exchange",
+    close: "Close Ticket",
+  };
+
+  const DESC: Record<string, string> = {
+    refund: "Full refund via Razorpay. Order marked refunded. Cannot be undone.",
+    return: "Schedule Delhivery reverse pickup from customer address.",
+    exchange: "Schedule reverse pickup. Ship replacement after receiving item.",
+    close: "Mark ticket as closed. Customer can still email for help.",
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{TITLE[action]}</DialogTitle>
+        </DialogHeader>
+
+        <p className="text-sm text-muted-foreground">{DESC[action]}</p>
+
+        {(action === "return" || action === "exchange") && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Return reason (sent to Delhivery)
+            </label>
+            <input
+              type="text"
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none"
+            />
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Note to customer (optional)
+          </label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            placeholder="Message sent to customer in the ticket…"
+            className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none resize-none"
+          />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            variant={action === "refund" || action === "return" || action === "exchange" ? "destructive" : "default"}
+            onClick={() =>
+              act.mutate({ ticketId, action, note: note || undefined, returnReason })
+            }
+            disabled={act.isPending}
+          >
+            {act.isPending ? "Processing…" : TITLE[action]}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function AdminTicketPage({ params }: { params: Promise<{ ticketId: string }> }) {
+  const { ticketId } = use(params);
+  const [draft, setDraft] = useState("");
+  const [activeAction, setActiveAction] = useState<"refund" | "return" | "exchange" | "close" | "reopen" | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const utils = trpc.useUtils();
+
+  const { data: ticket, isLoading } = trpc.ticket.get.useQuery(
+    { ticketId },
+    { refetchInterval: 5000 },
+  );
+
+  const send = trpc.ticket.sendMessage.useMutation({
+    onSuccess: async () => {
+      setDraft("");
+      await utils.ticket.get.invalidate({ ticketId });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const reopen = trpc.ticket.adminAction.useMutation({
+    onSuccess: async () => {
+      toast.success("Ticket reopened");
+      await utils.ticket.get.invalidate({ ticketId });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [ticket?.messages.length]);
+
+  if (isLoading) {
+    return <div className="h-80 animate-pulse bg-muted rounded" />;
+  }
+
+  if (!ticket) {
+    return (
+      <div className="text-center py-16 text-muted-foreground text-sm">
+        Ticket not found.
+        <Link href="/support" className="ml-2 underline">Back</Link>
+      </div>
+    );
+  }
+
+  const isClosed = ticket.status === "closed" || ticket.status === "resolved";
+  const hasOrder = !!ticket.order;
+
+  return (
+    <div className="space-y-6">
+      {/* Back */}
+      <Link
+        href="/support"
+        className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="size-3.5" />
+        All tickets
+      </Link>
+
+      {/* Header */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between pb-6 border-b border-border">
+        <div>
+          <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/50 mb-1">
+            {ticket.ticketNumber}
+          </p>
+          <h1 className="text-xl font-semibold">{ticket.subject}</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {ticket.user?.name} · {ticket.user?.email}
+            {ticket.order && (
+              <> · Order: <Link href={`/orders/${ticket.orderId}`} className="underline">{ticket.order.orderNumber}</Link></>
+            )}
+          </p>
+        </div>
+        <Badge variant={STATUS_VARIANT[ticket.status] ?? "outline"} className="self-start shrink-0">
+          {STATUS_LABEL[ticket.status] ?? ticket.status}
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6">
+
+        {/* Chat */}
+        <div className="space-y-4">
+          {/* Messages */}
+          <div className="space-y-3 min-h-[300px]">
+            {ticket.messages.map((msg) => {
+              const isAdmin = msg.senderRole === "admin";
+              return (
+                <div key={msg.id} className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[80%] flex flex-col gap-1 ${isAdmin ? "items-end" : "items-start"}`}>
+                    <div className={`px-4 py-3 text-sm leading-relaxed ${
+                      isAdmin
+                        ? "bg-foreground text-background"
+                        : "bg-muted border border-border text-foreground"
+                    }`}>
+                      {msg.content}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/40 px-1">
+                      {isAdmin ? "You (admin)" : ticket.user?.name ?? "Customer"} · {formatDateTime(msg.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Reply */}
+          {!isClosed ? (
+            <div className="border border-border p-4 flex gap-3 items-end">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (draft.trim()) send.mutate({ ticketId, content: draft.trim() });
+                  }
+                }}
+                rows={3}
+                placeholder="Reply to customer… (Enter to send)"
+                className="flex-1 resize-none bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/40"
+              />
+              <button
+                onClick={() => {
+                  if (draft.trim()) send.mutate({ ticketId, content: draft.trim() });
+                }}
+                disabled={!draft.trim() || send.isPending}
+                className="shrink-0 p-2.5 border border-foreground hover:bg-foreground hover:text-background transition-all disabled:opacity-30"
+              >
+                <Send className="size-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 border border-border p-4">
+              <p className="text-sm text-muted-foreground flex-1">Ticket is {ticket.status}.</p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => reopen.mutate({ ticketId, action: "reopen" })}
+              >
+                Reopen
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Action panel */}
+        <div className="space-y-4">
+
+          {/* Order info */}
+          {ticket.order && (
+            <div className="border border-border p-4 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">
+                Linked order
+              </p>
+              <p className="font-mono text-sm font-semibold">{ticket.order.orderNumber}</p>
+              <p className="text-xs text-muted-foreground capitalize">{ticket.order.status.replace(/_/g, " ")}</p>
+              <p className="text-sm font-semibold">₹{Number(ticket.order.total).toLocaleString("en-IN")}</p>
+            </div>
+          )}
+
+          {/* Actions */}
+          {!isClosed && (
+            <div className="border border-border p-4 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50 mb-3">
+                Admin actions
+              </p>
+
+              {hasOrder && (
+                <>
+                  <Button
+                    className="w-full justify-start"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveAction("refund")}
+                  >
+                    Process refund
+                  </Button>
+                  <Button
+                    className="w-full justify-start"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveAction("return")}
+                  >
+                    Schedule return pickup
+                  </Button>
+                  <Button
+                    className="w-full justify-start"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveAction("exchange")}
+                  >
+                    Return + exchange
+                  </Button>
+                </>
+              )}
+
+              <Button
+                className="w-full justify-start"
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveAction("close")}
+              >
+                Close ticket
+              </Button>
+            </div>
+          )}
+
+          {/* Audit */}
+          {ticket.actions.length > 0 && (
+            <div className="border border-border p-4 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">
+                Actions log
+              </p>
+              {ticket.actions.map((a) => (
+                <div key={a.id} className="text-xs text-muted-foreground">
+                  <span className="font-medium">{a.actionType.replace(/_/g, " ")}</span>
+                  <br />
+                  <span className="text-muted-foreground/50">{formatDateTime(a.createdAt)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Dialogs */}
+      {activeAction && activeAction !== "reopen" && (
+        <ActionDialog
+          ticketId={ticketId}
+          action={activeAction}
+          open={!!activeAction}
+          onOpenChange={(v) => { if (!v) setActiveAction(null); }}
+        />
+      )}
+    </div>
+  );
+}

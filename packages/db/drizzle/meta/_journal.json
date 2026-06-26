@@ -71,6 +71,13 @@
       "when": 1783500000000,
       "tag": "0009_delhivery_statuses",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783600000000,
+      "tag": "0010_support_tickets",
+      "breakpoints": true
     }
   ]
 }

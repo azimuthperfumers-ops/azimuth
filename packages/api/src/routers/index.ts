@@ -11,6 +11,7 @@ import { inventoryRouter } from "./inventory.router";
 import { storageRouter } from "./storage.router";
 import { userDataRouter } from "./user-data.router";
 import { userRouter } from "./user.router";
+import { ticketRouter } from "./ticket.router";
 
 export const appRouter = router({
   health: healthRouter,
@@ -25,6 +26,7 @@ export const appRouter = router({
   discount: discountRouter,
   coupon: couponRouter,
   userData: userDataRouter,
+  ticket: ticketRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -44,10 +44,29 @@ export type TrackingResult = {
   location?: string;
 };
 
+export type CreateReturnShipmentInput = {
+  originalOrderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  pickupAddress: {
+    line1: string;
+    line2?: string | null;
+    city: string;
+    state: string;
+    pincode: string;
+  };
+  returnReason: string;
+  weightGrams: number;
+  lengthCm: number;
+  widthCm: number;
+  heightCm: number;
+};
+
 export interface IDelhiveryService {
   checkServiceability(pincode: string): Promise<ServiceabilityResult>;
   createShipment(input: CreateShipmentInput): Promise<ShipmentResult>;
   trackShipment(waybill: string): Promise<TrackingResult>;
+  createReturnShipment(input: CreateReturnShipmentInput): Promise<ShipmentResult>;
 }
 
 export class StubDelhiveryService implements IDelhiveryService {
@@ -68,10 +87,16 @@ export class StubDelhiveryService implements IDelhiveryService {
 
   async trackShipment(waybill: string): Promise<TrackingResult> {
     console.log(`[delhivery:stub] track — ${waybill}`);
+    return { waybill, status: "In Transit", statusDetail: "Shipment is in transit" };
+  }
+
+  async createReturnShipment(input: CreateReturnShipmentInput): Promise<ShipmentResult> {
+    const fakeWaybill = `STUBRET${Date.now()}`;
+    console.log(`[delhivery:stub] return shipment — ${input.originalOrderNumber} → ${fakeWaybill}`);
     return {
-      waybill,
-      status: "In Transit",
-      statusDetail: "Shipment is in transit",
+      waybill: fakeWaybill,
+      trackingUrl: `https://www.delhivery.com/track/package/${fakeWaybill}`,
+      status: "created",
     };
   }
 }
@@ -180,6 +205,89 @@ class RealDelhiveryService implements IDelhiveryService {
         trackingUrl: "",
         status: "failed",
         errorMessage: pkg?.remarks ?? "Shipment creation failed",
+      };
+    }
+
+    return {
+      waybill: pkg.waybill,
+      trackingUrl: `https://www.delhivery.com/track/package/${pkg.waybill}`,
+      status: "created",
+    };
+  }
+
+  async createReturnShipment(input: CreateReturnShipmentInput): Promise<ShipmentResult> {
+    // Delhivery reverse pickup: customer address = pickup, warehouse = delivery
+    // Uses same shipment creation endpoint with add_return_services flag
+    const warehouseName = this.pickupLocation;
+    const warehouseAddress = process.env.DELHIVERY_WAREHOUSE_ADDRESS ?? "";
+    const warehousePincode = process.env.DELHIVERY_WAREHOUSE_PINCODE ?? "";
+    const warehouseCity = process.env.DELHIVERY_WAREHOUSE_CITY ?? "";
+    const warehouseState = process.env.DELHIVERY_WAREHOUSE_STATE ?? "";
+    const warehousePhone = process.env.DELHIVERY_WAREHOUSE_PHONE ?? "";
+
+    const shipmentPayload = {
+      pickup_location: {
+        name: warehouseName,
+        add: warehouseAddress,
+        city: warehouseCity,
+        pin_code: warehousePincode,
+        state: warehouseState,
+        country: "India",
+        phone: warehousePhone,
+      },
+      shipments: [
+        {
+          name: input.customerName,
+          add: input.pickupAddress.line1 + (input.pickupAddress.line2 ? `, ${input.pickupAddress.line2}` : ""),
+          pin: input.pickupAddress.pincode,
+          city: input.pickupAddress.city,
+          state: input.pickupAddress.state,
+          country: "India",
+          phone: input.customerPhone,
+          order: `RET-${input.originalOrderNumber}`,
+          payment_mode: "Pickup",
+          cod_amount: 0,
+          order_date: new Date().toISOString().split("T")[0],
+          total_amount: 0,
+          products_desc: `Return: ${input.returnReason}`,
+          hsn_code: "3303",
+          shipping_mode: "Surface",
+          weight: input.weightGrams / 1000,
+          length: input.lengthCm,
+          breadth: input.widthCm,
+          height: input.heightCm,
+          add_return_services: "1",
+          return_reason: input.returnReason,
+        },
+      ],
+    };
+
+    const body = new URLSearchParams({
+      format: "json",
+      data: JSON.stringify(shipmentPayload),
+    });
+
+    const res = await fetch(`${BASE_URL}/api/kinko/v1/invoice/shipments/json/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${this.token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: body.toString(),
+    });
+
+    const data = (await res.json()) as {
+      packages?: { status?: string; waybill?: string; remarks?: string }[];
+    };
+
+    const pkg = data.packages?.[0];
+    if (!res.ok || !pkg || pkg.status !== "Success" || !pkg.waybill) {
+      return {
+        waybill: "",
+        trackingUrl: "",
+        status: "failed",
+        errorMessage: pkg?.remarks ?? "Return shipment creation failed",
       };
     }
 

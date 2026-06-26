@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Boxes, FlaskConical, LayoutDashboard, Package, PercentCircle, ShoppingBag, Tag, Tags } from "lucide-react";
+import { Boxes, FlaskConical, LayoutDashboard, Package, PercentCircle, ShoppingBag, Tag, Tags, TicketIcon } from "lucide-react";
 
 import { ModeToggle } from "@/components/mode-toggle";
 import { Separator } from "@/components/ui/separator";
@@ -49,6 +49,12 @@ const NAV_GROUPS = [
     items: [
       { href: "/discounts", label: "Discounts", icon: PercentCircle },
       { href: "/coupons", label: "Coupons", icon: Tag },
+    ],
+  },
+  {
+    label: "Support",
+    items: [
+      { href: "/support", label: "Tickets", icon: TicketIcon },
     ],
   },
 ];

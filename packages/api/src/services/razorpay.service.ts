@@ -16,6 +16,12 @@ export interface IRazorpayService {
     signature: string,
   ): boolean;
   verifyWebhookSignature(rawBody: Buffer, signature: string): boolean;
+  refundPayment(params: {
+    paymentId: string;
+    amountPaise: number;
+    receipt: string;
+    notes?: Record<string, string>;
+  }): Promise<{ id: string; amount: number }>;
 }
 
 class RazorpayService implements IRazorpayService {
@@ -61,6 +67,21 @@ class RazorpayService implements IRazorpayService {
     const sigBuf = Buffer.from(signature, "utf8");
     if (expBuf.byteLength !== sigBuf.byteLength) return false;
     return crypto.timingSafeEqual(expBuf, sigBuf);
+  }
+
+  async refundPayment(params: {
+    paymentId: string;
+    amountPaise: number;
+    receipt: string;
+    notes?: Record<string, string>;
+  }): Promise<{ id: string; amount: number }> {
+    const refund = await this.rzp.payments.refund(params.paymentId, {
+      amount: params.amountPaise,
+      speed: "normal",
+      receipt: params.receipt,
+      notes: params.notes ?? {},
+    });
+    return { id: refund.id, amount: Number(refund.amount) };
   }
 
   verifyWebhookSignature(rawBody: Buffer, signature: string): boolean {
