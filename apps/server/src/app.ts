@@ -6,6 +6,7 @@ import cors from "cors";
 import express from "express";
 
 import { loginRateLimitMiddleware } from "./middleware/rate-limit";
+import { delhiveryWebhookHandler } from "./webhooks/delhivery";
 import { razorpayWebhookHandler } from "./webhooks/razorpay";
 
 export const app = express();
@@ -28,6 +29,9 @@ app.all("/api/auth/*splat", toNodeHandler(auth));
 app.post("/webhooks/razorpay", express.raw({ type: "application/json" }), razorpayWebhookHandler);
 
 app.use(express.json());
+
+// Delhivery webhook — regular JSON body, auth via ?token= query param
+app.post("/webhooks/delhivery", delhiveryWebhookHandler);
 
 app.use(
   "/trpc",

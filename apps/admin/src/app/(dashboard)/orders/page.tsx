@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@azimuth/api";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,12 +33,9 @@ import {
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { formatInr } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type Order = RouterOutputs["order"]["adminList"][number];
-type OrderItem = Order["items"][number];
-type StatusHistoryEntry = NonNullable<Order["statusHistory"]>[number];
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -45,6 +43,9 @@ const ORDER_STATUSES = [
   "pending_payment",
   "paid",
   "processing",
+  "picked_up",
+  "out_for_delivery",
+  "delivery_attempted",
   "shipped",
   "delivered",
   "cancelled",
@@ -59,6 +60,9 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   pending_payment: "Awaiting payment",
   paid: "Paid",
   processing: "Processing",
+  picked_up: "Picked up",
+  out_for_delivery: "Out for delivery",
+  delivery_attempted: "Delivery attempted",
   shipped: "Shipped",
   delivered: "Delivered",
   cancelled: "Cancelled",
@@ -71,6 +75,9 @@ const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive
   pending_payment: "outline",
   paid: "secondary",
   processing: "secondary",
+  picked_up: "secondary",
+  out_for_delivery: "default",
+  delivery_attempted: "outline",
   shipped: "default",
   delivered: "default",
   cancelled: "destructive",
@@ -214,116 +221,20 @@ function UpdateStatusDialog({
   );
 }
 
-// ─── Order detail row (expandable) ───────────────────────────────────────────
-
-function OrderDetailPanel({ order }: { order: Order }) {
-  const addr = order.shippingAddress as {
-    fullName?: string; phone?: string; line1?: string; line2?: string;
-    city?: string; state?: string; pincode?: string;
-  };
-
-  return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 p-4 bg-muted/30 text-sm">
-      {/* Shipping address */}
-      <div>
-        <p className="text-[10px] font-bold tracking-[0.16em] text-muted-foreground uppercase mb-2">
-          Delivery address
-        </p>
-        <p className="font-medium">{addr.fullName}</p>
-        <p className="text-muted-foreground">{addr.phone}</p>
-        <p className="text-muted-foreground mt-1">
-          {addr.line1}{addr.line2 ? `, ${addr.line2}` : ""}
-          <br />{addr.city}, {addr.state} — {addr.pincode}
-        </p>
-      </div>
-
-      {/* Financials */}
-      <div>
-        <p className="text-[10px] font-bold tracking-[0.16em] text-muted-foreground uppercase mb-2">
-          Financials
-        </p>
-        <div className="space-y-1 text-muted-foreground">
-          <div className="flex justify-between"><span>Subtotal</span><span>{formatInr(Number(order.subtotal))}</span></div>
-          {Number(order.discountAmount) > 0 && (
-            <div className="flex justify-between text-primary"><span>Discount {order.couponCode ? `(${order.couponCode})` : ""}</span><span>−{formatInr(Number(order.discountAmount))}</span></div>
-          )}
-          <div className="flex justify-between"><span>Shipping</span><span>{Number(order.shippingCharge) === 0 ? "Free" : formatInr(Number(order.shippingCharge))}</span></div>
-          <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1 mt-1"><span>Total</span><span>{formatInr(Number(order.total))}</span></div>
-        </div>
-        {order.razorpayOrderId && (
-          <p className="text-[10px] text-muted-foreground/60 mt-2 font-mono">
-            Rzp: {order.razorpayOrderId}
-          </p>
-        )}
-        {order.gstInvoiceNumber && (
-          <p className="text-[10px] text-muted-foreground/60 font-mono">
-            GST invoice: {order.gstInvoiceNumber}
-          </p>
-        )}
-      </div>
-
-      {/* Items */}
-      <div className="md:col-span-2">
-        <p className="text-[10px] font-bold tracking-[0.16em] text-muted-foreground uppercase mb-2">
-          Items
-        </p>
-        <div className="space-y-2">
-          {order.items.map((item: OrderItem) => (
-            <div key={item.id} className="flex items-center gap-3 border border-border/50 p-2">
-              {item.imageUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.imageUrl} alt={item.productName} className="w-9 h-11 object-cover bg-muted shrink-0" />
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{item.productName}</p>
-                <p className="text-[11px] text-muted-foreground">{item.variantSku} · {item.sizeMl}ml · qty {item.quantity}</p>
-              </div>
-              <p className="font-semibold tabular-nums shrink-0">{formatInr(Number(item.lineTotal))}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Status history */}
-      {order.statusHistory && order.statusHistory.length > 0 && (
-        <div className="md:col-span-2">
-          <p className="text-[10px] font-bold tracking-[0.16em] text-muted-foreground uppercase mb-2">
-            Audit trail
-          </p>
-          <div className="space-y-1.5">
-            {order.statusHistory.map((h: StatusHistoryEntry) => (
-              <div key={h.id} className="flex items-start gap-2 text-[12px]">
-                <span className="text-muted-foreground/50 tabular-nums shrink-0 w-36">
-                  {new Date(h.createdAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
-                </span>
-                <span className="text-muted-foreground">
-                  {h.fromStatus ? `${STATUS_LABEL[h.fromStatus as OrderStatus] ?? h.fromStatus} → ` : ""}
-                  <span className="font-medium text-foreground">{STATUS_LABEL[h.toStatus as OrderStatus] ?? h.toStatus}</span>
-                  {h.note && <span className="text-muted-foreground/60"> · {h.note}</span>}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Expanded order row ───────────────────────────────────────────────────────
+// ─── Order row ────────────────────────────────────────────────────────────────
 
 function OrderRow({ order }: { order: Order }) {
-  const [expanded, setExpanded] = useState(false);
+  const router = useRouter();
   const [statusDialog, setStatusDialog] = useState(false);
 
   return (
     <>
       <TableRow
-        className={cn("cursor-pointer hover:bg-muted/40", expanded && "bg-muted/30")}
-        onClick={() => setExpanded((v) => !v)}
+        className="cursor-pointer hover:bg-muted/40"
+        onClick={() => router.push(`/orders/${order.id}`)}
       >
         <TableCell>
-          {expanded ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
+          <ChevronRight className="size-3.5 text-muted-foreground" />
         </TableCell>
         <TableCell className="font-mono text-sm font-medium">{order.orderNumber}</TableCell>
         <TableCell className="text-muted-foreground text-sm">
@@ -347,14 +258,6 @@ function OrderRow({ order }: { order: Order }) {
           </Button>
         </TableCell>
       </TableRow>
-
-      {expanded && (
-        <TableRow>
-          <TableCell colSpan={7} className="p-0">
-            <OrderDetailPanel order={order} />
-          </TableCell>
-        </TableRow>
-      )}
 
       <UpdateStatusDialog
         orderId={order.id}

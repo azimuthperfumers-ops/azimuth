@@ -330,6 +330,9 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
   pending_payment: "Awaiting payment",
   paid: "Payment confirmed",
   processing: "Processing",
+  picked_up: "Picked up by courier",
+  out_for_delivery: "Out for delivery",
+  delivery_attempted: "Delivery attempted",
   shipped: "Shipped",
   delivered: "Delivered",
   cancelled: "Cancelled",
@@ -342,6 +345,9 @@ const ORDER_STATUS_COLOR: Record<string, string> = {
   pending_payment: "text-yellow-600",
   paid: "text-blue-600",
   processing: "text-blue-600",
+  picked_up: "text-blue-600",
+  out_for_delivery: "text-indigo-600",
+  delivery_attempted: "text-orange-500",
   shipped: "text-indigo-600",
   delivered: "text-green-600",
   cancelled: "text-red-500",
@@ -391,7 +397,7 @@ function OrdersTab() {
       {orders && orders.length > 0 && (
         <div className="space-y-4">
           {orders.map((order) => (
-            <div key={order.id} className="border border-border p-5 space-y-4">
+            <Link key={order.id} href={`/orders/${order.id}`} className="block border border-border p-5 space-y-4 hover:border-foreground/40 transition-colors">
               {/* Order header */}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -447,7 +453,7 @@ function OrdersTab() {
                   </div>
                 ))}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

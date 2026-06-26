@@ -13,6 +13,10 @@ const envSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  // Delhivery — optional at boot, validated at call time in delhivery.service.ts / webhook handler
+  DELHIVERY_API_TOKEN: z.string().optional(),
+  DELHIVERY_PICKUP_LOCATION: z.string().optional(),
+  DELHIVERY_WEBHOOK_TOKEN: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
