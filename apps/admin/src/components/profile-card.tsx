@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { authClient } from "@/lib/auth-client";
@@ -26,7 +28,12 @@ export function ProfileCard({ user }: { user: SessionUser }) {
           </p>
         )}
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex-col gap-2">
+        {isAdmin && (
+          <Button asChild className="w-full">
+            <Link href="/dashboard">Go to dashboard</Link>
+          </Button>
+        )}
         <Button variant="outline" className="w-full" onClick={() => authClient.signOut()}>
           Sign out
         </Button>
