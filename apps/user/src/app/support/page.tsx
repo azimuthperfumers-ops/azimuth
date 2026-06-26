@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, Plus, TicketIcon } from "lucide-react";
 
 import { SiteFooter } from "@/components/site-footer";
@@ -37,12 +37,12 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ── New ticket form ───────────────────────────────────────────────────────────
 
-function NewTicketForm({ onDone }: { onDone: (id: string) => void }) {
+function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => void; prefilledOrderId?: string }) {
   const router = useRouter();
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [type, setType] = useState<string>("general");
-  const [orderId, setOrderId] = useState("");
+  const [orderId, setOrderId] = useState(prefilledOrderId ?? "");
 
   const { data: orders } = trpc.order.list.useQuery();
   const utils = trpc.useUtils();
@@ -140,7 +140,9 @@ function NewTicketForm({ onDone }: { onDone: (id: string) => void }) {
 
 export default function SupportPage() {
   const { data: session, isPending } = authClient.useSession();
-  const [showForm, setShowForm] = useState(false);
+  const searchParams = useSearchParams();
+  const prefilledOrderId = searchParams.get("orderId") ?? undefined;
+  const [showForm, setShowForm] = useState(!!prefilledOrderId);
   const { data: tickets, isLoading } = trpc.ticket.list.useQuery(undefined, {
     enabled: !!session,
   });
@@ -182,7 +184,7 @@ export default function SupportPage() {
 
         {showForm && (
           <div className="mb-8">
-            <NewTicketForm onDone={() => setShowForm(false)} />
+            <NewTicketForm onDone={() => setShowForm(false)} prefilledOrderId={prefilledOrderId} />
           </div>
         )}
 

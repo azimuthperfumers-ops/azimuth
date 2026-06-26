@@ -56,6 +56,9 @@ export function SiteHeader() {
               <Link href="#" className="text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase transition-opacity hover:opacity-60">
                 Our Story
               </Link>
+              <Link href="/support" className="text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase transition-opacity hover:opacity-60">
+                Support
+              </Link>
             </nav>
           </div>
 
@@ -98,6 +101,7 @@ export function SiteHeader() {
               { href: "/shop", label: "Shop" },
               { href: "#", label: "Our Story" },
               { href: "/account", label: "Account" },
+              { href: "/support", label: "Support" },
             ].map(({ href, label }) => (
               <Link
                 key={label}

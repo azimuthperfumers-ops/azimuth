@@ -300,14 +300,22 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
           </section>
 
           {/* Help */}
-          {!isComplete && (
-            <p className="text-[12px] text-muted-foreground/50 text-center pt-2">
-              Questions about your order? Contact us at{" "}
-              <a href="mailto:azimuthperfumers@gmail.com" className="underline hover:text-foreground">
-                azimuthperfumers@gmail.com
-              </a>
-            </p>
-          )}
+          <section className="border border-border p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">
+                Need help with this order?
+              </p>
+              <p className="text-[13px] text-muted-foreground mt-0.5">
+                Returns, refunds, exchanges — raise a support request.
+              </p>
+            </div>
+            <Link
+              href={`/support?orderId=${orderId}`}
+              className="shrink-0 border border-foreground px-5 py-2.5 text-[10.5px] font-semibold tracking-[0.14em] uppercase hover:bg-foreground hover:text-background transition-all text-center"
+            >
+              Contact support
+            </Link>
+          </section>
         </div>
       </main>
       <SiteFooter />
