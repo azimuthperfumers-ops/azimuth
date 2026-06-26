@@ -149,6 +149,21 @@ export const paymentAttempts = pgTable(
   ],
 );
 
+// ── Webhook events (idempotency log — one row per Razorpay event.id) ──────────
+
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gateway: text("gateway").notNull(),
+    eventId: text("event_id").notNull().unique(),
+    eventType: text("event_type").notNull(),
+    payload: jsonb("payload").notNull(),
+    processedAt: timestamp("processed_at").defaultNow().notNull(),
+  },
+  (t) => [index("webhook_events_event_id_idx").on(t.eventId)],
+);
+
 // ── Relations ─────────────────────────────────────────────────────────────────
 
 export const orderRelations = relations(orders, ({ one, many }) => ({
