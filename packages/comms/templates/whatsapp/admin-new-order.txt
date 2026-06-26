@@ -1,0 +1,10 @@
+Template name: azimuth_admin_new_order
+Language: English
+Category: TRANSACTIONAL
+
+Body:
+[Azimuth Admin] New order received: *{{1}}* — *{{2}}*. Log in to process.
+
+Variables:
+{{1}} = order number
+{{2}} = amount (e.g. ₹1,234)

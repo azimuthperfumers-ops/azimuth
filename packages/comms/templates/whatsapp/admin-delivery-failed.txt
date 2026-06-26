@@ -1,0 +1,9 @@
+Template name: azimuth_admin_delivery_failed
+Language: English
+Category: TRANSACTIONAL
+
+Body:
+[Azimuth Admin] Delivery failed for order *{{1}}*. Customer was unavailable. Delhivery will retry. No action needed unless it fails again.
+
+Variables:
+{{1}} = order number

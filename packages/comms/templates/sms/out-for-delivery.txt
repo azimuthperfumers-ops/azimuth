@@ -1,0 +1,10 @@
+Flow name: AZIMUTH_OFD
+Sender ID: AZIMUT
+DLT Template category: Transactional
+
+SMS Text:
+Hi {name}, your Azimuth order {order_number} is out for delivery today. Please be available. -Azimuth Perfumers
+
+Flow variables:
+{name}         = customer name
+{order_number} = order number

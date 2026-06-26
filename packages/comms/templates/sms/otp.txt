@@ -1,0 +1,11 @@
+Flow name: AZIMUTH_OTP
+Sender ID: AZIMUT
+DLT Template category: Transactional (OTP)
+
+SMS Text:
+{otp} is your Azimuth Perfumers OTP. Valid for 10 minutes. Do not share with anyone. -Azimuth Perfumers
+
+Flow variables:
+{otp} = one-time password
+
+Note: OTP templates need separate DLT registration under OTP category.
