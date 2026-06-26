@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Lock, Tag } from "lucide-react";
+import { Check, ChevronLeft, Lock, MapPin, Plus, Tag } from "lucide-react";
 import { toast } from "sonner";
 
 import { SiteFooter } from "@/components/site-footer";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type AddressForm = {
+  label: string;
   fullName: string;
   phone: string;
   line1: string;
@@ -24,6 +25,19 @@ type AddressForm = {
   city: string;
   state: string;
   pincode: string;
+};
+
+type SavedAddress = {
+  id: string;
+  label: string;
+  fullName: string;
+  phone: string;
+  line1: string;
+  line2?: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  isDefault: boolean;
 };
 
 declare global {
@@ -54,85 +68,265 @@ function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
-// ─── Address form ─────────────────────────────────────────────────────────────
+const EMPTY_FORM: AddressForm = {
+  label: "Home", fullName: "", phone: "", line1: "", line2: "",
+  city: "", state: "", pincode: "",
+};
 
-const FIELDS: { key: keyof AddressForm; label: string; type: string; required: boolean; hint?: string }[] = [
-  { key: "fullName", label: "Full name", type: "text", required: true },
-  { key: "phone", label: "Phone number", type: "tel", required: true, hint: "10-digit mobile number" },
-  { key: "line1", label: "Address line 1", type: "text", required: true },
-  { key: "line2", label: "Address line 2", type: "text", required: false },
-  { key: "city", label: "City", type: "text", required: true },
-  { key: "state", label: "State", type: "text", required: true },
-  { key: "pincode", label: "Pincode", type: "text", required: true, hint: "6-digit postal code" },
-];
+function addressToForm(a: SavedAddress): AddressForm {
+  return {
+    label: a.label,
+    fullName: a.fullName,
+    phone: a.phone,
+    line1: a.line1,
+    line2: a.line2 ?? "",
+    city: a.city,
+    state: a.state,
+    pincode: a.pincode,
+  };
+}
 
-function AddressSection({
+// ─── Saved address card ───────────────────────────────────────────────────────
+
+function AddressCard({
+  address,
+  selected,
+  onSelect,
+}: {
+  address: SavedAddress;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "w-full text-left border p-4 transition-colors relative",
+        selected ? "border-foreground bg-foreground/[0.02]" : "border-border hover:border-foreground/40",
+      )}
+    >
+      {selected && (
+        <span className="absolute right-3 top-3 flex size-4 items-center justify-center rounded-full bg-foreground">
+          <Check className="size-2.5 text-background" />
+        </span>
+      )}
+      {address.isDefault && (
+        <span className="mb-1.5 inline-block text-[9px] font-bold tracking-[0.18em] uppercase text-muted-foreground/50">
+          Default
+        </span>
+      )}
+      <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase mb-1">
+        {address.label}
+      </p>
+      <p className="text-sm font-medium">{address.fullName}</p>
+      <p className="text-[12px] text-muted-foreground/70 mt-0.5 leading-relaxed">
+        {address.line1}{address.line2 ? `, ${address.line2}` : ""}
+        <br />{address.city}, {address.state} — {address.pincode}
+        <br />{address.phone}
+      </p>
+    </button>
+  );
+}
+
+// ─── New address form ─────────────────────────────────────────────────────────
+
+const ADDRESS_LABELS = ["Home", "Work", "Other"];
+
+function NewAddressForm({
   form,
   onChange,
+  saveToAccount,
+  onSaveToAccountChange,
+  formRef,
 }: {
   form: AddressForm;
   onChange: (key: keyof AddressForm, value: string) => void;
+  saveToAccount: boolean;
+  onSaveToAccountChange: (v: boolean) => void;
+  formRef?: React.RefObject<HTMLFormElement | null>;
 }) {
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-[11px] font-bold tracking-[0.22em] text-muted-foreground/60 uppercase mb-4">
-          Delivery address
-        </h2>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {FIELDS.slice(0, 2).map(({ key, label, type, required, hint }) => (
-              <div key={key} className="space-y-1.5">
-                <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">
-                  {label}
-                </label>
-                <input
-                  type={type}
-                  value={form[key]}
-                  onChange={(e) => onChange(key, e.target.value)}
-                  required={required}
-                  className="w-full border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/30 focus:border-foreground focus:outline-none transition-colors"
-                />
-                {hint && <p className="text-[10.5px] text-muted-foreground/40">{hint}</p>}
-              </div>
-            ))}
-          </div>
-
-          {FIELDS.slice(2, 4).map(({ key, label, type, required }) => (
-            <div key={key} className="space-y-1.5">
-              <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">
-                {label}{!required && <span className="ml-1 text-muted-foreground/40">(optional)</span>}
-              </label>
-              <input
-                type={type}
-                value={form[key]}
-                onChange={(e) => onChange(key, e.target.value)}
-                required={required}
-                className="w-full border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/30 focus:border-foreground focus:outline-none transition-colors"
-              />
-            </div>
-          ))}
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {FIELDS.slice(4).map(({ key, label, type, required, hint }) => (
-              <div key={key} className="space-y-1.5">
-                <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">
-                  {label}
-                </label>
-                <input
-                  type={type}
-                  value={form[key]}
-                  onChange={(e) => onChange(key, e.target.value)}
-                  required={required}
-                  maxLength={key === "pincode" ? 6 : undefined}
-                  className="w-full border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/30 focus:border-foreground focus:outline-none transition-colors"
-                />
-                {hint && <p className="text-[10.5px] text-muted-foreground/40">{hint}</p>}
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className="border border-border p-5 space-y-4 mt-3">
+      {/* Label selector */}
+      <div className="flex gap-2">
+        {ADDRESS_LABELS.map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => onChange("label", l)}
+            className={cn(
+              "border px-3 py-1.5 text-[10px] font-bold tracking-[0.14em] uppercase transition-colors",
+              form.label === l
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted-foreground hover:border-foreground/40",
+            )}
+          >
+            {l}
+          </button>
+        ))}
       </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[
+          { key: "fullName" as const, label: "Full name", type: "text" },
+          { key: "phone" as const, label: "Phone", type: "tel", hint: "10-digit mobile" },
+        ].map(({ key, label, type, hint }) => (
+          <div key={key} className="space-y-1.5">
+            <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">{label}</label>
+            <input
+              form={formRef ? undefined : "checkout-form"}
+              type={type}
+              value={form[key]}
+              onChange={(e) => onChange(key, e.target.value)}
+              required
+              className="w-full border border-border bg-background px-3 py-2.5 text-sm focus:border-foreground focus:outline-none transition-colors"
+            />
+            {hint && <p className="text-[10.5px] text-muted-foreground/40">{hint}</p>}
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">Address line 1</label>
+        <input
+          type="text"
+          value={form.line1}
+          onChange={(e) => onChange("line1", e.target.value)}
+          required
+          className="w-full border border-border bg-background px-3 py-2.5 text-sm focus:border-foreground focus:outline-none transition-colors"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">
+          Address line 2 <span className="text-muted-foreground/40">(optional)</span>
+        </label>
+        <input
+          type="text"
+          value={form.line2}
+          onChange={(e) => onChange("line2", e.target.value)}
+          className="w-full border border-border bg-background px-3 py-2.5 text-sm focus:border-foreground focus:outline-none transition-colors"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[
+          { key: "city" as const, label: "City" },
+          { key: "state" as const, label: "State" },
+          { key: "pincode" as const, label: "Pincode", maxLength: 6 },
+        ].map(({ key, label, maxLength }) => (
+          <div key={key} className="space-y-1.5">
+            <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">{label}</label>
+            <input
+              type="text"
+              value={form[key]}
+              onChange={(e) => onChange(key, e.target.value)}
+              required
+              maxLength={maxLength}
+              className="w-full border border-border bg-background px-3 py-2.5 text-sm focus:border-foreground focus:outline-none transition-colors"
+            />
+          </div>
+        ))}
+      </div>
+
+      <label className="flex items-center gap-2 text-[12px] text-muted-foreground cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={saveToAccount}
+          onChange={(e) => onSaveToAccountChange(e.target.checked)}
+          className="size-3.5"
+        />
+        Save this address to my account
+      </label>
+    </div>
+  );
+}
+
+// ─── Address section (saved + new) ────────────────────────────────────────────
+
+function AddressSection({
+  addresses,
+  loadingAddresses,
+  selectedId,
+  onSelectSaved,
+  showNewForm,
+  onShowNewForm,
+  newForm,
+  onNewFormChange,
+  saveToAccount,
+  onSaveToAccountChange,
+}: {
+  addresses: SavedAddress[];
+  loadingAddresses: boolean;
+  selectedId: string | null;
+  onSelectSaved: (id: string) => void;
+  showNewForm: boolean;
+  onShowNewForm: () => void;
+  newForm: AddressForm;
+  onNewFormChange: (key: keyof AddressForm, value: string) => void;
+  saveToAccount: boolean;
+  onSaveToAccountChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <h2 className="text-[11px] font-bold tracking-[0.22em] text-muted-foreground/60 uppercase">
+        Delivery address
+      </h2>
+
+      {loadingAddresses && (
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-24 border border-border bg-muted/30 animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {!loadingAddresses && (
+        <>
+          {addresses.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {addresses.map((addr) => (
+                <AddressCard
+                  key={addr.id}
+                  address={addr}
+                  selected={selectedId === addr.id && !showNewForm}
+                  onSelect={() => onSelectSaved(addr.id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Add new address toggle */}
+          <button
+            type="button"
+            onClick={onShowNewForm}
+            className={cn(
+              "flex w-full items-center gap-2.5 border px-4 py-3.5 text-left transition-colors",
+              showNewForm
+                ? "border-foreground"
+                : "border-dashed border-border hover:border-foreground/40",
+            )}
+          >
+            <Plus className={cn("size-3.5 shrink-0", showNewForm ? "text-foreground" : "text-muted-foreground/40")} />
+            <span className={cn(
+              "text-[11px] font-semibold tracking-[0.14em] uppercase",
+              showNewForm ? "text-foreground" : "text-muted-foreground/50",
+            )}>
+              {addresses.length === 0 ? "Enter delivery address" : "Use a different address"}
+            </span>
+          </button>
+
+          {showNewForm && (
+            <NewAddressForm
+              form={newForm}
+              onChange={onNewFormChange}
+              saveToAccount={saveToAccount}
+              onSaveToAccountChange={onSaveToAccountChange}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -202,8 +396,7 @@ function CheckoutSummary({
 
       <div className="px-6 pb-6 space-y-3">
         <button
-          type="submit"
-          form="checkout-form"
+          type="button"
           disabled={paying}
           onClick={onPay}
           className={cn(
@@ -231,29 +424,56 @@ export default function CheckoutPage() {
   const { data: session, isPending: sessionLoading } = authClient.useSession();
   const cart = useCart();
 
-  const [form, setForm] = useState<AddressForm>({
-    fullName: "", phone: "", line1: "", line2: "", city: "", state: "", pincode: "",
-  });
+  // Saved addresses
+  const { data: savedAddresses, isLoading: loadingAddresses } = trpc.userData.listAddresses.useQuery(
+    undefined,
+    { enabled: !!session },
+  );
+  const addAddressMut = trpc.userData.addAddress.useMutation();
+
+  // Which saved address is selected (null = show new form)
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newForm, setNewForm] = useState<AddressForm>({ ...EMPTY_FORM });
+  const [saveToAccount, setSaveToAccount] = useState(false);
   const [paying, setPaying] = useState(false);
-  const formRef = useRef<HTMLFormElement>(null);
+  const newFormRef = useRef<HTMLDivElement>(null);
 
   const utils = trpc.useUtils();
   const createOrder = trpc.order.create.useMutation();
   const createRazorpayOrder = trpc.payment.createRazorpayOrder.useMutation();
   const verifyPayment = trpc.payment.verifyAndConfirmPayment.useMutation();
 
-  // Pre-fill name/phone from session
+  // Auto-select default address once loaded
   useEffect(() => {
-    if (session?.user) {
-      setForm((prev) => ({
-        ...prev,
-        fullName: prev.fullName || session.user.name || "",
-      }));
+    if (!savedAddresses) return;
+    if (savedAddresses.length === 0) {
+      setShowNewForm(true);
+      return;
+    }
+    const def = savedAddresses.find((a) => a.isDefault) ?? savedAddresses[0];
+    if (def) setSelectedId(def.id);
+  }, [savedAddresses]);
+
+  // Pre-fill new form name from session
+  useEffect(() => {
+    if (session?.user?.name) {
+      setNewForm((prev) => ({ ...prev, fullName: prev.fullName || session.user.name || "" }));
     }
   }, [session]);
 
-  function setField(key: keyof AddressForm, value: string) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+  function setNewFormField(key: keyof AddressForm, value: string) {
+    setNewForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleSelectSaved(id: string) {
+    setSelectedId(id);
+    setShowNewForm(false);
+  }
+
+  function handleShowNewForm() {
+    setShowNewForm(true);
+    setSelectedId(null);
   }
 
   const items = cart.items;
@@ -262,9 +482,34 @@ export default function CheckoutPage() {
   const shipping = shippingCharge(subtotal);
   const total = Math.max(0, subtotal - discount) + shipping;
 
+  function resolveShippingAddress(): AddressForm | null {
+    if (showNewForm) return newForm;
+    const saved = (savedAddresses ?? []).find((a) => a.id === selectedId);
+    if (saved) return addressToForm(saved);
+    return null;
+  }
+
+  function validateAddress(addr: AddressForm): boolean {
+    return !!(
+      addr.fullName.trim() &&
+      addr.phone.trim() &&
+      addr.line1.trim() &&
+      addr.city.trim() &&
+      addr.state.trim() &&
+      addr.pincode.trim()
+    );
+  }
+
   async function handlePay() {
-    if (!formRef.current?.checkValidity()) {
-      formRef.current?.reportValidity();
+    const addr = resolveShippingAddress();
+
+    if (!addr) {
+      toast.error("Select a delivery address");
+      return;
+    }
+
+    if (!validateAddress(addr)) {
+      toast.error("Fill in all required address fields");
       return;
     }
 
@@ -275,6 +520,22 @@ export default function CheckoutPage() {
 
     setPaying(true);
     try {
+      // Optionally save new address to account first
+      if (showNewForm && saveToAccount) {
+        await addAddressMut.mutateAsync({
+          label: addr.label,
+          fullName: addr.fullName.trim(),
+          phone: addr.phone.trim(),
+          line1: addr.line1.trim(),
+          line2: addr.line2.trim() || undefined,
+          city: addr.city.trim(),
+          state: addr.state.trim(),
+          pincode: addr.pincode.trim(),
+          isDefault: (savedAddresses ?? []).length === 0,
+        });
+        await utils.userData.listAddresses.invalidate();
+      }
+
       // 1. Load Razorpay script
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) {
@@ -285,13 +546,13 @@ export default function CheckoutPage() {
       // 2. Create order in DB
       const order = await createOrder.mutateAsync({
         shippingAddress: {
-          fullName: form.fullName.trim(),
-          phone: form.phone.trim(),
-          line1: form.line1.trim(),
-          line2: form.line2.trim() || null,
-          city: form.city.trim(),
-          state: form.state.trim(),
-          pincode: form.pincode.trim(),
+          fullName: addr.fullName.trim(),
+          phone: addr.phone.trim(),
+          line1: addr.line1.trim(),
+          line2: addr.line2.trim() || null,
+          city: addr.city.trim(),
+          state: addr.state.trim(),
+          pincode: addr.pincode.trim(),
         },
         items: items.map((item) => ({
           variantId: item.variantId,
@@ -325,8 +586,9 @@ export default function CheckoutPage() {
           description: `Order ${rzpData.orderNumber}`,
           order_id: rzpData.razorpayOrderId,
           prefill: {
-            name: form.fullName.trim(),
-            contact: form.phone.trim(),
+            name: addr.fullName.trim(),
+            contact: addr.phone.trim(),
+            email: session?.user?.email ?? "",
           },
           theme: { color: "#0a0a0a" },
           modal: {
@@ -411,21 +673,29 @@ export default function CheckoutPage() {
           </h1>
         </div>
 
-        <form
-          id="checkout-form"
-          ref={formRef}
-          onSubmit={(e) => e.preventDefault()}
-          className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_360px] lg:gap-14 items-start"
-        >
-          {/* Left: address + items preview */}
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_360px] lg:gap-14 items-start">
+          {/* Left: address + items */}
           <div className="space-y-10">
-            <AddressSection form={form} onChange={setField} />
+            <AddressSection
+              addresses={(savedAddresses ?? []) as SavedAddress[]}
+              loadingAddresses={loadingAddresses}
+              selectedId={selectedId}
+              onSelectSaved={handleSelectSaved}
+              showNewForm={showNewForm}
+              onShowNewForm={handleShowNewForm}
+              newForm={newForm}
+              onNewFormChange={setNewFormField}
+              saveToAccount={saveToAccount}
+              onSaveToAccountChange={setSaveToAccount}
+            />
 
             {/* Items preview */}
             <div>
-              <h2 className="text-[11px] font-bold tracking-[0.22em] text-muted-foreground/60 uppercase mb-4">
-                Items ({items.length})
-              </h2>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-[11px] font-bold tracking-[0.22em] text-muted-foreground/60 uppercase">
+                  Items ({items.length})
+                </h2>
+              </div>
               <div className="space-y-3">
                 {items.map((item) => (
                   <div
@@ -458,6 +728,27 @@ export default function CheckoutPage() {
                 ))}
               </div>
             </div>
+
+            {/* Selected address confirmation (mobile: show below items) */}
+            {!showNewForm && selectedId && (
+              <div className="lg:hidden border border-border p-4 flex gap-3">
+                <MapPin className="size-4 text-muted-foreground/40 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  {(() => {
+                    const a = (savedAddresses ?? []).find((x) => x.id === selectedId);
+                    if (!a) return null;
+                    return (
+                      <>
+                        <p className="font-medium">{a.fullName}</p>
+                        <p className="text-muted-foreground/60 text-[12px] mt-0.5">
+                          {a.line1}{a.line2 ? `, ${a.line2}` : ""}, {a.city}, {a.state} — {a.pincode}
+                        </p>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right: summary + pay */}
@@ -468,7 +759,7 @@ export default function CheckoutPage() {
             paying={paying}
             onPay={handlePay}
           />
-        </form>
+        </div>
       </main>
       <SiteFooter />
     </>
