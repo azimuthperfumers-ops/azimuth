@@ -2,6 +2,13 @@ import { z } from "zod";
 
 import { schema } from "@azimuth/db";
 import { eq } from "drizzle-orm";
+import {
+  alertAdminRefund,
+  notifyRefundInitiated,
+  notifyShipped,
+  type CustomerContact,
+  type OrderInfo,
+} from "@azimuth/comms";
 
 import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import {
@@ -13,6 +20,35 @@ import {
   getUserOrders,
 } from "../repositories/order.repository";
 import { router } from "../trpc";
+
+// ── Notification helpers ──────────────────────────────────────────────────────
+
+type OrderRow = typeof schema.orders.$inferSelect;
+interface ShippingAddr { fullName?: string; phone?: string; }
+
+async function getOrderContact(db: Parameters<typeof advanceOrderStatus>[0], order: OrderRow): Promise<CustomerContact> {
+  const addr = order.shippingAddress as ShippingAddr;
+  const user = await db.query.user.findFirst({
+    where: eq(schema.user.id, order.userId),
+    columns: { email: true, name: true, phone: true, phoneNumber: true },
+  });
+  return {
+    name: addr.fullName ?? user?.name ?? "Customer",
+    email: user?.email ?? undefined,
+    phone: addr.phone ?? user?.phone ?? user?.phoneNumber ?? undefined,
+  };
+}
+
+function toOrderInfo(order: OrderRow): OrderInfo {
+  return {
+    orderNumber: order.orderNumber,
+    totalInr: new Intl.NumberFormat("en-IN", {
+      style: "currency", currency: "INR", maximumFractionDigits: 0,
+    }).format(Number(order.total)),
+    delhiveryWaybill: order.delhiveryWaybill ?? undefined,
+    trackingUrl: order.trackingUrl ?? undefined,
+  };
+}
 
 const addressSchema = z.object({
   fullName: z.string().min(1),
@@ -135,7 +171,24 @@ export const orderRouter = router({
           .where(eq(schema.orders.id, input.orderId));
       }
 
-      return advanceOrderStatus(ctx.db, input.orderId, input.status, adminId, input.note);
+      const result = await advanceOrderStatus(ctx.db, input.orderId, input.status, adminId, input.note);
+
+      // Fire-and-forget notifications for status changes that originate from admin
+      const order = await ctx.db.query.orders.findFirst({ where: eq(schema.orders.id, input.orderId) });
+      if (order) {
+        const contact = await getOrderContact(ctx.db, order);
+        const info = toOrderInfo(order);
+        if (input.status === "shipped") {
+          notifyShipped(contact, info).catch((e: unknown) => console.error("[comms] notifyShipped:", e));
+        } else if (input.status === "refunded") {
+          Promise.all([
+            notifyRefundInitiated(contact, info),
+            alertAdminRefund(info),
+          ]).catch((e: unknown) => console.error("[comms] refund notify:", e));
+        }
+      }
+
+      return result;
     }),
 
   // ── Admin: store razorpay IDs after webhook confirms payment ─────────────────

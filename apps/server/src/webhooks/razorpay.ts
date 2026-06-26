@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
 import { advanceOrderStatus, createRazorpayService } from "@azimuth/api";
+import { alertAdminNewOrder, notifyOrderPlaced } from "@azimuth/comms";
+import { getCustomerContact, orderInfo } from "../lib/comms.js";
 
 export async function razorpayWebhookHandler(req: Request, res: Response) {
   const sig = req.headers["x-razorpay-signature"];
@@ -106,6 +108,16 @@ async function handlePaymentCaptured(payload: Record<string, unknown>) {
   );
 
   console.log(`[webhook:razorpay] Order ${order.orderNumber} marked paid`);
+
+  const updatedOrder = await db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) });
+  if (updatedOrder) {
+    const contact = await getCustomerContact(updatedOrder);
+    const info = orderInfo(updatedOrder);
+    await Promise.all([
+      notifyOrderPlaced(contact, info),
+      alertAdminNewOrder(info),
+    ]);
+  }
 }
 
 async function handlePaymentFailed(payload: Record<string, unknown>) {

@@ -3,6 +3,14 @@ import { eq } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
 import { advanceOrderStatus } from "@azimuth/api";
+import {
+  alertAdminDeliveryFailed,
+  notifyDelivered,
+  notifyDeliveryFailed,
+  notifyOutForDelivery,
+  notifyShipped,
+} from "@azimuth/comms";
+import { getCustomerContact, orderInfo } from "../lib/comms.js";
 
 // ── Payload shape ─────────────────────────────────────────────────────────────
 // Delhivery pushes { Shipment: { AWB, Status: { StatusType, Status, StatusDateTime, StatusLocation, Instructions }, ... } }
@@ -142,6 +150,15 @@ async function processShipment(shipment: DelhiveryShipment) {
   );
 
   console.log(`[webhook:delhivery] order ${order.orderNumber} → ${targetStatus}`);
+
+  const contact = await getCustomerContact(order);
+  const info = orderInfo(order);
+  if (targetStatus === "picked_up") await notifyShipped(contact, info);
+  else if (targetStatus === "out_for_delivery") await notifyOutForDelivery(contact, info);
+  else if (targetStatus === "delivered") await notifyDelivered(contact, info);
+  else if (targetStatus === "delivery_attempted") {
+    await Promise.all([notifyDeliveryFailed(contact, info), alertAdminDeliveryFailed(info)]);
+  }
 }
 
 // ── Express handler ───────────────────────────────────────────────────────────
