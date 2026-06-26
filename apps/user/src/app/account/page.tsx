@@ -3,7 +3,7 @@
 import { type FormEvent, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ChevronRight, Heart, LogOut, MapPin, Package, User } from "lucide-react";
+import { ChevronRight, Heart, LogOut, MapPin, Package, TicketIcon, User } from "lucide-react";
 import { toast } from "sonner";
 
 import { AuthCard } from "@/components/auth-card";
@@ -537,6 +537,7 @@ const TABS = [
   { id: "addresses", label: "Addresses", icon: MapPin },
   { id: "orders", label: "Orders", icon: Package },
   { id: "wishlist", label: "Wishlist", icon: Heart },
+  { id: "support", label: "Support", icon: TicketIcon },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -624,6 +625,21 @@ export default function AccountPage() {
             {activeTab === "addresses" && <AddressesTab />}
             {activeTab === "orders" && <OrdersTab />}
             {activeTab === "wishlist" && <WishlistTab />}
+            {activeTab === "support" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold">Support</h2>
+                <p className="text-sm text-muted-foreground">
+                  Raise a request for returns, refunds, exchanges, or any other issue.
+                </p>
+                <Link
+                  href="/support"
+                  className="inline-flex items-center gap-2 border border-foreground px-5 py-2.5 text-[11px] font-semibold tracking-[0.14em] uppercase hover:bg-foreground hover:text-background transition-all"
+                >
+                  <TicketIcon className="size-3.5" />
+                  View support requests
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </main>
