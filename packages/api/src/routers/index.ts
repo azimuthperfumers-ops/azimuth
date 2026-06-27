@@ -12,11 +12,15 @@ import { storageRouter } from "./storage.router";
 import { userDataRouter } from "./user-data.router";
 import { userRouter } from "./user.router";
 import { ticketRouter } from "./ticket.router";
+import { adminUserRouter } from "./admin-user.router";
+import { analyticsRouter } from "./analytics.router";
 
 export const appRouter = router({
+  analytics: analyticsRouter,
   health: healthRouter,
   user: userRouter,
   adminAuth: adminAuthRouter,
+  adminUser: adminUserRouter,
   catalog: catalogRouter,
   cart: cartRouter,
   order: orderRouter,

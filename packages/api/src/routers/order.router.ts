@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { schema } from "@azimuth/db";
-import { eq } from "drizzle-orm";
+import { and, count, eq, gte, sql, sum } from "drizzle-orm";
 import {
   alertAdminRefund,
   notifyRefundInitiated,
@@ -11,6 +11,7 @@ import {
 } from "@azimuth/comms";
 
 import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
+import { createLogisticsService } from "../services/logistics.service";
 import {
   advanceOrderStatus,
   createOrder,
@@ -128,17 +129,97 @@ export const orderRouter = router({
       getOrderByNumber(ctx.db, input.orderNumber, ctx.session.user.id),
     ),
 
+  // ── User: estimate shipping cost (Delhivery rate API) ───────────────────────
+
+  estimateShipping: protectedProcedure
+    .input(
+      z.object({
+        pincode: z.string().length(6),
+        items: z.array(z.object({ sizeMl: z.number().int().positive(), quantity: z.number().int().min(1) })),
+      }),
+    )
+    .query(async ({ input }) => {
+      // Estimate weight: ~(sizeMl + 300)g per item unit + 200g outer packaging
+      const weightGrams = Math.max(
+        500,
+        input.items.reduce((sum, i) => sum + (i.sizeMl + 300) * i.quantity, 0) + 200,
+      );
+      const logistics = createLogisticsService();
+      return logistics.getShippingRate(input.pincode, weightGrams);
+    }),
+
   // ── Admin: list all orders ───────────────────────────────────────────────────
 
   adminList: adminProcedure
     .input(
       z.object({
         status: z.enum(ORDER_STATUS_VALUES).optional(),
-        limit: z.number().int().min(1).max(100).default(50),
+        search: z.string().optional(),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+        limit: z.number().int().min(1).max(200).default(50),
         offset: z.number().int().nonnegative().default(0),
       }),
     )
     .query(({ ctx, input }) => getAllOrders(ctx.db, input)),
+
+  // ── Admin: dashboard stats (DB-aggregated, React Query caches 5min) ──────────
+
+  adminStats: adminProcedure.query(async ({ ctx }) => {
+    const db = ctx.db;
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Status breakdown — count + revenue per status in one pass
+    const breakdown = await db
+      .select({
+        status: schema.orders.status,
+        orderCount: count(),
+        revenue: sum(schema.orders.total),
+      })
+      .from(schema.orders)
+      .groupBy(schema.orders.status);
+
+    // Today's confirmed revenue
+    const CONFIRMED = ["paid","processing","picked_up","shipped","out_for_delivery","delivery_attempted","delivered","rto_initiated","rto_delivered"];
+    const todayRevenue = await db
+      .select({ revenue: sum(schema.orders.total) })
+      .from(schema.orders)
+      .where(
+        and(
+          gte(schema.orders.createdAt, startOfToday),
+          sql`${schema.orders.status} = ANY(ARRAY[${sql.raw(CONFIRMED.map((s) => `'${s}'`).join(","))}]::order_status[])`,
+        ),
+      );
+
+    const mtdRevenue = await db
+      .select({ revenue: sum(schema.orders.total) })
+      .from(schema.orders)
+      .where(
+        and(
+          gte(schema.orders.createdAt, startOfMonth),
+          sql`${schema.orders.status} = ANY(ARRAY[${sql.raw(CONFIRMED.map((s) => `'${s}'`).join(","))}]::order_status[])`,
+        ),
+      );
+
+    const todayOrders = await db
+      .select({ orderCount: count() })
+      .from(schema.orders)
+      .where(gte(schema.orders.createdAt, startOfToday));
+
+    return {
+      breakdown: breakdown.map((r) => ({
+        status: r.status,
+        count: Number(r.orderCount),
+        revenue: Number(r.revenue ?? 0),
+      })),
+      todayRevenue: Number(todayRevenue[0]?.revenue ?? 0),
+      mtdRevenue: Number(mtdRevenue[0]?.revenue ?? 0),
+      todayOrderCount: Number(todayOrders[0]?.orderCount ?? 0),
+    };
+  }),
 
   adminGet: adminProcedure
     .input(z.object({ orderId: z.string().uuid() }))
@@ -155,16 +236,19 @@ export const orderRouter = router({
         delhiveryWaybill: z.string().optional(),
         trackingUrl: z.string().url().optional(),
         gstInvoiceNumber: z.string().optional(),
+        // Actual Delhivery charge (₹). Customer pays shippingCharge = half of this.
+        shippingCostActual: z.number().positive().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const adminId = ctx.session.user.id;
 
-      if (input.delhiveryWaybill || input.trackingUrl || input.gstInvoiceNumber) {
+      if (input.delhiveryWaybill || input.trackingUrl || input.gstInvoiceNumber || input.shippingCostActual) {
         const update: Record<string, string> = {};
         if (input.delhiveryWaybill) update.delhiveryWaybill = input.delhiveryWaybill;
         if (input.trackingUrl) update.trackingUrl = input.trackingUrl;
         if (input.gstInvoiceNumber) update.gstInvoiceNumber = input.gstInvoiceNumber;
+        if (input.shippingCostActual) update.shippingCostActual = String(input.shippingCostActual);
         await ctx.db
           .update(schema.orders)
           .set(update)

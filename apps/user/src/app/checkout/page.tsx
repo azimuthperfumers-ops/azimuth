@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, Lock, MapPin, Plus, Tag } from "lucide-react";
 import { toast } from "sonner";
@@ -51,10 +51,6 @@ declare global {
 
 function formatInr(n: number) {
   return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-}
-
-function shippingCharge(subtotal: number) {
-  return subtotal >= 999 ? 0 : 99;
 }
 
 function loadRazorpayScript(): Promise<boolean> {
@@ -337,18 +333,26 @@ function CheckoutSummary({
   subtotal,
   couponCode,
   couponDiscount,
+  shippingRate,
+  shippingLoading,
+  pincode,
   paying,
   onPay,
 }: {
   subtotal: number;
   couponCode: string | null;
   couponDiscount: number | null;
+  shippingRate: number | null;
+  shippingLoading: boolean;
+  pincode: string;
   paying: boolean;
   onPay: () => void;
 }) {
   const discount = couponDiscount ?? 0;
-  const shipping = shippingCharge(subtotal);
+  const shipping = shippingRate ?? 0;
   const total = Math.max(0, subtotal - discount) + shipping;
+  const needsPincode = pincode.length < 6;
+  const blocked = paying || shippingLoading || needsPincode;
 
   return (
     <div className="border border-border lg:sticky lg:top-24">
@@ -376,19 +380,23 @@ function CheckoutSummary({
 
         <div className="flex justify-between text-sm text-muted-foreground/60">
           <span>Shipping</span>
-          <span className="tabular-nums">{shipping === 0 ? "Free" : formatInr(shipping)}</span>
+          <span className="tabular-nums">
+            {needsPincode
+              ? <span className="text-xs italic">Enter pincode</span>
+              : shippingLoading
+              ? <span className="animate-pulse">Calculating…</span>
+              : shippingRate === null
+              ? <span className="text-destructive text-xs">Not available</span>
+              : formatInr(shippingRate)}
+          </span>
         </div>
-
-        {subtotal < 999 && (
-          <p className="text-[10.5px] text-muted-foreground/50 border border-dashed border-border px-3 py-2 text-center">
-            Add {formatInr(999 - subtotal)} more for free shipping
-          </p>
-        )}
 
         <div className="border-t border-border pt-4 flex justify-between">
           <span className="font-semibold text-base">Total</span>
           <div className="text-right">
-            <span className="font-bold text-xl tabular-nums">{formatInr(total)}</span>
+            <span className="font-bold text-xl tabular-nums">
+              {shippingLoading || needsPincode ? "—" : formatInr(total)}
+            </span>
             <p className="text-[10px] text-muted-foreground/40 mt-0.5">Incl. of all taxes</p>
           </div>
         </div>
@@ -397,16 +405,16 @@ function CheckoutSummary({
       <div className="px-6 pb-6 space-y-3">
         <button
           type="button"
-          disabled={paying}
+          disabled={blocked}
           onClick={onPay}
           className={cn(
             "w-full py-4 text-[11px] font-bold tracking-[0.26em] uppercase transition-all",
-            paying
+            blocked
               ? "bg-muted text-muted-foreground cursor-not-allowed"
               : "bg-foreground text-background hover:opacity-85",
           )}
         >
-          {paying ? "Processing…" : `Pay ${formatInr(total)}`}
+          {paying ? "Processing…" : shippingLoading ? "Calculating shipping…" : `Pay ${shippingLoading || needsPincode ? "—" : formatInr(total)}`}
         </button>
         <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/40">
           <Lock className="size-3" />
@@ -479,8 +487,26 @@ export default function CheckoutPage() {
   const items = cart.items;
   const subtotal = cartSubtotal(items);
   const discount = cart.couponDiscount ?? 0;
-  const shipping = shippingCharge(subtotal);
-  const total = Math.max(0, subtotal - discount) + shipping;
+
+  // Derive current pincode from whichever address is active
+  const currentPincode = useMemo(() => {
+    if (showNewForm) return newForm.pincode;
+    const saved = (savedAddresses ?? []).find((a) => a.id === selectedId);
+    return saved?.pincode ?? "";
+  }, [showNewForm, newForm.pincode, savedAddresses, selectedId]);
+
+  const shippingQuery = trpc.order.estimateShipping.useQuery(
+    { pincode: currentPincode, items: items.map((i) => ({ sizeMl: i.sizeMl, quantity: i.quantity })) },
+    { enabled: currentPincode.length === 6, staleTime: 5 * 60 * 1000 },
+  );
+
+  // null = serviceable rate; null = not available/loading
+  const shippingRate: number | null =
+    shippingQuery.data?.available ? shippingQuery.data.chargeInr : null;
+  const shippingLoading = currentPincode.length === 6 && shippingQuery.isLoading;
+
+  const shippingForOrder = shippingRate ?? 0;
+  const total = Math.max(0, subtotal - discount) + shippingForOrder;
 
   function resolveShippingAddress(): AddressForm | null {
     if (showNewForm) return newForm;
@@ -515,6 +541,16 @@ export default function CheckoutPage() {
 
     if (items.length === 0) {
       toast.error("Your cart is empty");
+      return;
+    }
+
+    if (shippingLoading) {
+      toast.error("Calculating shipping cost, please wait…");
+      return;
+    }
+
+    if (addr.pincode.length === 6 && shippingQuery.isSuccess && !shippingQuery.data?.available) {
+      toast.error("Delivery not available to this pincode");
       return;
     }
 
@@ -566,7 +602,7 @@ export default function CheckoutPage() {
         })),
         subtotal,
         discountAmount: discount,
-        shippingCharge: shipping,
+        shippingCharge: shippingForOrder,
         taxAmount: 0,
         total,
         couponId: cart.couponId ?? null,
@@ -756,6 +792,9 @@ export default function CheckoutPage() {
             subtotal={subtotal}
             couponCode={cart.couponCode}
             couponDiscount={cart.couponDiscount}
+            shippingRate={shippingRate}
+            shippingLoading={shippingLoading}
+            pincode={currentPincode}
             paying={paying}
             onPay={handlePay}
           />

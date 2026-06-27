@@ -4,6 +4,7 @@
 import type {
   ILogisticsService,
   ServiceabilityResult,
+  ShippingRateResult,
   CreateShipmentInput,
   ShipmentResult,
   TrackingResult,
@@ -19,6 +20,10 @@ export class StubLogisticsProvider implements ILogisticsService {
   async checkServiceability(pincode: string): Promise<ServiceabilityResult> {
     console.log(`[logistics:stub] serviceability — ${pincode}`);
     return { serviceable: true, mode: "Surface", estimatedDays: 5, cod: false };
+  }
+
+  async getShippingRate(_destPincode: string, _weightGrams: number): Promise<ShippingRateResult> {
+    return { available: true, chargeInr: 99, estimatedDays: 5 };
   }
 
   async createShipment(input: CreateShipmentInput): Promise<ShipmentResult> {
@@ -80,6 +85,39 @@ export class DelhiveryProvider implements ILogisticsService {
       estimatedDays: entry.pre_paid?.surface_days ? Number(entry.pre_paid.surface_days) : null,
       cod: entry.cash_on_delivery?.cod === "Y",
     };
+  }
+
+  async getShippingRate(destPincode: string, weightGrams: number): Promise<ShippingRateResult> {
+    const originPin = env.DELHIVERY_WAREHOUSE_PINCODE ?? "305005";
+    const url =
+      `${BASE_URL}/api/kinko/v0.2/packages/fetch_suggested_packages/` +
+      `?md=S&ss=Delivered&d_pin=${destPincode}&o_pin=${originPin}&cgm=${weightGrams}&pt=Pre-paid&cod_amount=0`;
+
+    try {
+      const res = await fetch(url, { headers: this.headers() });
+      if (!res.ok) return { available: false, chargeInr: 0, estimatedDays: null };
+
+      type RateRow = { total?: number; freight?: number; gst?: number; delivery_days?: number };
+      const data = (await res.json()) as RateRow[] | { surfaces?: RateRow[]; surface?: RateRow[] };
+
+      let row: RateRow | undefined;
+      if (Array.isArray(data)) {
+        row = data[0];
+      } else {
+        row = (data.surfaces ?? data.surface)?.[0];
+      }
+
+      if (!row) return { available: false, chargeInr: 0, estimatedDays: null };
+
+      const charge = row.total ?? ((row.freight ?? 0) + (row.gst ?? 0));
+      return {
+        available: charge > 0,
+        chargeInr: Math.ceil(charge),
+        estimatedDays: row.delivery_days ?? null,
+      };
+    } catch {
+      return { available: false, chargeInr: 0, estimatedDays: null };
+    }
   }
 
   async createShipment(input: CreateShipmentInput): Promise<ShipmentResult> {

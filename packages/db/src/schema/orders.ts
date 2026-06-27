@@ -67,6 +67,8 @@ export const orders = pgTable(
     delhiveryWaybill: text("delhivery_waybill"),
     trackingUrl: text("tracking_url"),
     podImageUrl: text("pod_image_url"),
+    // Actual cost Delhivery charges us. shippingCharge (above) = what customer pays = half of this.
+    shippingCostActual: numeric("shipping_cost_actual", { precision: 10, scale: 2 }),
 
     // GST
     gstInvoiceNumber: text("gst_invoice_number"),

@@ -45,6 +45,12 @@ export type TrackingResult = {
   location?: string;
 };
 
+export type ShippingRateResult = {
+  available: boolean;
+  chargeInr: number;
+  estimatedDays: number | null;
+};
+
 export type CreateReturnShipmentInput = {
   originalOrderNumber: string;
   customerName: string;
@@ -67,6 +73,7 @@ export type CreateReturnShipmentInput = {
 
 export interface ILogisticsService {
   checkServiceability(pincode: string): Promise<ServiceabilityResult>;
+  getShippingRate(destPincode: string, weightGrams: number): Promise<ShippingRateResult>;
   createShipment(input: CreateShipmentInput): Promise<ShipmentResult>;
   trackShipment(waybill: string): Promise<TrackingResult>;
   createReturnShipment(input: CreateReturnShipmentInput): Promise<ShipmentResult>;

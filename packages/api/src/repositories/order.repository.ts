@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
 
 import type { Database } from "@azimuth/db";
 import { schema } from "@azimuth/db";
@@ -204,14 +204,44 @@ export async function getOrderByNumber(db: Database, orderNumber: string, userId
 
 export async function getAllOrders(
   db: Database,
-  opts: { status?: string; limit?: number; offset?: number } = {},
+  opts: {
+    status?: string;
+    search?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    limit?: number;
+    offset?: number;
+  } = {},
 ) {
   const { limit = 50, offset = 0 } = opts;
 
+  const conditions = [];
+
+  if (opts.status) {
+    conditions.push(eq(schema.orders.status, opts.status as typeof schema.orders.$inferSelect["status"]));
+  }
+  if (opts.search) {
+    const q = `%${opts.search}%`;
+    conditions.push(
+      or(
+        ilike(schema.orders.orderNumber, q),
+        sql`${schema.orders.shippingAddress}->>'fullName' ILIKE ${q}`,
+        sql`${schema.orders.shippingAddress}->>'phone' ILIKE ${q}`,
+        ilike(schema.orders.delhiveryWaybill, q),
+      ),
+    );
+  }
+  if (opts.dateFrom) {
+    conditions.push(gte(schema.orders.createdAt, new Date(opts.dateFrom)));
+  }
+  if (opts.dateTo) {
+    const to = new Date(opts.dateTo);
+    to.setHours(23, 59, 59, 999);
+    conditions.push(lte(schema.orders.createdAt, to));
+  }
+
   return db.query.orders.findMany({
-    where: opts.status
-      ? eq(schema.orders.status, opts.status as typeof schema.orders.$inferSelect["status"])
-      : undefined,
+    where: conditions.length > 0 ? and(...conditions) : undefined,
     with: {
       items: true,
       statusHistory: { orderBy: desc(schema.orderStatusHistory.createdAt) },
