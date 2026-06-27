@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,9 +30,22 @@ const STATUS_FILTERS = [
   { value: "archived", label: "Archived" },
 ] as const;
 
+type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
+
 export default function ProductsPage() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]["value"]>("all");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const search = searchParams.get("q") ?? "";
+  const statusFilter = (searchParams.get("status") ?? "all") as StatusFilter;
+
+  function setParam(key: string, value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value && value !== "all") params.set(key, value); else params.delete(key);
+    router.replace(`${pathname}?${params.toString()}`);
+  }
+
   const products = trpc.catalog.listProducts.useQuery({
     limit: 50,
     search: search || undefined,
@@ -40,7 +53,6 @@ export default function ProductsPage() {
   });
   const linkedVariants = trpc.discount.listLinkedVariants.useQuery();
 
-  // variantId → { type, value } for active discounts
   const discountMap = new Map(
     (linkedVariants.data ?? [])
       .filter((lv) => lv.discount.isActive)
@@ -65,7 +77,7 @@ export default function ProductsPage() {
             type="search"
             placeholder="Search products…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => setParam("q", e.target.value)}
             className="w-60"
           />
           <Button asChild>
@@ -80,7 +92,7 @@ export default function ProductsPage() {
             key={filter.value}
             size="sm"
             variant={statusFilter === filter.value ? "default" : "outline"}
-            onClick={() => setStatusFilter(filter.value)}
+            onClick={() => setParam("status", filter.value)}
           >
             {filter.label}
           </Button>
@@ -130,7 +142,6 @@ export default function ProductsPage() {
                     ? formatInr(minPrice)
                     : `${formatInr(minPrice)} – ${formatInr(maxPrice!)}`;
 
-              // discounted prices across variants that have an active discount
               const discPrices = product.variants
                 .map((v) => discountedPrice(Number(v.sellingPrice), v.id))
                 .filter((p): p is number => p !== null);

@@ -26,8 +26,8 @@ export function createCouponService(db: Database) {
       return repo.listCoupons(input);
     },
 
-    listActive() {
-      return repo.listActive();
+    listActive(userId?: string) {
+      return repo.listActive(userId);
     },
 
     async createCoupon(input: CreateCouponInput) {

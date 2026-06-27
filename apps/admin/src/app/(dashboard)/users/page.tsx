@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Search, Users, ShoppingBag } from "lucide-react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { Search, ShoppingBag } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +25,16 @@ function fmtDate(d: string | Date) {
 
 export default function UsersPage() {
   const router = useRouter();
-  const [search, setSearch] = useState("");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const search = searchParams.get("q") ?? "";
+
+  function setSearch(v: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (v) params.set("q", v); else params.delete("q");
+    router.replace(`${pathname}?${params.toString()}`);
+  }
 
   const { data, isLoading } = trpc.adminUser.list.useQuery({
     search: search || undefined,

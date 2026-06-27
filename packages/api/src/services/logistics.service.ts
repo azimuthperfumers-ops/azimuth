@@ -87,9 +87,12 @@ import { env } from "../env";
 export function createLogisticsService(): ILogisticsService {
   if (env.LOGISTICS_PROVIDER === "delhivery") {
     if (!env.DELHIVERY_API_TOKEN || !env.DELHIVERY_PICKUP_LOCATION) {
+      console.log("HERE");
+      
       console.warn("[logistics] DELHIVERY_API_TOKEN or DELHIVERY_PICKUP_LOCATION not set — using stub");
       return new StubLogisticsProvider();
     }
+     console.log("HEEEEEERE");
     return new DelhiveryProvider(env.DELHIVERY_API_TOKEN, env.DELHIVERY_PICKUP_LOCATION);
   }
 

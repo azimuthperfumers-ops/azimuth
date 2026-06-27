@@ -1,0 +1,21 @@
+# Exclude frontend apps — only server is deployed
+apps/admin
+apps/user
+
+# Git & editor
+.git
+.gitignore
+*.txt
+
+# Env files — inject via fly secrets set
+.env
+.env.*
+
+# Local build artifacts
+**/node_modules/.cache
+**/.turbo
+**/dist
+**/.next
+
+# Dev-only
+docker-compose.yml

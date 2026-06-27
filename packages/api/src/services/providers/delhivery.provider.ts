@@ -90,14 +90,19 @@ export class DelhiveryProvider implements ILogisticsService {
   async getShippingRate(destPincode: string, weightGrams: number): Promise<ShippingRateResult> {
     const originPin = env.DELHIVERY_WAREHOUSE_PINCODE ?? "305005";
     const url =
-      `${BASE_URL}/api/kinko/v0.2/packages/fetch_suggested_packages/` +
+      `${BASE_URL}/c/api/kinko/v0.2/packages/fetch_suggested_packages/` +
       `?md=S&ss=Delivered&d_pin=${destPincode}&o_pin=${originPin}&cgm=${weightGrams}&pt=Pre-paid&cod_amount=0`;
 
     try {
       const res = await fetch(url, { headers: this.headers() });
-      if (!res.ok) return { available: false, chargeInr: 0, estimatedDays: null };
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error(`[delhivery] rate API ${res.status}: ${body.slice(0, 300)}`);
+        return { available: false, chargeInr: 0, estimatedDays: null };
+      }
 
-      type RateRow = { total?: number; freight?: number; gst?: number; delivery_days?: number };
+      // Delhivery may use 'charge', 'freight', or 'total' depending on the plan/route
+      type RateRow = { total?: number; charge?: number; freight?: number; gst?: number; delivery_days?: number };
       const data = (await res.json()) as RateRow[] | { surfaces?: RateRow[]; surface?: RateRow[] };
 
       let row: RateRow | undefined;
@@ -107,15 +112,23 @@ export class DelhiveryProvider implements ILogisticsService {
         row = (data.surfaces ?? data.surface)?.[0];
       }
 
-      if (!row) return { available: false, chargeInr: 0, estimatedDays: null };
+      if (!row) {
+        console.error(`[delhivery] rate API returned no rows — raw:`, JSON.stringify(data).slice(0, 500));
+        return { available: false, chargeInr: 0, estimatedDays: null };
+      }
 
-      const charge = row.total ?? ((row.freight ?? 0) + (row.gst ?? 0));
+      // total = fully inclusive; charge = base rate; freight + gst = old breakdown format
+      const chargeAmt = row.total ?? row.charge ?? ((row.freight ?? 0) + (row.gst ?? 0));
+      if (chargeAmt <= 0) {
+        console.error(`[delhivery] rate resolved to 0 — row:`, JSON.stringify(row));
+      }
       return {
-        available: charge > 0,
-        chargeInr: Math.ceil(charge),
+        available: chargeAmt > 0,
+        chargeInr: Math.ceil(chargeAmt),
         estimatedDays: row.delivery_days ?? null,
       };
-    } catch {
+    } catch (err) {
+      console.error(`[delhivery] rate API exception:`, err);
       return { available: false, chargeInr: 0, estimatedDays: null };
     }
   }

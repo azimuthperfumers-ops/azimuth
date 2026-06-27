@@ -150,6 +150,9 @@ importers:
       ioredis:
         specifier: ^5.11.1
         version: 5.11.1
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.4
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -163,9 +166,6 @@ importers:
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.0
-      tsx:
-        specifier: ^4.19.0
-        version: 4.22.4
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

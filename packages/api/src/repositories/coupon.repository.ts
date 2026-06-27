@@ -1,6 +1,6 @@
 import type { Database } from "@azimuth/db";
 import { schema } from "@azimuth/db";
-import { and, asc, count, desc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 
 import type { CreateCouponInput, ListCouponsInput, RecordCouponUsageInput, UpdateCouponInput } from "../schemas/coupon.schema";
 
@@ -65,13 +65,16 @@ export function createCouponRepository(db: Database) {
       await db.delete(schema.coupons).where(eq(schema.coupons.id, id));
     },
 
-    async listActive() {
+    async listActive(userId?: string) {
       const now = new Date();
-      return db.query.coupons.findMany({
+
+      // Filter out globally exhausted coupons at DB level
+      const coupons = await db.query.coupons.findMany({
         where: and(
           eq(schema.coupons.isActive, true),
           lte(schema.coupons.startsAt, now),
           or(isNull(schema.coupons.endsAt), gt(schema.coupons.endsAt, now)),
+          or(isNull(schema.coupons.usageLimit), lt(schema.coupons.usedCount, schema.coupons.usageLimit)),
         ),
         columns: {
           id: true,
@@ -82,8 +85,33 @@ export function createCouponRepository(db: Database) {
           minCartValue: true,
           maxDiscount: true,
           endsAt: true,
+          usageLimitPerUser: true,
         },
         orderBy: asc(schema.coupons.minCartValue),
+      });
+
+      if (!userId || coupons.length === 0) return coupons;
+
+      // Count this user's usages for these coupons in one query
+      const usageRows = await db
+        .select({
+          couponId: schema.couponUsages.couponId,
+          cnt: sql<number>`cast(count(*) as int)`,
+        })
+        .from(schema.couponUsages)
+        .where(
+          and(
+            eq(schema.couponUsages.userId, userId),
+            inArray(schema.couponUsages.couponId, coupons.map((c) => c.id)),
+          ),
+        )
+        .groupBy(schema.couponUsages.couponId);
+
+      const userCount = new Map(usageRows.map((r) => [r.couponId, r.cnt]));
+
+      return coupons.filter((c) => {
+        if (c.usageLimitPerUser === null) return true;
+        return (userCount.get(c.id) ?? 0) < c.usageLimitPerUser;
       });
     },
 

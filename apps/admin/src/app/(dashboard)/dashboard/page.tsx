@@ -216,6 +216,15 @@ function OrderStatusPie({ breakdown }: { breakdown: { status: string; count: num
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function thisMonthRange(): { from: string; to: string } {
+  const now = new Date();
+  const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const to = now.toISOString().split("T")[0];
+  return { from, to };
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 // 5-minute stale time — stats are expensive, don't need real-time
@@ -223,6 +232,7 @@ const STATS_QUERY_OPTS = { staleTime: 5 * 60 * 1000 } as const;
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { from: mtdFrom, to: mtdTo } = thisMonthRange();
 
   // Heavy aggregations — server-side, cached 5 min
   const statsQuery = trpc.order.adminStats.useQuery(undefined, STATS_QUERY_OPTS);
@@ -290,7 +300,7 @@ export default function DashboardPage() {
               : "Loading…"
           }
           icon={IndianRupee}
-          href="/orders"
+          href={`/orders?from=${mtdFrom}&to=${mtdTo}`}
         />
         <KpiCard
           label="Needs fulfillment"
@@ -302,14 +312,14 @@ export default function DashboardPage() {
           }
           icon={PackageCheck}
           alert={derived.fulfillmentQueue.length > 0}
-          href="/orders"
+          href="/orders?status=paid"
         />
         <KpiCard
           label="In transit"
           value={derived.inTransit.length}
           sub="shipped / out for delivery"
           icon={Truck}
-          href="/orders"
+          href="/orders?status=shipped"
         />
         <KpiCard
           label="Open tickets"
@@ -332,7 +342,7 @@ export default function DashboardPage() {
             <SectionHeader
               title="Fulfillment queue"
               count={derived.fulfillmentQueue.length}
-              href="/orders"
+              href="/orders?status=paid"
             />
           </CardHeader>
           <CardContent className="px-5 pt-4 pb-2">
@@ -489,7 +499,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2 px-5 pt-5 pb-0">
               <Truck className="size-4 text-muted-foreground" />
               <CardTitle>In transit ({derived.inTransit.length})</CardTitle>
-              <Link href="/orders" className="ml-auto flex items-center gap-0.5 text-xs font-semibold text-primary hover:underline">
+              <Link href="/orders?status=shipped" className="ml-auto flex items-center gap-0.5 text-xs font-semibold text-primary hover:underline">
                 View all <ArrowRight className="size-3" />
               </Link>
             </div>

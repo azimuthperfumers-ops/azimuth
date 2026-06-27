@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart2, Boxes, FlaskConical, LayoutDashboard, Package, PercentCircle, Settings, ShoppingBag, Tag, Tags, TicketIcon, Users } from "lucide-react";
@@ -74,6 +74,12 @@ const NAV_GROUPS = [
   },
 ];
 
+function getSidebarDefaultOpen(): boolean {
+  if (typeof document === "undefined") return true;
+  const match = document.cookie.match(/(?:^|;\s*)sidebar_state=([^;]*)/);
+  return match ? match[1] !== "false" : true;
+}
+
 function initials(name: string) {
   return name
     .split(" ")
@@ -87,6 +93,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const { data: session, isPending } = authClient.useSession();
+  const [sidebarDefaultOpen] = useState(getSidebarDefaultOpen);
   const isAdmin = session?.user.role === "admin";
 
   useEffect(() => {
@@ -100,7 +107,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={sidebarDefaultOpen}>
       <Sidebar>
         {/* Brand header */}
         <SidebarHeader>

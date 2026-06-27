@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@azimuth/api";
 import { toast } from "sonner";
@@ -331,12 +331,31 @@ function OrderRow({ order }: { order: Order }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const search = searchParams.get("q") ?? "";
+  const statusFilter = (searchParams.get("status") ?? "all") as OrderStatus | "all";
+  const dateFrom = searchParams.get("from") ?? "";
+  const dateTo = searchParams.get("to") ?? "";
 
   const hasFilters = search || statusFilter !== "all" || dateFrom || dateTo;
+
+  function setParam(key: string, value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set(key, value); else params.delete(key);
+    router.replace(`${pathname}?${params.toString()}`);
+  }
+
+  function setSearch(v: string) { setParam("q", v); }
+  function setStatusFilter(v: string) { setParam("status", v === "all" ? "" : v); }
+  function setDateFrom(v: string) { setParam("from", v); }
+  function setDateTo(v: string) { setParam("to", v); }
+
+  function clearFilters() {
+    router.replace(pathname);
+  }
 
   const { data: orders, isLoading } = trpc.order.adminList.useQuery({
     status: statusFilter === "all" ? undefined : statusFilter,
@@ -352,13 +371,6 @@ export default function OrdersPage() {
     const total = orders.reduce((sum, o) => sum + Number(o.total), 0);
     return { count: orders.length, total };
   }, [orders]);
-
-  function clearFilters() {
-    setSearch("");
-    setStatusFilter("all");
-    setDateFrom("");
-    setDateTo("");
-  }
 
   return (
     <div className="space-y-5">

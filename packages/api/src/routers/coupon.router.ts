@@ -28,9 +28,9 @@ export const couponRouter = router({
     .input(deleteCouponSchema)
     .mutation(({ ctx, input }) => createCouponService(ctx.db).deleteCoupon(input)),
 
-  // Public — returns active coupons for the coupon browser in cart
-  listActive: publicProcedure
-    .query(({ ctx }) => createCouponService(ctx.db).listActive()),
+  // Returns active coupons filtered by user's per-coupon usage limit
+  listActive: protectedProcedure
+    .query(({ ctx }) => createCouponService(ctx.db).listActive(ctx.session.user.id)),
 
   // Public — called from user checkout (pass userId for per-user check)
   validate: publicProcedure
