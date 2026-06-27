@@ -256,7 +256,7 @@ export default function AdminOrderDetailPage({
     : [];
 
   return (
-    <div className="space-y-8 max-w-4xl">
+    <div className="space-y-8">
 
       {/* Back + header */}
       <div>
@@ -427,10 +427,10 @@ export default function AdminOrderDetailPage({
           </section>
 
           {/* Shipping */}
-          {(order.delhiveryWaybill || order.trackingUrl) && (
+          {(order.delhiveryWaybill || order.trackingUrl || order.podImageUrl) && (
             <section>
               <SectionLabel>Shipping</SectionLabel>
-              <div className="border border-border p-4 space-y-1.5 text-[12px]">
+              <div className="border border-border p-4 space-y-2 text-[12px]">
                 {order.delhiveryWaybill && (
                   <div className="flex justify-between gap-2">
                     <span className="text-muted-foreground shrink-0">Waybill</span>
@@ -446,6 +446,21 @@ export default function AdminOrderDetailPage({
                   >
                     {order.trackingUrl}
                   </a>
+                )}
+                {order.podImageUrl && (
+                  <div className="pt-1 space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50">
+                      Proof of delivery
+                    </p>
+                    <a href={order.podImageUrl} target="_blank" rel="noopener noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={order.podImageUrl}
+                        alt="Proof of delivery"
+                        className="max-h-48 border border-border object-contain hover:opacity-80 transition-opacity"
+                      />
+                    </a>
+                  </div>
                 )}
               </div>
             </section>

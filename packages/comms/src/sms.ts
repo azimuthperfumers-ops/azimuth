@@ -1,4 +1,5 @@
 import { msg91Post } from "./client.js";
+import { env } from "./env.js";
 
 // MSG91 Flow/Template SMS — DLT-compliant for India.
 // flowId = MSG91 Flow ID (create in MSG91 dashboard under SMS > Flows).
@@ -12,7 +13,7 @@ export async function sendSms(
 ): Promise<void> {
   await msg91Post("https://control.msg91.com/api/v5/flow/", {
     flow_id: flowId,
-    sender: process.env.MSG91_SENDER_ID ?? "AZIMUT",
+    sender: env.MSG91_SENDER_ID,
     short_url: "0",
     mobiles: mobile,
     ...vars,

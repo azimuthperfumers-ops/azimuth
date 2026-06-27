@@ -324,9 +324,13 @@ importers:
         version: 5.9.3
 
   packages/comms:
+    dependencies:
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
     devDependencies:
       '@types/node':
-        specifier: ^22.10.0
+        specifier: ^22.20.0
         version: 22.20.0
       typescript:
         specifier: ^5.7.0

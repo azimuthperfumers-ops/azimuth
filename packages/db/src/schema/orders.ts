@@ -66,6 +66,7 @@ export const orders = pgTable(
     // Shipping
     delhiveryWaybill: text("delhivery_waybill"),
     trackingUrl: text("tracking_url"),
+    podImageUrl: text("pod_image_url"),
 
     // GST
     gstInvoiceNumber: text("gst_invoice_number"),

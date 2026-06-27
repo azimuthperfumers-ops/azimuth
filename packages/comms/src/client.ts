@@ -1,9 +1,10 @@
 // Raw MSG91 HTTP helpers. All channels share the same authkey.
 
+import { env } from "./env.js";
+
 function authKey(): string {
-  const k = process.env.MSG91_AUTH_KEY;
-  if (!k) throw new Error("MSG91_AUTH_KEY not set");
-  return k;
+  if (!env.MSG91_AUTH_KEY) throw new Error("MSG91_AUTH_KEY not set");
+  return env.MSG91_AUTH_KEY;
 }
 
 export async function msg91Post(url: string, body: unknown): Promise<unknown> {

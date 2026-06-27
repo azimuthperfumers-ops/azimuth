@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 
 import { schema } from "@azimuth/db";
 import { createRazorpayService } from "../services/razorpay.service";
-import { createDelhiveryService } from "../services/delhivery.service";
+import { createLogisticsService } from "../services/logistics.service";
 import { advanceOrderStatus } from "../repositories/order.repository";
 import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import { router } from "../trpc";
@@ -36,9 +36,18 @@ export const ticketRouter = router({
         message: z.string().min(10),
         type: z.enum(["general", "return", "exchange", "refund", "damaged", "other"]).default("general"),
         orderId: z.string().uuid().optional(),
+        attachmentUrls: z.array(z.string().url()).max(5).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const PHOTO_REQUIRED = new Set(["return", "exchange", "damaged"]);
+      if (PHOTO_REQUIRED.has(input.type) && (!input.attachmentUrls || input.attachmentUrls.length === 0)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "At least one photo is required for return, exchange, and damaged item requests.",
+        });
+      }
+
       const userId = ctx.session.user.id;
       const ticketNumber = await generateTicketNumber(ctx.db);
 
@@ -62,6 +71,7 @@ export const ticketRouter = router({
         senderId: userId,
         senderRole: "user",
         content: input.message,
+        attachmentUrls: input.attachmentUrls ?? [],
       });
 
       return ticket;
@@ -137,45 +147,83 @@ export const ticketRouter = router({
       });
     }),
 
-  // ── User/Admin: send message ───────────────────────────────────────────────
+  // ── User: send message (always senderRole:"user") ─────────────────────────
 
   sendMessage: protectedProcedure
     .input(
       z.object({
         ticketId: z.string().uuid(),
-        content: z.string().min(1).max(2000),
+        content: z.string().max(2000).default(""),
+        attachmentUrls: z.array(z.string().url()).max(5).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const isAdmin = ctx.session.user.role === "admin";
 
       const ticket = await ctx.db.query.tickets.findFirst({
-        where: and(
-          eq(schema.tickets.id, input.ticketId),
-          isAdmin ? undefined : eq(schema.tickets.userId, userId),
-        ),
+        where: and(eq(schema.tickets.id, input.ticketId), eq(schema.tickets.userId, userId)),
       });
 
       if (!ticket) throw new TRPCError({ code: "NOT_FOUND" });
       if (ticket.status === "closed") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Ticket is closed" });
       }
+      if (!input.content.trim() && (!input.attachmentUrls || input.attachmentUrls.length === 0)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Message or attachment required" });
+      }
 
       await ctx.db.insert(schema.ticketMessages).values({
         ticketId: ticket.id,
         senderId: userId,
-        senderRole: isAdmin ? "admin" : "user",
+        senderRole: "user",
         content: input.content,
+        attachmentUrls: input.attachmentUrls ?? [],
       });
 
-      // Update status: admin reply → awaiting_user, user reply → awaiting_admin
       await ctx.db
         .update(schema.tickets)
-        .set({
-          status: isAdmin ? "awaiting_user" : "awaiting_admin",
-          updatedAt: new Date(),
-        })
+        .set({ status: "awaiting_admin", updatedAt: new Date() })
+        .where(eq(schema.tickets.id, ticket.id));
+
+      return { ok: true };
+    }),
+
+  // ── Admin: send message (always senderRole:"admin") ────────────────────────
+
+  adminSendMessage: adminProcedure
+    .input(
+      z.object({
+        ticketId: z.string().uuid(),
+        content: z.string().max(2000).default(""),
+        attachmentUrls: z.array(z.string().url()).max(5).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const adminId = ctx.session.user.id;
+
+      const ticket = await ctx.db.query.tickets.findFirst({
+        where: eq(schema.tickets.id, input.ticketId),
+      });
+
+      if (!ticket) throw new TRPCError({ code: "NOT_FOUND" });
+      if (ticket.status === "closed") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Ticket is closed" });
+      }
+      if (!input.content.trim() && (!input.attachmentUrls || input.attachmentUrls.length === 0)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Message or attachment required" });
+      }
+
+      await ctx.db.insert(schema.ticketMessages).values({
+        ticketId: ticket.id,
+        senderId: adminId,
+        senderRole: "admin",
+        content: input.content,
+        attachmentUrls: input.attachmentUrls ?? [],
+      });
+
+      await ctx.db
+        .update(schema.tickets)
+        .set({ status: "awaiting_user", updatedAt: new Date() })
         .where(eq(schema.tickets.id, ticket.id));
 
       return { ok: true };
@@ -269,7 +317,7 @@ export const ticketRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Order has incomplete shipping address" });
         }
 
-        const delvSvc = createDelhiveryService();
+        const delvSvc = createLogisticsService();
         const returnResult = await delvSvc.createReturnShipment({
           originalOrderNumber: order.orderNumber,
           customerName: shippingAddr.fullName ?? ticket.user?.name ?? "Customer",

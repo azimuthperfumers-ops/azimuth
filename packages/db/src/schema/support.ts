@@ -67,6 +67,7 @@ export const ticketMessages = pgTable(
     senderId: text("sender_id").notNull(),
     senderRole: text("sender_role").$type<"user" | "admin">().notNull(),
     content: text("content").notNull(),
+    attachmentUrls: jsonb("attachment_urls").$type<string[]>().default([]).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("ticket_messages_ticket_idx").on(t.ticketId)],

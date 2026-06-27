@@ -11,6 +11,7 @@ import {
   notifyShipped,
 } from "@azimuth/comms";
 import { getCustomerContact, orderInfo } from "../lib/comms.js";
+import { env } from "../lib/env.js";
 
 // ── Payload shape ─────────────────────────────────────────────────────────────
 // Delhivery pushes { Shipment: { AWB, Status: { StatusType, Status, StatusDateTime, StatusLocation, Instructions }, ... } }
@@ -164,7 +165,7 @@ async function processShipment(shipment: DelhiveryShipment) {
 // ── Express handler ───────────────────────────────────────────────────────────
 
 export async function delhiveryWebhookHandler(req: Request, res: Response) {
-  const webhookToken = process.env.DELHIVERY_WEBHOOK_TOKEN;
+  const webhookToken = env.DELHIVERY_WEBHOOK_TOKEN;
   if (webhookToken && req.query.token !== webhookToken) {
     res.status(401).json({ error: "Unauthorized" });
     return;

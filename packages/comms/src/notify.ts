@@ -1,6 +1,7 @@
 import { sendSms, toMobile } from "./sms.js";
 import { sendWhatsapp } from "./whatsapp.js";
 import { sendEmail } from "./email.js";
+import { env } from "./env.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,10 +29,6 @@ async function fire(label: string, p: Promise<void>): Promise<void> {
   }
 }
 
-function env(key: string): string | undefined {
-  return process.env[key] || undefined;
-}
-
 // ── Order lifecycle ───────────────────────────────────────────────────────────
 
 export async function notifyOrderPlaced(
@@ -40,10 +37,10 @@ export async function notifyOrderPlaced(
 ): Promise<void> {
   const mobile = customer.phone ? toMobile(customer.phone) : null;
 
-  if (mobile && env("MSG91_SMS_FLOW_ORDER_PLACED")) {
+  if (mobile && env.MSG91_SMS_FLOW_ORDER_PLACED) {
     await fire(
       `sms:order_placed:${order.orderNumber}`,
-      sendSms(mobile, env("MSG91_SMS_FLOW_ORDER_PLACED")!, {
+      sendSms(mobile, env.MSG91_SMS_FLOW_ORDER_PLACED!, {
         name: customer.name,
         order_number: order.orderNumber,
         amount: order.totalInr,
@@ -51,10 +48,10 @@ export async function notifyOrderPlaced(
     );
   }
 
-  if (mobile && env("MSG91_WA_TEMPLATE_ORDER_PLACED")) {
+  if (mobile && env.MSG91_WA_TEMPLATE_ORDER_PLACED) {
     await fire(
       `wa:order_placed:${order.orderNumber}`,
-      sendWhatsapp(mobile, env("MSG91_WA_TEMPLATE_ORDER_PLACED")!, [
+      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_ORDER_PLACED!, [
         customer.name,
         order.orderNumber,
         order.totalInr,
@@ -62,14 +59,14 @@ export async function notifyOrderPlaced(
     );
   }
 
-  if (customer.email && env("MSG91_EMAIL_TEMPLATE_ORDER_PLACED")) {
+  if (customer.email && env.MSG91_EMAIL_TEMPLATE_ORDER_PLACED) {
     await fire(
       `email:order_placed:${order.orderNumber}`,
       sendEmail({
         to: customer.email,
         name: customer.name,
         subject: `Order confirmed — ${order.orderNumber}`,
-        templateId: env("MSG91_EMAIL_TEMPLATE_ORDER_PLACED")!,
+        templateId: env.MSG91_EMAIL_TEMPLATE_ORDER_PLACED!,
         vars: {
           name: customer.name,
           order_number: order.orderNumber,
@@ -88,10 +85,10 @@ export async function notifyShipped(
   const waybill = order.delhiveryWaybill ?? "";
   const trackUrl = order.trackingUrl ?? "";
 
-  if (mobile && env("MSG91_SMS_FLOW_SHIPPED")) {
+  if (mobile && env.MSG91_SMS_FLOW_SHIPPED) {
     await fire(
       `sms:shipped:${order.orderNumber}`,
-      sendSms(mobile, env("MSG91_SMS_FLOW_SHIPPED")!, {
+      sendSms(mobile, env.MSG91_SMS_FLOW_SHIPPED!, {
         name: customer.name,
         order_number: order.orderNumber,
         waybill,
@@ -100,10 +97,10 @@ export async function notifyShipped(
     );
   }
 
-  if (mobile && env("MSG91_WA_TEMPLATE_SHIPPED")) {
+  if (mobile && env.MSG91_WA_TEMPLATE_SHIPPED) {
     await fire(
       `wa:shipped:${order.orderNumber}`,
-      sendWhatsapp(mobile, env("MSG91_WA_TEMPLATE_SHIPPED")!, [
+      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_SHIPPED!, [
         customer.name,
         order.orderNumber,
         waybill,
@@ -112,14 +109,14 @@ export async function notifyShipped(
     );
   }
 
-  if (customer.email && env("MSG91_EMAIL_TEMPLATE_SHIPPED")) {
+  if (customer.email && env.MSG91_EMAIL_TEMPLATE_SHIPPED) {
     await fire(
       `email:shipped:${order.orderNumber}`,
       sendEmail({
         to: customer.email,
         name: customer.name,
         subject: `Your order ${order.orderNumber} has shipped`,
-        templateId: env("MSG91_EMAIL_TEMPLATE_SHIPPED")!,
+        templateId: env.MSG91_EMAIL_TEMPLATE_SHIPPED!,
         vars: {
           name: customer.name,
           order_number: order.orderNumber,
@@ -137,20 +134,20 @@ export async function notifyOutForDelivery(
 ): Promise<void> {
   const mobile = customer.phone ? toMobile(customer.phone) : null;
 
-  if (mobile && env("MSG91_SMS_FLOW_OFD")) {
+  if (mobile && env.MSG91_SMS_FLOW_OFD) {
     await fire(
       `sms:ofd:${order.orderNumber}`,
-      sendSms(mobile, env("MSG91_SMS_FLOW_OFD")!, {
+      sendSms(mobile, env.MSG91_SMS_FLOW_OFD!, {
         name: customer.name,
         order_number: order.orderNumber,
       }),
     );
   }
 
-  if (mobile && env("MSG91_WA_TEMPLATE_OFD")) {
+  if (mobile && env.MSG91_WA_TEMPLATE_OFD) {
     await fire(
       `wa:ofd:${order.orderNumber}`,
-      sendWhatsapp(mobile, env("MSG91_WA_TEMPLATE_OFD")!, [
+      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_OFD!, [
         customer.name,
         order.orderNumber,
       ]),
@@ -164,24 +161,24 @@ export async function notifyDelivered(
 ): Promise<void> {
   const mobile = customer.phone ? toMobile(customer.phone) : null;
 
-  if (mobile && env("MSG91_WA_TEMPLATE_DELIVERED")) {
+  if (mobile && env.MSG91_WA_TEMPLATE_DELIVERED) {
     await fire(
       `wa:delivered:${order.orderNumber}`,
-      sendWhatsapp(mobile, env("MSG91_WA_TEMPLATE_DELIVERED")!, [
+      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_DELIVERED!, [
         customer.name,
         order.orderNumber,
       ]),
     );
   }
 
-  if (customer.email && env("MSG91_EMAIL_TEMPLATE_DELIVERED")) {
+  if (customer.email && env.MSG91_EMAIL_TEMPLATE_DELIVERED) {
     await fire(
       `email:delivered:${order.orderNumber}`,
       sendEmail({
         to: customer.email,
         name: customer.name,
         subject: `Your order ${order.orderNumber} has been delivered`,
-        templateId: env("MSG91_EMAIL_TEMPLATE_DELIVERED")!,
+        templateId: env.MSG91_EMAIL_TEMPLATE_DELIVERED!,
         vars: { name: customer.name, order_number: order.orderNumber },
       }),
     );
@@ -194,20 +191,20 @@ export async function notifyDeliveryFailed(
 ): Promise<void> {
   const mobile = customer.phone ? toMobile(customer.phone) : null;
 
-  if (mobile && env("MSG91_SMS_FLOW_DELIVERY_FAILED")) {
+  if (mobile && env.MSG91_SMS_FLOW_DELIVERY_FAILED) {
     await fire(
       `sms:failed:${order.orderNumber}`,
-      sendSms(mobile, env("MSG91_SMS_FLOW_DELIVERY_FAILED")!, {
+      sendSms(mobile, env.MSG91_SMS_FLOW_DELIVERY_FAILED!, {
         name: customer.name,
         order_number: order.orderNumber,
       }),
     );
   }
 
-  if (mobile && env("MSG91_WA_TEMPLATE_DELIVERY_FAILED")) {
+  if (mobile && env.MSG91_WA_TEMPLATE_DELIVERY_FAILED) {
     await fire(
       `wa:failed:${order.orderNumber}`,
-      sendWhatsapp(mobile, env("MSG91_WA_TEMPLATE_DELIVERY_FAILED")!, [
+      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_DELIVERY_FAILED!, [
         customer.name,
         order.orderNumber,
       ]),
@@ -221,10 +218,10 @@ export async function notifyRefundInitiated(
 ): Promise<void> {
   const mobile = customer.phone ? toMobile(customer.phone) : null;
 
-  if (mobile && env("MSG91_WA_TEMPLATE_REFUND")) {
+  if (mobile && env.MSG91_WA_TEMPLATE_REFUND) {
     await fire(
       `wa:refund:${order.orderNumber}`,
-      sendWhatsapp(mobile, env("MSG91_WA_TEMPLATE_REFUND")!, [
+      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_REFUND!, [
         customer.name,
         order.orderNumber,
         order.totalInr,
@@ -232,14 +229,14 @@ export async function notifyRefundInitiated(
     );
   }
 
-  if (customer.email && env("MSG91_EMAIL_TEMPLATE_REFUND")) {
+  if (customer.email && env.MSG91_EMAIL_TEMPLATE_REFUND) {
     await fire(
       `email:refund:${order.orderNumber}`,
       sendEmail({
         to: customer.email,
         name: customer.name,
         subject: `Refund initiated — ${order.orderNumber}`,
-        templateId: env("MSG91_EMAIL_TEMPLATE_REFUND")!,
+        templateId: env.MSG91_EMAIL_TEMPLATE_REFUND!,
         vars: {
           name: customer.name,
           order_number: order.orderNumber,
@@ -253,7 +250,7 @@ export async function notifyRefundInitiated(
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export async function sendOtp(phone: string, otp: string): Promise<void> {
-  const flowId = env("MSG91_SMS_FLOW_OTP");
+  const flowId = env.MSG91_SMS_FLOW_OTP;
   if (!flowId) {
     console.warn("[comms] MSG91_SMS_FLOW_OTP not set — OTP not sent");
     return;
@@ -266,7 +263,7 @@ export async function sendPasswordReset(
   name: string,
   resetUrl: string,
 ): Promise<void> {
-  const templateId = env("MSG91_EMAIL_TEMPLATE_PASSWORD_RESET");
+  const templateId = env.MSG91_EMAIL_TEMPLATE_PASSWORD_RESET;
   if (!templateId) {
     console.warn("[comms] MSG91_EMAIL_TEMPLATE_PASSWORD_RESET not set");
     return;
@@ -286,26 +283,26 @@ export async function sendPasswordReset(
 // ── Admin alerts ──────────────────────────────────────────────────────────────
 
 export async function alertAdminNewOrder(order: OrderInfo): Promise<void> {
-  const adminEmail = env("ADMIN_EMAIL");
-  const adminWhatsapp = env("ADMIN_WHATSAPP");
+  const adminEmail = env.ADMIN_EMAIL;
+  const adminWhatsapp = env.ADMIN_WHATSAPP;
 
-  if (adminEmail && env("MSG91_EMAIL_TEMPLATE_ADMIN_NEW_ORDER")) {
+  if (adminEmail && env.MSG91_EMAIL_TEMPLATE_ADMIN_NEW_ORDER) {
     await fire(
       `email:admin:new_order:${order.orderNumber}`,
       sendEmail({
         to: adminEmail,
         name: "Azimuth Admin",
         subject: `New order — ${order.orderNumber} (${order.totalInr})`,
-        templateId: env("MSG91_EMAIL_TEMPLATE_ADMIN_NEW_ORDER")!,
+        templateId: env.MSG91_EMAIL_TEMPLATE_ADMIN_NEW_ORDER!,
         vars: { order_number: order.orderNumber, amount: order.totalInr },
       }),
     );
   }
 
-  if (adminWhatsapp && env("MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER")) {
+  if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER) {
     await fire(
       `wa:admin:new_order:${order.orderNumber}`,
-      sendWhatsapp(adminWhatsapp, env("MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER")!, [
+      sendWhatsapp(adminWhatsapp, env.MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER!, [
         order.orderNumber,
         order.totalInr,
       ]),
@@ -314,16 +311,16 @@ export async function alertAdminNewOrder(order: OrderInfo): Promise<void> {
 }
 
 export async function alertAdminRefund(order: OrderInfo): Promise<void> {
-  const adminEmail = env("ADMIN_EMAIL");
+  const adminEmail = env.ADMIN_EMAIL;
 
-  if (adminEmail && env("MSG91_EMAIL_TEMPLATE_ADMIN_REFUND")) {
+  if (adminEmail && env.MSG91_EMAIL_TEMPLATE_ADMIN_REFUND) {
     await fire(
       `email:admin:refund:${order.orderNumber}`,
       sendEmail({
         to: adminEmail,
         name: "Azimuth Admin",
         subject: `Refund needed — ${order.orderNumber} (${order.totalInr})`,
-        templateId: env("MSG91_EMAIL_TEMPLATE_ADMIN_REFUND")!,
+        templateId: env.MSG91_EMAIL_TEMPLATE_ADMIN_REFUND!,
         vars: { order_number: order.orderNumber, amount: order.totalInr },
       }),
     );
@@ -331,14 +328,14 @@ export async function alertAdminRefund(order: OrderInfo): Promise<void> {
 }
 
 export async function alertAdminDeliveryFailed(order: OrderInfo): Promise<void> {
-  const adminWhatsapp = env("ADMIN_WHATSAPP");
+  const adminWhatsapp = env.ADMIN_WHATSAPP;
 
-  if (adminWhatsapp && env("MSG91_WA_TEMPLATE_ADMIN_DELIVERY_FAILED")) {
+  if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_DELIVERY_FAILED) {
     await fire(
       `wa:admin:delivery_failed:${order.orderNumber}`,
       sendWhatsapp(
         adminWhatsapp,
-        env("MSG91_WA_TEMPLATE_ADMIN_DELIVERY_FAILED")!,
+        env.MSG91_WA_TEMPLATE_ADMIN_DELIVERY_FAILED!,
         [order.orderNumber],
       ),
     );

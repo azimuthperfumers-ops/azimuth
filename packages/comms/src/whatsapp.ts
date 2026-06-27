@@ -1,4 +1,5 @@
 import { msg91Post } from "./client.js";
+import { env } from "./env.js";
 
 // MSG91 WhatsApp outbound — uses Meta-approved templates.
 // templateName = approved template name in MSG91 / Meta Business Manager.
@@ -10,7 +11,7 @@ export async function sendWhatsapp(
   templateName: string,
   params: string[],
 ): Promise<void> {
-  const integratedNumber = process.env.MSG91_WHATSAPP_NUMBER;
+  const integratedNumber = env.MSG91_WHATSAPP_NUMBER;
   if (!integratedNumber) throw new Error("MSG91_WHATSAPP_NUMBER not set");
 
   await msg91Post(

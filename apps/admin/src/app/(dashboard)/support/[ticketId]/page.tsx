@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, ImagePlus, Send, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
+import { useTicketUpload } from "@/hooks/use-ticket-upload";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -139,20 +140,28 @@ export default function AdminTicketPage({ params }: { params: Promise<{ ticketId
   const [draft, setDraft] = useState("");
   const [activeAction, setActiveAction] = useState<"refund" | "return" | "exchange" | "close" | "reopen" | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
+  const { uploads, uploading, addFiles, remove, urls, reset: resetUploads } = useTicketUpload();
 
   const { data: ticket, isLoading } = trpc.ticket.get.useQuery(
     { ticketId },
     { refetchInterval: 5000 },
   );
 
-  const send = trpc.ticket.sendMessage.useMutation({
+  const send = trpc.ticket.adminSendMessage.useMutation({
     onSuccess: async () => {
       setDraft("");
+      resetUploads();
       await utils.ticket.get.invalidate({ ticketId });
     },
     onError: (e) => toast.error(e.message),
   });
+
+  function handleSend() {
+    if (!draft.trim() && urls.length === 0) return;
+    send.mutate({ ticketId, content: draft.trim(), attachmentUrls: urls.length > 0 ? urls : undefined });
+  }
 
   const reopen = trpc.ticket.adminAction.useMutation({
     onSuccess: async () => {
@@ -183,53 +192,71 @@ export default function AdminTicketPage({ params }: { params: Promise<{ ticketId
   const hasOrder = !!ticket.order;
 
   return (
-    <div className="space-y-6">
-      {/* Back */}
-      <Link
-        href="/support"
-        className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="size-3.5" />
-        All tickets
-      </Link>
-
-      {/* Header */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between pb-6 border-b border-border">
-        <div>
-          <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/50 mb-1">
-            {ticket.ticketNumber}
-          </p>
-          <h1 className="text-xl font-semibold">{ticket.subject}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {ticket.user?.name} · {ticket.user?.email}
-            {ticket.order && (
-              <> · Order: <Link href={`/orders/${ticket.orderId}`} className="underline">{ticket.order.orderNumber}</Link></>
-            )}
-          </p>
+    <div className="flex flex-col h-[calc(100vh-3rem)]">
+      {/* Back + Header */}
+      <div className="shrink-0 pb-5 border-b border-border space-y-4">
+        <Link
+          href="/support"
+          className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="size-3.5" />
+          All tickets
+        </Link>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/50 mb-1">
+              {ticket.ticketNumber}
+            </p>
+            <h1 className="text-xl font-semibold">{ticket.subject}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {ticket.user?.name} · {ticket.user?.email}
+              {ticket.order && (
+                <> · Order: <Link href={`/orders/${ticket.orderId}`} className="underline">{ticket.order.orderNumber}</Link></>
+              )}
+            </p>
+          </div>
+          <Badge variant={STATUS_VARIANT[ticket.status] ?? "outline"} className="self-start shrink-0">
+            {STATUS_LABEL[ticket.status] ?? ticket.status}
+          </Badge>
         </div>
-        <Badge variant={STATUS_VARIANT[ticket.status] ?? "outline"} className="self-start shrink-0">
-          {STATUS_LABEL[ticket.status] ?? ticket.status}
-        </Badge>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6">
+      {/* Body */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 pt-5">
 
-        {/* Chat */}
-        <div className="space-y-4">
-          {/* Messages */}
-          <div className="space-y-3 min-h-[300px]">
+        {/* Chat column */}
+        <div className="flex flex-col min-h-0">
+          {/* Messages — scrollable */}
+          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
             {ticket.messages.map((msg) => {
               const isAdmin = msg.senderRole === "admin";
+              const attachments = (msg.attachmentUrls ?? []) as string[];
               return (
                 <div key={msg.id} className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[80%] flex flex-col gap-1 ${isAdmin ? "items-end" : "items-start"}`}>
-                    <div className={`px-4 py-3 text-sm leading-relaxed ${
-                      isAdmin
-                        ? "bg-foreground text-background"
-                        : "bg-muted border border-border text-foreground"
-                    }`}>
-                      {msg.content}
-                    </div>
+                    {msg.content && (
+                      <div className={`px-4 py-3 text-sm leading-relaxed ${
+                        isAdmin
+                          ? "bg-foreground text-background"
+                          : "bg-muted border border-border text-foreground"
+                      }`}>
+                        {msg.content}
+                      </div>
+                    )}
+                    {attachments.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {attachments.map((url) => (
+                          <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={url}
+                              alt="attachment"
+                              className="size-20 object-cover border border-border hover:opacity-80 transition-opacity"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-[10px] text-muted-foreground/40 px-1">
                       {isAdmin ? "You (admin)" : ticket.user?.name ?? "Customer"} · {formatDateTime(msg.createdAt)}
                     </p>
@@ -240,31 +267,66 @@ export default function AdminTicketPage({ params }: { params: Promise<{ ticketId
             <div ref={bottomRef} />
           </div>
 
-          {/* Reply */}
+          {/* Reply — pinned at bottom */}
+          <div className="shrink-0 pt-3">
           {!isClosed ? (
-            <div className="border border-border p-4 flex gap-3 items-end">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (draft.trim()) send.mutate({ ticketId, content: draft.trim() });
-                  }
-                }}
-                rows={3}
-                placeholder="Reply to customer… (Enter to send)"
-                className="flex-1 resize-none bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/40"
-              />
-              <button
-                onClick={() => {
-                  if (draft.trim()) send.mutate({ ticketId, content: draft.trim() });
-                }}
-                disabled={!draft.trim() || send.isPending}
-                className="shrink-0 p-2.5 border border-foreground hover:bg-foreground hover:text-background transition-all disabled:opacity-30"
-              >
-                <Send className="size-4" />
-              </button>
+            <div className="border border-border">
+              {uploads.length > 0 && (
+                <div className="flex flex-wrap gap-2 p-3 border-b border-border">
+                  {uploads.map((u) => (
+                    <div key={u.url} className="relative group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u.url} alt={u.name} className="size-14 object-cover border border-border" />
+                      <button
+                        type="button"
+                        onClick={() => remove(u.url)}
+                        className="absolute -top-1.5 -right-1.5 size-4 bg-foreground text-background flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="size-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="p-4 flex gap-3 items-end">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => addFiles(e.target.files)}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading || uploads.length >= 5}
+                  className="shrink-0 p-2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+                  title="Attach image"
+                >
+                  <ImagePlus className="size-4" />
+                </button>
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  rows={3}
+                  placeholder={uploading ? "Uploading…" : "Reply to customer… (Enter to send)"}
+                  className="flex-1 resize-none bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/40"
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={(!draft.trim() && urls.length === 0) || send.isPending || uploading}
+                  className="shrink-0 p-2.5 border border-foreground hover:bg-foreground hover:text-background transition-all disabled:opacity-30"
+                >
+                  <Send className="size-4" />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-3 border border-border p-4">
@@ -278,10 +340,11 @@ export default function AdminTicketPage({ params }: { params: Promise<{ ticketId
               </Button>
             </div>
           )}
+          </div>
         </div>
 
-        {/* Action panel */}
-        <div className="space-y-4">
+        {/* Action panel — scrollable */}
+        <div className="overflow-y-auto space-y-4 pb-4">
 
           {/* Order info */}
           {ticket.order && (

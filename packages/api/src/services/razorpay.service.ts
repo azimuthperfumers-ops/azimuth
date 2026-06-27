@@ -1,6 +1,7 @@
 import crypto from "crypto";
 
 import Razorpay from "razorpay";
+import { env } from "../env";
 
 export interface IRazorpayService {
   getKeyId(): string;
@@ -97,9 +98,9 @@ class RazorpayService implements IRazorpayService {
 }
 
 export function createRazorpayService(): IRazorpayService {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  const keyId = env.RAZORPAY_KEY_ID;
+  const keySecret = env.RAZORPAY_KEY_SECRET;
+  const webhookSecret = env.RAZORPAY_WEBHOOK_SECRET;
 
   const missing = [
     !keyId && "RAZORPAY_KEY_ID",

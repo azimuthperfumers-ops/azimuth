@@ -78,6 +78,20 @@
       "when": 1783600000000,
       "tag": "0010_support_tickets",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783700000000,
+      "tag": "0011_ticket_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783800000000,
+      "tag": "0012_pod_image_url",
+      "breakpoints": true
     }
   ]
 }

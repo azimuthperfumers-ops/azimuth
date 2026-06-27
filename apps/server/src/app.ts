@@ -7,6 +7,7 @@ import express from "express";
 
 import { loginRateLimitMiddleware } from "./middleware/rate-limit";
 import { delhiveryWebhookHandler } from "./webhooks/delhivery";
+import { delhiveryPodWebhookHandler } from "./webhooks/delhivery-pod";
 import { razorpayWebhookHandler } from "./webhooks/razorpay";
 
 export const app = express();
@@ -30,8 +31,10 @@ app.post("/webhooks/razorpay", express.raw({ type: "application/json" }), razorp
 
 app.use(express.json());
 
-// Delhivery webhook — regular JSON body, auth via ?token= query param
+// Delhivery Scan Push — shipment status updates
 app.post("/webhooks/delhivery", delhiveryWebhookHandler);
+// Delhivery POD (Document Push) — proof of delivery image
+app.post("/webhooks/delhivery-pod", delhiveryPodWebhookHandler);
 
 app.use(
   "/trpc",

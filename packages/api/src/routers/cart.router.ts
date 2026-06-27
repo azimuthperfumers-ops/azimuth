@@ -5,11 +5,12 @@ import { z } from "zod";
 
 import { protectedProcedure } from "../middleware/auth.middleware";
 import { router } from "../trpc";
+import { env } from "../env";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function imageUrl(key: string) {
-  const base = process.env.R2_PUBLIC_URL?.replace(/\/$/, "") ?? "";
+  const base = env.R2_PUBLIC_URL?.replace(/\/$/, "") ?? "";
   return `${base}/${key}`;
 }
 

@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 
 import { CacheKey, cacheDel, cacheGetOrSet } from "../lib/redis";
 import { createCatalogRepository } from "../repositories/catalog.repository";
+import { env } from "../env";
 import type {
   AddProductImageInput,
   AddProductNoteInput,
@@ -53,7 +54,7 @@ async function guardReferenced<T>(fn: () => Promise<T>, message: string): Promis
 }
 
 function imageUrl(key: string) {
-  const base = process.env.R2_PUBLIC_URL?.replace(/\/$/, "") ?? "";
+  const base = env.R2_PUBLIC_URL?.replace(/\/$/, "") ?? "";
   return `${base}/${key}`;
 }
 

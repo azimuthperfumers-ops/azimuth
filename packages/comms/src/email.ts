@@ -1,4 +1,5 @@
 import { msg91Post } from "./client.js";
+import { env } from "./env.js";
 
 // MSG91 Email — template-based transactional email.
 // templateId = MSG91 email template ID.
@@ -11,8 +12,8 @@ export async function sendEmail(opts: {
   templateId: string;
   vars: Record<string, string>;
 }): Promise<void> {
-  const domain = process.env.MSG91_EMAIL_DOMAIN;
-  const from = process.env.MSG91_EMAIL_FROM ?? `noreply@${domain}`;
+  const domain = env.MSG91_EMAIL_DOMAIN;
+  const from = env.MSG91_EMAIL_FROM ?? `noreply@${domain}`;
   if (!domain) throw new Error("MSG91_EMAIL_DOMAIN not set");
 
   await msg91Post("https://api.msg91.com/api/v5/email/send", {

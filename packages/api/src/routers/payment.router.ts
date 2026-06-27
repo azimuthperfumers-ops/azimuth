@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { schema } from "@azimuth/db";
 import { protectedProcedure } from "../middleware/auth.middleware";
 import { advanceOrderStatus } from "../repositories/order.repository";
-import { createDelhiveryService } from "../services/delhivery.service";
+import { createLogisticsService } from "../services/logistics.service";
 import { createRazorpayService } from "../services/razorpay.service";
 import { publicProcedure, router } from "../trpc";
 
@@ -138,7 +138,7 @@ export const paymentRouter = router({
   checkServiceability: publicProcedure
     .input(z.object({ pincode: z.string().length(6) }))
     .query(async ({ input }) => {
-      const delhivery = createDelhiveryService();
-      return delhivery.checkServiceability(input.pincode);
+      const logistics = createLogisticsService();
+      return logistics.checkServiceability(input.pincode);
     }),
 });

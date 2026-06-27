@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, Plus, TicketIcon } from "lucide-react";
+import { ChevronRight, ImagePlus, Plus, TicketIcon, X } from "lucide-react";
 
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
+import { useTicketUpload } from "@/hooks/use-ticket-upload";
 
 const TYPE_LABEL: Record<string, string> = {
   general: "General",
@@ -37,15 +38,21 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ── New ticket form ───────────────────────────────────────────────────────────
 
+const PHOTO_REQUIRED_TYPES = new Set(["return", "exchange", "damaged"]);
+
 function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => void; prefilledOrderId?: string }) {
   const router = useRouter();
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [type, setType] = useState<string>("general");
   const [orderId, setOrderId] = useState(prefilledOrderId ?? "");
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: orders } = trpc.order.list.useQuery();
   const utils = trpc.useUtils();
+  const { uploads, uploading, addFiles, remove, urls } = useTicketUpload();
+
+  const photoRequired = PHOTO_REQUIRED_TYPES.has(type);
 
   const create = trpc.ticket.create.useMutation({
     onSuccess: async (ticket) => {
@@ -118,6 +125,63 @@ function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => v
         />
       </div>
 
+      {/* Attachments */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${photoRequired ? "text-foreground" : "text-muted-foreground"}`}>
+            Photos{photoRequired ? <span className="text-red-500 ml-0.5">*</span> : " (optional)"}
+            <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground/60">max 5</span>
+          </label>
+          {uploads.length < 5 && (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold tracking-[0.12em] uppercase text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+            >
+              <ImagePlus className="size-3.5" />
+              {uploading ? "Uploading…" : "Add image"}
+            </button>
+          )}
+        </div>
+
+        {photoRequired && uploads.length === 0 && (
+          <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2">
+            Photos are required for {TYPE_LABEL[type]?.toLowerCase()} requests. Please attach at least one image showing the item.
+          </p>
+        )}
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => addFiles(e.target.files)}
+        />
+        {uploads.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {uploads.map((u) => (
+              <div key={u.url} className="relative group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={u.url}
+                  alt={u.name}
+                  className="size-16 object-cover border border-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => remove(u.url)}
+                  className="absolute -top-1.5 -right-1.5 size-4 bg-foreground text-background flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="size-2.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <button
         onClick={() =>
           create.mutate({
@@ -125,9 +189,16 @@ function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => v
             message,
             type: type as "general",
             orderId: orderId || undefined,
+            attachmentUrls: urls.length > 0 ? urls : undefined,
           })
         }
-        disabled={!subject.trim() || !message.trim() || create.isPending}
+        disabled={
+          !subject.trim() ||
+          !message.trim() ||
+          (photoRequired && urls.length === 0) ||
+          create.isPending ||
+          uploading
+        }
         className="border border-foreground px-6 py-2.5 text-[11px] font-semibold tracking-[0.14em] uppercase hover:bg-foreground hover:text-background transition-all disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {create.isPending ? "Submitting…" : "Submit request"}
