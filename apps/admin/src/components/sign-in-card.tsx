@@ -45,7 +45,7 @@ export function SignInCard() {
           type="button"
           variant="outline"
           className="w-full"
-          onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}
+          onClick={() => authClient.signIn.social({ provider: "google", callbackURL: window.location.origin + "/" })}
         >
           Continue with Google
         </Button>

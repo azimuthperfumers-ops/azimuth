@@ -6,7 +6,7 @@ compatibility_date = "2025-01-01"
 crons = ["*/5 * * * *"]
 
 [vars]
-SERVER_URL = "https://your-server.onrender.com"
+SERVER_URL = "https://api.azimuth.net.in"
 
 [observability]
 enabled = false

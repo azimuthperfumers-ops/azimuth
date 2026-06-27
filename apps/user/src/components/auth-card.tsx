@@ -195,7 +195,7 @@ export function AuthCard() {
       {/* Google */}
       <button
         type="button"
-        onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}
+        onClick={() => authClient.signIn.social({ provider: "google", callbackURL: window.location.origin + "/" })}
         className="flex w-full items-center justify-center gap-3 border border-border py-3 text-[11px] font-semibold tracking-[0.14em] uppercase text-foreground transition-colors hover:bg-muted"
       >
         <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">

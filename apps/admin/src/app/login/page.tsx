@@ -65,7 +65,7 @@ export default function LoginPage() {
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/dashboard" })}
+              onClick={() => authClient.signIn.social({ provider: "google", callbackURL: window.location.origin + "/dashboard" })}
             >
               Continue with Google
             </Button>
