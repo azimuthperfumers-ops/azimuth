@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+export const dynamic = "force-dynamic";
+
+import { useRef, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, ImagePlus, Plus, TicketIcon, X } from "lucide-react";
@@ -209,7 +211,7 @@ function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => v
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function SupportPage() {
+function SupportPageInner() {
   const { data: session, isPending } = authClient.useSession();
   const searchParams = useSearchParams();
   const prefilledOrderId = searchParams.get("orderId") ?? undefined;
@@ -304,5 +306,13 @@ export default function SupportPage() {
       </main>
       <SiteFooter />
     </>
+  );
+}
+
+export default function SupportPage() {
+  return (
+    <Suspense>
+      <SupportPageInner />
+    </Suspense>
   );
 }

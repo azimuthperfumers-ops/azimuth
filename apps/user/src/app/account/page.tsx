@@ -1,6 +1,8 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+export const dynamic = "force-dynamic";
+
+import { type FormEvent, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ChevronRight, Heart, LogOut, MapPin, Package, TicketIcon, User } from "lucide-react";
@@ -544,7 +546,7 @@ type TabId = (typeof TABS)[number]["id"];
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function AccountPage() {
+function AccountPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, isPending } = authClient.useSession();
@@ -645,5 +647,13 @@ export default function AccountPage() {
       </main>
       <SiteFooter />
     </>
+  );
+}
+
+export default function AccountPage() {
+  return (
+    <Suspense>
+      <AccountPageInner />
+    </Suspense>
   );
 }

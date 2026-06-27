@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+export const dynamic = "force-dynamic";
+
+import { useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
@@ -181,7 +183,7 @@ function FilterContent({
   );
 }
 
-export default function ShopPage() {
+function ShopPageInner() {
   const filter = useFilter();
   const { category, concentration, gender, search, hasFilters } = filter;
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -319,5 +321,13 @@ export default function ShopPage() {
       </main>
       <SiteFooter />
     </>
+  );
+}
+
+export default function ShopPage() {
+  return (
+    <Suspense>
+      <ShopPageInner />
+    </Suspense>
   );
 }

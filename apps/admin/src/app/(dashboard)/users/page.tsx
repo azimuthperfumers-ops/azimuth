@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Search, ShoppingBag } from "lucide-react";
 
