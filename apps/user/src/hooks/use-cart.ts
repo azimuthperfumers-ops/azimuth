@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { createElement } from "react";
+import { toast } from "sonner";
 
 import { authClient } from "@/lib/auth-client";
 import type { CartItem } from "@/lib/cart";
@@ -24,7 +25,7 @@ export interface CartState {
   saveForLater: (variantId: string) => void | Promise<unknown>;
   moveToCart: (variantId: string) => void | Promise<unknown>;
   removeSaved: (variantId: string) => void | Promise<unknown>;
-  applyCoupon: (code: string, couponId: string, discount: number) => void;
+  applyCoupon: (code: string, couponId: string, discount: number, minCartValue: number) => void;
   clearCoupon: () => void;
   clear: () => void | Promise<unknown>;
 }
@@ -37,7 +38,7 @@ type ServerRow = {
   productName: string | null;
   sku: string | null;
   sizeMl: number | null;
-  sellingPrice: string | null;
+  effectivePrice: number;
   mrp: string | null;
   imageUrl: string | null;
   themeColor: string | null;
@@ -51,7 +52,7 @@ function toCartItem(row: ServerRow): CartItem {
     productName: row.productName ?? "",
     variantSku: row.sku ?? "",
     sizeMl: row.sizeMl ?? 0,
-    sellingPrice: Number(row.sellingPrice ?? 0),
+    effectivePrice: row.effectivePrice,
     mrp: Number(row.mrp ?? 0),
     imageUrl: row.imageUrl ?? undefined,
     themeColor: row.themeColor ?? undefined,
@@ -76,6 +77,7 @@ export function useCartProviderValue(): CartState {
   const couponCode = useCartStore((s) => s.couponCode);
   const couponId = useCartStore((s) => s.couponId);
   const couponDiscount = useCartStore((s) => s.couponDiscount);
+  const couponMinCartValue = useCartStore((s) => s.couponMinCartValue);
   const guestAdd = useCartStore((s) => s.add);
   const guestRemove = useCartStore((s) => s.remove);
   const guestUpdateQty = useCartStore((s) => s.updateQty);
@@ -117,6 +119,20 @@ export function useCartProviderValue(): CartState {
     prevUserId.current = userId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
+
+  // Auto-clear coupon for auth users when server cart changes make it ineligible
+  useEffect(() => {
+    if (!isAuth || !couponCode || couponMinCartValue === null) return;
+    const rows = (serverQuery.data ?? []) as ServerRow[];
+    const activeSubtotal = rows
+      .filter((r) => !r.isSaved)
+      .reduce((s, r) => s + r.effectivePrice * r.quantity, 0);
+    if (activeSubtotal < couponMinCartValue) {
+      clearCoupon();
+      toast.warning(`${couponCode} removed — cart minimum ₹${couponMinCartValue.toLocaleString("en-IN")} not met`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverQuery.data]);
 
   if (isAuth) {
     const rows = (serverQuery.data ?? []) as ServerRow[];

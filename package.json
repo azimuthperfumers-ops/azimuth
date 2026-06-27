@@ -12,7 +12,8 @@
     "typecheck": "turbo run typecheck",
     "db:generate": "pnpm --filter @azimuth/db generate",
     "db:migrate": "pnpm --filter @azimuth/db migrate",
-    "db:studio": "pnpm --filter @azimuth/db studio"
+    "db:studio": "pnpm --filter @azimuth/db studio",
+    "db:seed": "pnpm --filter @azimuth/db seed"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

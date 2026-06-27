@@ -81,7 +81,6 @@ const variantFieldsSchema = z.object({
   sku: z.string().min(1).max(64),
   sizeMl: z.number().int().min(1).max(2000),
   mrp: z.number().positive(),
-  sellingPrice: z.number().positive(),
   weightGrams: z.number().int().positive(),
   // Packed shipping box dimensions (outer corrugated box handed to courier — NOT bottle dimensions)
   boxLengthCm: z.number().int().positive(),
@@ -91,21 +90,12 @@ const variantFieldsSchema = z.object({
   isDefault: z.boolean().default(false),
 });
 
-export const createVariantSchema = variantFieldsSchema
-  .extend({ productId: z.uuid() })
-  .refine((v) => v.sellingPrice <= v.mrp, {
-    message: "selling price cannot exceed MRP",
-    path: ["sellingPrice"],
-  });
+export const createVariantSchema = variantFieldsSchema.extend({ productId: z.uuid() });
 export type CreateVariantInput = z.infer<typeof createVariantSchema>;
 
 export const updateVariantSchema = variantFieldsSchema
   .partial()
-  .extend({ id: z.uuid(), status: z.enum(["active", "discontinued"]).optional() })
-  .refine((v) => v.mrp === undefined || v.sellingPrice === undefined || v.sellingPrice <= v.mrp, {
-    message: "selling price cannot exceed MRP",
-    path: ["sellingPrice"],
-  });
+  .extend({ id: z.uuid(), status: z.enum(["active", "discontinued"]).optional() });
 export type UpdateVariantInput = z.infer<typeof updateVariantSchema>;
 
 export const addProductImageSchema = z.object({

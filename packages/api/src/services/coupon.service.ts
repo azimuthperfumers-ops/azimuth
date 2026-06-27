@@ -117,6 +117,7 @@ export function createCouponService(db: Database) {
         code: coupon.code,
         type: coupon.type,
         value,
+        minCartValue: Number(coupon.minCartValue),
         discountAmount: Math.round(discountAmount * 100) / 100,
         finalTotal: Math.round((input.cartTotal - discountAmount) * 100) / 100,
       };

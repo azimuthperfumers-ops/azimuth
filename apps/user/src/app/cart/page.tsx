@@ -38,9 +38,9 @@ function CartRow({
   onUpdateQty: (variantId: string, qty: number) => void;
   onSaveForLater: (variantId: string) => void;
 }) {
-  const lineTotal = item.sellingPrice * item.quantity;
+  const lineTotal = item.effectivePrice * item.quantity;
   const lineMrp = item.mrp * item.quantity;
-  const hasSaving = item.mrp > item.sellingPrice;
+  const hasSaving = item.mrp > item.effectivePrice;
 
   return (
     <div className="grid grid-cols-[120px_1fr] gap-6 py-8 border-b border-border">
@@ -139,7 +139,7 @@ function CartRow({
             )}
             {item.quantity > 1 && (
               <p className="mt-0.5 text-[11px] text-muted-foreground/40 tabular-nums">
-                {formatInr(item.sellingPrice)} each
+                {formatInr(item.effectivePrice)} each
               </p>
             )}
           </div>
@@ -175,7 +175,7 @@ function SavedRow({
       <div className="flex flex-1 items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-foreground/60">{item.productName}</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground/40">{item.sizeMl}ml · {formatInr(item.sellingPrice)}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground/40">{item.sizeMl}ml · {formatInr(item.effectivePrice)}</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -283,7 +283,7 @@ function CouponSection({
   subtotal: number;
   couponCode: string | null;
   couponDiscount: number | null;
-  onApply: (code: string, couponId: string, discount: number) => void;
+  onApply: (code: string, couponId: string, discount: number, minCartValue: number) => void;
   onClear: () => void;
 }) {
   const { data: session } = authClient.useSession();
@@ -303,7 +303,7 @@ function CouponSection({
         cartTotal: subtotal,
         userId: session?.user.id,
       });
-      onApply(data.code, data.couponId, data.discountAmount);
+      onApply(data.code, data.couponId, data.discountAmount, data.minCartValue);
       toast.success(`${data.code} applied — ${formatInr(data.discountAmount)} off`);
       setOpen(false);
       setInput("");

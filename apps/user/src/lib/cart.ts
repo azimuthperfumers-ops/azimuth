@@ -7,7 +7,7 @@ export type CartItem = {
   productName: string;
   variantSku: string;
   sizeMl: number;
-  sellingPrice: number;
+  effectivePrice: number;
   mrp: number;
   imageUrl?: string;
   themeColor?: string;
@@ -21,6 +21,7 @@ interface CartStore {
   couponCode: string | null;
   couponId: string | null;
   couponDiscount: number | null;
+  couponMinCartValue: number | null;
 
   add: (item: Omit<CartItem, "quantity">) => void;
   remove: (variantId: string) => void;
@@ -28,7 +29,7 @@ interface CartStore {
   saveForLater: (variantId: string) => void;
   moveToCart: (variantId: string) => void;
   removeSaved: (variantId: string) => void;
-  applyCoupon: (code: string, couponId: string, discount: number) => void;
+  applyCoupon: (code: string, couponId: string, discount: number, minCartValue: number) => void;
   clearCoupon: () => void;
   clear: () => void;
 }
@@ -41,6 +42,7 @@ export const useCartStore = create<CartStore>()(
       couponCode: null,
       couponId: null,
       couponDiscount: null,
+      couponMinCartValue: null,
 
       add: (item) =>
         set((state) => {
@@ -64,30 +66,27 @@ export const useCartStore = create<CartStore>()(
         }),
 
       remove: (variantId) =>
-        set((state) => ({
-          items: state.items.filter((i) => i.variantId !== variantId),
-          couponCode: null,
-          couponId: null,
-          couponDiscount: null,
-        })),
+        set((state) => {
+          const newItems = state.items.filter((i) => i.variantId !== variantId);
+          const newSubtotal = newItems.reduce((s, i) => s + i.effectivePrice * i.quantity, 0);
+          const couponValid = state.couponMinCartValue === null || newSubtotal >= state.couponMinCartValue;
+          return {
+            items: newItems,
+            ...(couponValid ? {} : { couponCode: null, couponId: null, couponDiscount: null, couponMinCartValue: null }),
+          };
+        }),
 
       updateQty: (variantId, qty) =>
         set((state) => {
-          if (qty <= 0) {
-            return {
-              items: state.items.filter((i) => i.variantId !== variantId),
-              couponCode: null,
-              couponId: null,
-              couponDiscount: null,
-            };
-          }
+          const newItems =
+            qty <= 0
+              ? state.items.filter((i) => i.variantId !== variantId)
+              : state.items.map((i) => (i.variantId === variantId ? { ...i, quantity: qty } : i));
+          const newSubtotal = newItems.reduce((s, i) => s + i.effectivePrice * i.quantity, 0);
+          const couponValid = state.couponMinCartValue === null || newSubtotal >= state.couponMinCartValue;
           return {
-            items: state.items.map((i) =>
-              i.variantId === variantId ? { ...i, quantity: qty } : i,
-            ),
-            couponCode: null,
-            couponId: null,
-            couponDiscount: null,
+            items: newItems,
+            ...(couponValid ? {} : { couponCode: null, couponId: null, couponDiscount: null, couponMinCartValue: null }),
           };
         }),
 
@@ -96,12 +95,13 @@ export const useCartStore = create<CartStore>()(
           const item = state.items.find((i) => i.variantId === variantId);
           if (!item) return {};
           const alreadySaved = state.savedItems.find((i) => i.variantId === variantId);
+          const newItems = state.items.filter((i) => i.variantId !== variantId);
+          const newSubtotal = newItems.reduce((s, i) => s + i.effectivePrice * i.quantity, 0);
+          const couponValid = state.couponMinCartValue === null || newSubtotal >= state.couponMinCartValue;
           return {
-            items: state.items.filter((i) => i.variantId !== variantId),
+            items: newItems,
             savedItems: alreadySaved ? state.savedItems : [...state.savedItems, { ...item, quantity: 1 }],
-            couponCode: null,
-            couponId: null,
-            couponDiscount: null,
+            ...(couponValid ? {} : { couponCode: null, couponId: null, couponDiscount: null, couponMinCartValue: null }),
           };
         }),
 
@@ -125,17 +125,17 @@ export const useCartStore = create<CartStore>()(
           savedItems: state.savedItems.filter((i) => i.variantId !== variantId),
         })),
 
-      applyCoupon: (code, couponId, discount) =>
-        set({ couponCode: code, couponId, couponDiscount: discount }),
+      applyCoupon: (code, couponId, discount, minCartValue) =>
+        set({ couponCode: code, couponId, couponDiscount: discount, couponMinCartValue: minCartValue }),
 
-      clearCoupon: () => set({ couponCode: null, couponId: null, couponDiscount: null }),
+      clearCoupon: () => set({ couponCode: null, couponId: null, couponDiscount: null, couponMinCartValue: null }),
 
-      clear: () => set({ items: [], savedItems: [], couponCode: null, couponId: null, couponDiscount: null }),
+      clear: () => set({ items: [], savedItems: [], couponCode: null, couponId: null, couponDiscount: null, couponMinCartValue: null }),
     }),
     { name: "azimuth-cart" },
   ),
 );
 
 export function cartSubtotal(items: CartItem[]) {
-  return items.reduce((sum, i) => sum + i.sellingPrice * i.quantity, 0);
+  return items.reduce((sum, i) => sum + i.effectivePrice * i.quantity, 0);
 }

@@ -1,7 +1,10 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { schema } from "@azimuth/db";
-import { and, count, eq, gte, sql, sum } from "drizzle-orm";
+import { and, count, eq, gte, inArray, sql, sum } from "drizzle-orm";
+import { computeEffectivePrice, fetchActiveDiscountMap } from "../utils/pricing";
+import { createCouponService } from "../services/coupon.service";
 import {
   alertAdminRefund,
   notifyRefundInitiated,
@@ -106,7 +109,49 @@ export const orderRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return createOrder(ctx.db, { ...input, userId: ctx.session.user.id });
+      // Re-verify prices server-side — never trust client unitPrice
+      const variantIds = input.items.map((i) => i.variantId);
+      const variantRows = await ctx.db
+        .select({ id: schema.productVariants.id, mrp: schema.productVariants.mrp })
+        .from(schema.productVariants)
+        .where(inArray(schema.productVariants.id, variantIds));
+
+      const mrpMap = new Map(variantRows.map((v) => [v.id, Number(v.mrp)]));
+      const discountMap = await fetchActiveDiscountMap(ctx.db, variantIds);
+
+      const serverItems = input.items.map((item) => {
+        const mrp = mrpMap.get(item.variantId);
+        if (!mrp) throw new TRPCError({ code: "BAD_REQUEST", message: `Variant ${item.variantId} not found` });
+        const effectivePrice = computeEffectivePrice(mrp, discountMap.get(item.variantId));
+        if (Math.abs(item.unitPrice - effectivePrice) > 0.5) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Price mismatch — please refresh and retry" });
+        }
+        return { ...item, unitPrice: effectivePrice, mrp };
+      });
+
+      const serverSubtotal = serverItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+
+      // Re-validate coupon server-side — never trust client discountAmount
+      let serverDiscountAmount = 0;
+      if (input.couponCode) {
+        const validation = await createCouponService(ctx.db).validateCoupon({
+          code: input.couponCode,
+          cartTotal: serverSubtotal,
+          userId: ctx.session.user.id,
+        });
+        serverDiscountAmount = validation.discountAmount;
+      }
+
+      const serverTotal = Math.max(0, serverSubtotal - serverDiscountAmount) + input.shippingCharge + input.taxAmount;
+
+      return createOrder(ctx.db, {
+        ...input,
+        items: serverItems,
+        subtotal: serverSubtotal,
+        discountAmount: serverDiscountAmount,
+        total: serverTotal,
+        userId: ctx.session.user.id,
+      });
     }),
 
   // ── User: list own orders ────────────────────────────────────────────────────

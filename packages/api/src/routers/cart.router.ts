@@ -6,6 +6,7 @@ import { z } from "zod";
 import { protectedProcedure } from "../middleware/auth.middleware";
 import { router } from "../trpc";
 import { env } from "../env";
+import { computeEffectivePrice, fetchActiveDiscountMap } from "../utils/pricing";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,6 @@ async function fetchCartRows(db: Database, userId: string) {
       addedAt: schema.cartItems.addedAt,
       sizeMl: schema.productVariants.sizeMl,
       sku: schema.productVariants.sku,
-      sellingPrice: schema.productVariants.sellingPrice,
       mrp: schema.productVariants.mrp,
       stockCached: schema.productVariants.stockCached,
       productId: schema.products.id,
@@ -40,10 +40,15 @@ async function fetchCartRows(db: Database, userId: string) {
     .where(eq(schema.cartItems.userId, userId))
     .orderBy(schema.cartItems.addedAt);
 
+  const variantIds = rows.map((r) => r.variantId).filter((id): id is string => id != null);
+  const discountMap = await fetchActiveDiscountMap(db, variantIds);
+
   // fetch primary image per product (cart is small, N+1 acceptable)
   return Promise.all(
     rows.map(async (row) => {
-      if (!row.productId) return { ...row, imageUrl: null };
+      const mrpNum = Number(row.mrp ?? 0);
+      const effectivePrice = computeEffectivePrice(mrpNum, row.variantId ? discountMap.get(row.variantId) : undefined);
+      if (!row.productId) return { ...row, imageUrl: null, effectivePrice };
       const [img] = await db
         .select({ key: schema.productImages.key })
         .from(schema.productImages)
@@ -54,7 +59,7 @@ async function fetchCartRows(db: Database, userId: string) {
           ),
         )
         .limit(1);
-      return { ...row, imageUrl: img ? imageUrl(img.key) : null };
+      return { ...row, imageUrl: img ? imageUrl(img.key) : null, effectivePrice };
     }),
   );
 }

@@ -232,9 +232,9 @@ export default function ProductDetailPage() {
               <div className="border-t border-border pt-6">
                 <div className="flex items-baseline gap-3">
                   <span className="text-2xl font-semibold text-foreground tabular-nums">
-                    ₹{Number(activeVariant.sellingPrice).toFixed(0)}
+                    ₹{(activeVariant as any).effectivePrice?.toFixed(0) ?? Number(activeVariant.mrp).toFixed(0)}
                   </span>
-                  {Number(activeVariant.mrp) > Number(activeVariant.sellingPrice) && (
+                  {Number(activeVariant.mrp) > ((activeVariant as any).effectivePrice ?? Number(activeVariant.mrp)) && (
                     <span className="text-sm text-muted-foreground line-through tabular-nums">
                       ₹{Number(activeVariant.mrp).toFixed(0)}
                     </span>
@@ -306,7 +306,7 @@ export default function ProductDetailPage() {
                     productName: product.name,
                     variantSku: activeVariant.sku,
                     sizeMl: activeVariant.sizeMl,
-                    sellingPrice: Number(activeVariant.sellingPrice),
+                    effectivePrice: (activeVariant as any).effectivePrice ?? Number(activeVariant.mrp),
                     mrp: Number(activeVariant.mrp),
                     imageUrl: primaryImg?.url ?? undefined,
                     themeColor: product.themeColor ?? undefined,

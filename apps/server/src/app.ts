@@ -13,8 +13,15 @@ import { razorpayWebhookHandler } from "./webhooks/razorpay";
 export const app = express();
 
 const allowedOrigins = new Set(
-  [authEnv.ADMIN_APP_URL, authEnv.USER_APP_URL].map((o) => o.replace(/\/$/, "").toLowerCase()),
+  [
+    authEnv.ADMIN_APP_URL,
+    authEnv.USER_APP_URL,
+    // Comma-separated extra origins for local dev overrides (e.g. CORS_EXTRA_ORIGINS=http://localhost:3002)
+    ...(process.env.CORS_EXTRA_ORIGINS?.split(",") ?? []),
+  ].map((o) => o.trim().replace(/\/$/, "").toLowerCase()),
 );
+
+console.log("[cors] allowed origins:", [...allowedOrigins]);
 
 app.use(
   cors({

@@ -15,6 +15,7 @@ import type {
   UpdateProductInput,
   UpdateVariantInput,
 } from "../schemas/catalog.schema";
+import { computeEffectivePrice, fetchActiveDiscountMap } from "../utils/pricing";
 
 export function createCatalogRepository(db: Database) {
   return {
@@ -110,36 +111,57 @@ export function createCatalogRepository(db: Database) {
         filters.search ? ilike(schema.products.name, `%${filters.search}%`) : undefined,
       ].filter((c): c is NonNullable<typeof c> => c !== undefined);
 
-      return db.query.products.findMany({
+      const products = await db.query.products.findMany({
         where: conditions.length > 0 ? and(...conditions) : undefined,
         orderBy: desc(schema.products.createdAt),
         limit: filters.limit,
         with: { category: true, variants: true, images: true },
       });
+
+      const allVariantIds = products.flatMap((p) => p.variants.map((v) => v.id));
+      const discountMap = await fetchActiveDiscountMap(db, allVariantIds);
+
+      return products.map((p) => ({
+        ...p,
+        variants: p.variants.map((v) => ({
+          ...v,
+          effectivePrice: computeEffectivePrice(Number(v.mrp), discountMap.get(v.id)),
+        })),
+      }));
     },
 
     async getProductById(id: string) {
-      return db.query.products.findFirst({
+      const product = await db.query.products.findFirst({
         where: eq(schema.products.id, id),
-        with: {
-          category: true,
-          variants: true,
-          images: true,
-          notes: { with: { note: true } },
-        },
+        with: { category: true, variants: true, images: true, notes: { with: { note: true } } },
       });
+      if (!product) return undefined;
+
+      const discountMap = await fetchActiveDiscountMap(db, product.variants.map((v) => v.id));
+      return {
+        ...product,
+        variants: product.variants.map((v) => ({
+          ...v,
+          effectivePrice: computeEffectivePrice(Number(v.mrp), discountMap.get(v.id)),
+        })),
+      };
     },
 
     async getProductBySlug(slug: string) {
-      return db.query.products.findFirst({
+      const product = await db.query.products.findFirst({
         where: and(eq(schema.products.slug, slug), eq(schema.products.status, "active")),
-        with: {
-          category: true,
-          variants: true,
-          images: true,
-          notes: { with: { note: true } },
-        },
+        with: { category: true, variants: true, images: true, notes: { with: { note: true } } },
       });
+      if (!product) return undefined;
+
+      const discountMap = await fetchActiveDiscountMap(db, product.variants.map((v) => v.id));
+      return {
+        ...product,
+        variants: product.variants.map((v) => ({
+          ...v,
+          effectivePrice: computeEffectivePrice(Number(v.mrp), discountMap.get(v.id)),
+        })),
+      };
     },
 
     async createVariant(input: CreateVariantInput) {
@@ -151,12 +173,13 @@ export function createCatalogRepository(db: Database) {
             .where(eq(schema.productVariants.productId, input.productId));
         }
 
+        const mrpStr = input.mrp.toString();
         const [variant] = await tx
           .insert(schema.productVariants)
           .values({
             ...input,
-            mrp: input.mrp.toString(),
-            sellingPrice: input.sellingPrice.toString(),
+            mrp: mrpStr,
+            sellingPrice: mrpStr,
           })
           .returning();
 
@@ -165,7 +188,7 @@ export function createCatalogRepository(db: Database) {
     },
 
     async updateVariant(input: UpdateVariantInput) {
-      const { id, mrp, sellingPrice, isDefault, ...rest } = input;
+      const { id, mrp, isDefault, ...rest } = input;
 
       return db.transaction(async (tx) => {
         if (isDefault) {
@@ -182,10 +205,10 @@ export function createCatalogRepository(db: Database) {
           }
         }
 
+        const mrpStr = mrp !== undefined ? mrp.toString() : undefined;
         const updateFields = {
           ...rest,
-          ...(mrp !== undefined ? { mrp: mrp.toString() } : {}),
-          ...(sellingPrice !== undefined ? { sellingPrice: sellingPrice.toString() } : {}),
+          ...(mrpStr !== undefined ? { mrp: mrpStr, sellingPrice: mrpStr } : {}),
           ...(isDefault !== undefined ? { isDefault } : {}),
         };
 

@@ -608,7 +608,7 @@ export default function CheckoutPage() {
           productName: item.productName,
           variantSku: item.variantSku,
           sizeMl: item.sizeMl,
-          unitPrice: item.sellingPrice,
+          unitPrice: item.effectivePrice,
           mrp: item.mrp,
           quantity: item.quantity,
           imageUrl: item.imageUrl ?? null,
@@ -771,7 +771,7 @@ export default function CheckoutPage() {
                       </p>
                     </div>
                     <p className="text-sm font-semibold tabular-nums shrink-0">
-                      {formatInr(item.sellingPrice * item.quantity)}
+                      {formatInr(item.effectivePrice * item.quantity)}
                     </p>
                   </div>
                 ))}

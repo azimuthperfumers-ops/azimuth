@@ -21,7 +21,6 @@ type Variant = {
   sku: string;
   sizeMl: number;
   mrp: string;
-  sellingPrice: string;
   weightGrams: number;
   boxLengthCm: number | null;
   boxWidthCm: number | null;
@@ -44,7 +43,6 @@ function EditVariantForm({
   const [sku, setSku] = useState(variant.sku);
   const [sizeMl, setSizeMl] = useState(String(variant.sizeMl));
   const [mrp, setMrp] = useState(variant.mrp);
-  const [sellingPrice, setSellingPrice] = useState(variant.sellingPrice);
   const [weightGrams, setWeightGrams] = useState(String(variant.weightGrams));
   const [boxLengthCm, setBoxLengthCm] = useState(variant.boxLengthCm ? String(variant.boxLengthCm) : "");
   const [boxWidthCm, setBoxWidthCm] = useState(variant.boxWidthCm ? String(variant.boxWidthCm) : "");
@@ -69,7 +67,6 @@ function EditVariantForm({
       sku,
       sizeMl: Number(sizeMl),
       mrp: Number(mrp),
-      sellingPrice: Number(sellingPrice),
       weightGrams: Number(weightGrams),
       boxLengthCm: boxLengthCm ? Number(boxLengthCm) : undefined,
       boxWidthCm: boxWidthCm ? Number(boxWidthCm) : undefined,
@@ -99,31 +96,18 @@ function EditVariantForm({
           />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="edit-mrp">MRP (₹)</Label>
-          <Input
-            id="edit-mrp"
-            type="number"
-            min={0}
-            step="0.01"
-            value={mrp}
-            onChange={(e) => setMrp(e.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="edit-selling-price">Selling price (₹)</Label>
-          <Input
-            id="edit-selling-price"
-            type="number"
-            min={0}
-            step="0.01"
-            value={sellingPrice}
-            onChange={(e) => setSellingPrice(e.target.value)}
-            required
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="edit-mrp">MRP (₹)</Label>
+        <Input
+          id="edit-mrp"
+          type="number"
+          min={0}
+          step="0.01"
+          value={mrp}
+          onChange={(e) => setMrp(e.target.value)}
+          required
+        />
+        <p className="text-[11px] text-muted-foreground">Discounts are applied via the Discounts section.</p>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
