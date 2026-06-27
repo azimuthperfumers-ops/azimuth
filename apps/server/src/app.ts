@@ -12,9 +12,20 @@ import { razorpayWebhookHandler } from "./webhooks/razorpay";
 
 export const app = express();
 
+const allowedOrigins = new Set(
+  [authEnv.ADMIN_APP_URL, authEnv.USER_APP_URL].map((o) => o.replace(/\/$/, "").toLowerCase()),
+);
+
 app.use(
   cors({
-    origin: [authEnv.ADMIN_APP_URL, authEnv.USER_APP_URL],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(origin.replace(/\/$/, "").toLowerCase())) {
+        callback(null, true);
+      } else {
+        console.warn(`[cors] blocked: ${origin}`);
+        callback(null, false);
+      }
+    },
     credentials: true,
   }),
 );
