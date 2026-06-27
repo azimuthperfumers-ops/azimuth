@@ -135,17 +135,26 @@ export const orderRouter = router({
     .input(
       z.object({
         pincode: z.string().length(6),
+        subtotal: z.number().nonnegative(),
         items: z.array(z.object({ sizeMl: z.number().int().positive(), quantity: z.number().int().min(1) })),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      // Check free-shipping threshold from DB settings
+      const settings = await ctx.db.query.siteSettings.findFirst();
+      const threshold = Number(settings?.freeShippingAboveInr ?? 999);
+      if (input.subtotal >= threshold) {
+        return { available: true, chargeInr: 0, estimatedDays: null, isFree: true };
+      }
+
       // Estimate weight: ~(sizeMl + 300)g per item unit + 200g outer packaging
       const weightGrams = Math.max(
         500,
         input.items.reduce((sum, i) => sum + (i.sizeMl + 300) * i.quantity, 0) + 200,
       );
       const logistics = createLogisticsService();
-      return logistics.getShippingRate(input.pincode, weightGrams);
+      const rate = await logistics.getShippingRate(input.pincode, weightGrams);
+      return { ...rate, isFree: false };
     }),
 
   // ── Admin: list all orders ───────────────────────────────────────────────────

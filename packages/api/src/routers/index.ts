@@ -14,6 +14,7 @@ import { userRouter } from "./user.router";
 import { ticketRouter } from "./ticket.router";
 import { adminUserRouter } from "./admin-user.router";
 import { analyticsRouter } from "./analytics.router";
+import { settingsRouter } from "./settings.router";
 
 export const appRouter = router({
   analytics: analyticsRouter,
@@ -31,6 +32,7 @@ export const appRouter = router({
   coupon: couponRouter,
   userData: userDataRouter,
   ticket: ticketRouter,
+  settings: settingsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -336,6 +336,7 @@ function CheckoutSummary({
   shippingRate,
   shippingLoading,
   pincode,
+  freeShippingAbove,
   paying,
   onPay,
 }: {
@@ -345,6 +346,7 @@ function CheckoutSummary({
   shippingRate: number | null;
   shippingLoading: boolean;
   pincode: string;
+  freeShippingAbove: number;
   paying: boolean;
   onPay: () => void;
 }) {
@@ -381,7 +383,9 @@ function CheckoutSummary({
         <div className="flex justify-between text-sm text-muted-foreground/60">
           <span>Shipping</span>
           <span className="tabular-nums">
-            {needsPincode
+            {subtotal >= freeShippingAbove
+              ? <span className="text-green-600 font-semibold text-xs">Free</span>
+              : needsPincode
               ? <span className="text-xs italic">Enter pincode</span>
               : shippingLoading
               ? <span className="animate-pulse">Calculating…</span>
@@ -390,6 +394,12 @@ function CheckoutSummary({
               : formatInr(shippingRate)}
           </span>
         </div>
+
+        {subtotal < freeShippingAbove && (
+          <p className="text-[10.5px] text-muted-foreground/50 border border-dashed border-border px-3 py-2 text-center">
+            Add {formatInr(freeShippingAbove - subtotal)} more for free shipping
+          </p>
+        )}
 
         <div className="border-t border-border pt-4 flex justify-between">
           <span className="font-semibold text-base">Total</span>
@@ -495,8 +505,11 @@ export default function CheckoutPage() {
     return saved?.pincode ?? "";
   }, [showNewForm, newForm.pincode, savedAddresses, selectedId]);
 
+  const settingsQuery = trpc.settings.get.useQuery(undefined, { staleTime: 10 * 60 * 1000 });
+  const freeShippingAbove = settingsQuery.data?.freeShippingAboveInr ?? 999;
+
   const shippingQuery = trpc.order.estimateShipping.useQuery(
-    { pincode: currentPincode, items: items.map((i) => ({ sizeMl: i.sizeMl, quantity: i.quantity })) },
+    { pincode: currentPincode, subtotal, items: items.map((i) => ({ sizeMl: i.sizeMl, quantity: i.quantity })) },
     { enabled: currentPincode.length === 6, staleTime: 5 * 60 * 1000 },
   );
 
@@ -795,6 +808,7 @@ export default function CheckoutPage() {
             shippingRate={shippingRate}
             shippingLoading={shippingLoading}
             pincode={currentPincode}
+            freeShippingAbove={freeShippingAbove}
             paying={paying}
             onPay={handlePay}
           />
