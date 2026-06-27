@@ -1,5 +1,5 @@
 app = "azimuth-server"
-primary_region = "blr"
+primary_region = "bom"
 
 [build]
   dockerfile = "../../Dockerfile.server"
