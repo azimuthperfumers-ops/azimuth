@@ -228,6 +228,47 @@ export function CollectionCarousel({ products }: { products: Product[] }) {
     return () => el.removeEventListener("scroll", updateArrows);
   }, [updateArrows, products]);
 
+  // Smooth inertia for wheel / trackpad horizontal scroll
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+
+    let velocity = 0;
+    let current = el.scrollLeft;
+    let rafId: number;
+    let ticking = false;
+
+    const tick = () => {
+      velocity *= 0.86;
+      current += velocity;
+      current = Math.max(0, Math.min(current, el.scrollWidth - el.clientWidth));
+      el.scrollLeft = current;
+      if (Math.abs(velocity) > 0.5) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        ticking = false;
+      }
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (delta === 0) return;
+      e.preventDefault();
+      current = el.scrollLeft;
+      velocity += delta * 1.1;
+      if (!ticking) {
+        ticking = true;
+        rafId = requestAnimationFrame(tick);
+      }
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   const scroll = (dir: "prev" | "next") => {
     const el = trackRef.current;
     if (!el) return;

@@ -142,7 +142,7 @@ function UpdateStatusDialog({
       orderId,
       status,
       note: note || undefined,
-      delhiveryWaybill: waybill || undefined,
+      waybill: waybill || undefined,
       trackingUrl: trackingUrl || undefined,
       gstInvoiceNumber: invoiceNum || undefined,
       shippingCostActual: shippingCostActual ? Number(shippingCostActual) : undefined,

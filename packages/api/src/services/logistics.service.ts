@@ -31,6 +31,7 @@ export type CreateShipmentInput = {
 export type ShipmentResult = {
   waybill: string;
   trackingUrl: string;
+  estimatedDeliveryDate?: string;
   status: "created" | "failed";
   errorMessage?: string;
 };
@@ -75,21 +76,19 @@ export interface ILogisticsService {
   createShipment(input: CreateShipmentInput): Promise<ShipmentResult>;
   trackShipment(waybill: string): Promise<TrackingResult>;
   createReturnShipment(input: CreateReturnShipmentInput): Promise<ShipmentResult>;
+  cancelShipment(waybill: string): Promise<{ cancelled: boolean; message?: string }>;
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
-import { DelhiveryProvider, StubLogisticsProvider } from "./providers/delhivery.provider";
+import { StubLogisticsProvider } from "./providers/stub.provider";
+import { ShiprocketProvider } from "./providers/shiprocket.provider";
 import { env } from "../env";
 
 export function createLogisticsService(): ILogisticsService {
-  if (env.LOGISTICS_PROVIDER === "delhivery") {
-    if (!env.DELHIVERY_API_TOKEN || !env.DELHIVERY_PICKUP_LOCATION) {
-      console.warn("[logistics] DELHIVERY_API_TOKEN or DELHIVERY_PICKUP_LOCATION not set — using stub");
-      return new StubLogisticsProvider();
-    }
-    return new DelhiveryProvider(env.DELHIVERY_API_TOKEN, env.DELHIVERY_PICKUP_LOCATION);
+  if (!env.SHIPROCKET_EMAIL || !env.SHIPROCKET_PASSWORD) {
+    console.warn("[logistics] SHIPROCKET_EMAIL or SHIPROCKET_PASSWORD not set — using stub");
+    return new StubLogisticsProvider();
   }
-
-  throw new Error(`[logistics] Unknown LOGISTICS_PROVIDER: "${env.LOGISTICS_PROVIDER}"`);
+  return new ShiprocketProvider();
 }

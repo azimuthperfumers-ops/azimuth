@@ -3,8 +3,7 @@ import { eq } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
 import { advanceOrderStatus, createRazorpayService } from "@azimuth/api";
-import { alertAdminNewOrder, notifyOrderPlaced } from "@azimuth/comms";
-import { getCustomerContact, orderInfo } from "../lib/comms.js";
+import { orderQueue } from "@azimuth/queue";
 
 export async function razorpayWebhookHandler(req: Request, res: Response) {
   const sig = req.headers["x-razorpay-signature"];
@@ -27,7 +26,7 @@ export async function razorpayWebhookHandler(req: Request, res: Response) {
     return;
   }
 
-  let event: { id: string; event: string; payload: Record<string, unknown> };
+  let event: { id?: string; event: string; payload: Record<string, unknown> };
   try {
     event = JSON.parse(rawBody.toString("utf8")) as typeof event;
   } catch {
@@ -35,18 +34,34 @@ export async function razorpayWebhookHandler(req: Request, res: Response) {
     return;
   }
 
-  const { id: eventId, event: eventType } = event;
+  const eventType = event.event;
 
-  // Idempotency — skip already-processed events
-  const existing = await db.query.webhookEvents.findFirst({
-    where: eq(schema.webhookEvents.eventId, eventId),
-  });
+  // Razorpay webhooks may not include a top-level `id` — derive a stable idempotency key
+  // from the payment entity id + event type, which is always unique per event
+  const paymentEntity = (event.payload?.payment as { entity?: Record<string, unknown> } | undefined)
+    ?.entity;
+  const paymentId = paymentEntity?.id as string | undefined;
+  const eventId = event.id ?? (paymentId ? `${eventType}:${paymentId}` : null);
+
+  if (!eventId) {
+    console.warn(`[webhook:razorpay] Could not derive event ID for ${eventType}, skipping`);
+    res.json({ status: "ok" });
+    return;
+  }
+
+  // Idempotency check — use db.select() to avoid Drizzle relational-query alias bug
+  const [existing] = await db
+    .select({ id: schema.webhookEvents.id })
+    .from(schema.webhookEvents)
+    .where(eq(schema.webhookEvents.eventId, eventId))
+    .limit(1);
+
   if (existing) {
     res.json({ status: "already_processed" });
     return;
   }
 
-  // Record event before processing so crashes don't cause double-processing on retry
+  // Record event before enqueuing so crashes don't double-process on retry
   await db.insert(schema.webhookEvents).values({
     gateway: "razorpay",
     eventId,
@@ -54,83 +69,58 @@ export async function razorpayWebhookHandler(req: Request, res: Response) {
     payload: event as Record<string, unknown>,
   });
 
+  // Enqueue for reliable async processing — return 200 immediately
   try {
-    if (eventType === "payment.captured") {
-      await handlePaymentCaptured(event.payload);
-    } else if (eventType === "payment.failed") {
-      await handlePaymentFailed(event.payload);
+    if (eventType === "payment.captured" && paymentEntity) {
+      const razorpayOrderId = paymentEntity.order_id as string;
+      const razorpayPaymentId = paymentEntity.id as string;
+      const amountPaise = Number(paymentEntity.amount);
+
+      await orderQueue.add("payment_captured", {
+        type: "payment_captured",
+        eventId,
+        razorpayOrderId,
+        razorpayPaymentId,
+        amountPaise,
+      });
+
+      console.log(`[webhook:razorpay] Enqueued payment_captured rzp_order=${razorpayOrderId}`);
+    } else if (eventType === "payment.failed" && paymentEntity) {
+      const razorpayOrderId = paymentEntity.order_id as string | undefined;
+      const razorpayPaymentId = (paymentEntity.id as string | undefined) ?? null;
+
+      if (razorpayOrderId) {
+        await orderQueue.add("payment_failed", {
+          type: "payment_failed",
+          eventId,
+          razorpayOrderId,
+          razorpayPaymentId,
+        });
+
+        console.log(`[webhook:razorpay] Enqueued payment_failed rzp_order=${razorpayOrderId}`);
+      }
+    } else if (eventType === "refund.processed" || eventType === "refund.created") {
+      const refundEntity = (event.payload?.refund as { entity?: Record<string, unknown> } | undefined)?.entity;
+      const refundPaymentId = refundEntity?.payment_id as string | undefined;
+      const refundId = refundEntity?.id as string | undefined;
+
+      if (refundPaymentId && refundId) {
+        const order = await db.query.orders.findFirst({
+          where: eq(schema.orders.razorpayPaymentId, refundPaymentId),
+        });
+        if (order && order.status !== "refunded") {
+          await advanceOrderStatus(
+            db, order.id, "refunded", "webhook:razorpay",
+            `Razorpay refund settled: ${refundId}`,
+          );
+          console.log(`[webhook:razorpay] Order ${order.orderNumber} marked refunded via ${eventType}`);
+        }
+      }
     }
   } catch (err) {
-    // Log but return 200 — Razorpay retries on non-2xx, event is already recorded for idempotency
-    console.error(`[webhook:razorpay] Error processing ${eventType} (${eventId}):`, err);
+    // Enqueue failed — event already recorded in DB for manual replay
+    console.error(`[webhook:razorpay] Failed to enqueue ${eventType} (${eventId}):`, err);
   }
 
   res.json({ status: "ok" });
-}
-
-async function handlePaymentCaptured(payload: Record<string, unknown>) {
-  const paymentEntity = (payload.payment as { entity: Record<string, string | number> }).entity;
-  const razorpayOrderId = paymentEntity.order_id as string;
-  const razorpayPaymentId = paymentEntity.id as string;
-  const amountPaise = Number(paymentEntity.amount);
-
-  const order = await db.query.orders.findFirst({
-    where: eq(schema.orders.razorpayOrderId, razorpayOrderId),
-  });
-
-  if (!order) {
-    console.warn(`[webhook:razorpay] No order for razorpay_order_id=${razorpayOrderId}`);
-    return;
-  }
-
-  // Idempotent — skip if frontend verify already advanced the order
-  if (order.status !== "pending_payment") {
-    console.log(`[webhook:razorpay] Order ${order.orderNumber} already ${order.status}, skipping`);
-    return;
-  }
-
-  await db
-    .update(schema.orders)
-    .set({ razorpayPaymentId })
-    .where(eq(schema.orders.id, order.id));
-
-  await db
-    .update(schema.paymentAttempts)
-    .set({ gatewayPaymentId: razorpayPaymentId, status: "captured" })
-    .where(eq(schema.paymentAttempts.gatewayOrderId, razorpayOrderId));
-
-  await advanceOrderStatus(
-    db,
-    order.id,
-    "paid",
-    "webhook:razorpay",
-    `Webhook payment.captured: ${razorpayPaymentId} (₹${amountPaise / 100})`,
-  );
-
-  console.log(`[webhook:razorpay] Order ${order.orderNumber} marked paid`);
-
-  const updatedOrder = await db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) });
-  if (updatedOrder) {
-    const contact = await getCustomerContact(updatedOrder);
-    const info = orderInfo(updatedOrder);
-    await Promise.all([
-      notifyOrderPlaced(contact, info),
-      alertAdminNewOrder(info),
-    ]);
-  }
-}
-
-async function handlePaymentFailed(payload: Record<string, unknown>) {
-  const paymentEntity = (payload.payment as { entity: Record<string, unknown> }).entity;
-  const razorpayOrderId = paymentEntity.order_id as string | undefined;
-  const razorpayPaymentId = paymentEntity.id as string | undefined;
-
-  if (!razorpayOrderId) return;
-
-  await db
-    .update(schema.paymentAttempts)
-    .set({ gatewayPaymentId: razorpayPaymentId ?? null, status: "failed" })
-    .where(eq(schema.paymentAttempts.gatewayOrderId, razorpayOrderId));
-
-  console.log(`[webhook:razorpay] Payment failed for rzp_order_id=${razorpayOrderId}`);
 }

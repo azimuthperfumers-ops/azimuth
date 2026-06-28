@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
 import { productVariants, products } from "./catalog";
@@ -20,6 +20,8 @@ export const userAddresses = pgTable(
     state: text("state").notNull(),
     pincode: text("pincode").notNull(),
     isDefault: boolean("is_default").default(false).notNull(),
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()

@@ -56,7 +56,7 @@ export default function SettingsPage() {
               Free shipping above (₹)
             </label>
             <p className="text-[11px] text-muted-foreground/60">
-              Orders at or above this subtotal get free shipping (Delhivery cost absorbed by store).
+              Orders at or above this subtotal get free shipping (shipping cost absorbed by store).
               Set to 0 to always charge shipping.
             </p>
             <div className="flex gap-2 mt-2">

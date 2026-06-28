@@ -6,6 +6,7 @@ import { ThemeProvider } from "next-themes";
 
 import { Toaster } from "@/components/ui/sonner";
 import { CartProvider } from "@/hooks/use-cart";
+import { SmoothScroll } from "@/components/smooth-scroll";
 import { getTrpcClient, trpc } from "@/lib/trpc";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -17,6 +18,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
           <CartProvider>
+            <SmoothScroll />
             {children}
             <Toaster />
           </CartProvider>

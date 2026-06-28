@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, Lock, MapPin, Plus, Tag } from "lucide-react";
 import { toast } from "sonner";
 
+import dynamic from "next/dynamic";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { AuthCard } from "@/components/auth-card";
+
+const MapPicker = dynamic(() => import("@/components/map-picker"), { ssr: false });
 import { authClient } from "@/lib/auth-client";
 import { cartSubtotal } from "@/lib/cart";
 import { trpc } from "@/lib/trpc";
@@ -25,6 +28,8 @@ type AddressForm = {
   city: string;
   state: string;
   pincode: string;
+  lat?: number;
+  lng?: number;
 };
 
 type SavedAddress = {
@@ -38,6 +43,8 @@ type SavedAddress = {
   state: string;
   pincode: string;
   isDefault: boolean;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 declare global {
@@ -66,7 +73,7 @@ function loadRazorpayScript(): Promise<boolean> {
 
 const EMPTY_FORM: AddressForm = {
   label: "Home", fullName: "", phone: "", line1: "", line2: "",
-  city: "", state: "", pincode: "",
+  city: "", state: "", pincode: "", lat: undefined, lng: undefined,
 };
 
 function addressToForm(a: SavedAddress): AddressForm {
@@ -79,6 +86,8 @@ function addressToForm(a: SavedAddress): AddressForm {
     city: a.city,
     state: a.state,
     pincode: a.pincode,
+    lat: a.lat ?? undefined,
+    lng: a.lng ?? undefined,
   };
 }
 
@@ -132,12 +141,14 @@ const ADDRESS_LABELS = ["Home", "Work", "Other"];
 function NewAddressForm({
   form,
   onChange,
+  onLocationChange,
   saveToAccount,
   onSaveToAccountChange,
   formRef,
 }: {
   form: AddressForm;
   onChange: (key: keyof AddressForm, value: string) => void;
+  onLocationChange: (lat: number, lng: number) => void;
   saveToAccount: boolean;
   onSaveToAccountChange: (v: boolean) => void;
   formRef?: React.RefObject<HTMLFormElement | null>;
@@ -208,12 +219,15 @@ function NewAddressForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { key: "city" as const, label: "City" },
-          { key: "state" as const, label: "State" },
-          { key: "pincode" as const, label: "Pincode", maxLength: 6 },
-        ].map(({ key, label, maxLength }) => (
+          { key: "city" as const, label: "City", hint: undefined },
+          { key: "state" as const, label: "State", hint: undefined },
+          { key: "pincode" as const, label: "Pincode", maxLength: 6, hint: "Enter to auto-locate on map" },
+        ].map(({ key, label, maxLength, hint }) => (
           <div key={key} className="space-y-1.5">
-            <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">{label}</label>
+            <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground flex items-baseline justify-between gap-2">
+              {label}
+              {hint && <span className="text-[10px] normal-case font-normal tracking-normal text-muted-foreground/50">{hint}</span>}
+            </label>
             <input
               type="text"
               value={form[key]}
@@ -225,6 +239,13 @@ function NewAddressForm({
           </div>
         ))}
       </div>
+
+      <MapPicker
+        lat={form.lat}
+        lng={form.lng}
+        pincode={form.pincode}
+        onChange={onLocationChange}
+      />
 
       <label className="flex items-center gap-2 text-[12px] text-muted-foreground cursor-pointer select-none">
         <input
@@ -250,6 +271,7 @@ function AddressSection({
   onShowNewForm,
   newForm,
   onNewFormChange,
+  onNewFormLocationChange,
   saveToAccount,
   onSaveToAccountChange,
 }: {
@@ -261,6 +283,7 @@ function AddressSection({
   onShowNewForm: () => void;
   newForm: AddressForm;
   onNewFormChange: (key: keyof AddressForm, value: string) => void;
+  onNewFormLocationChange: (lat: number, lng: number) => void;
   saveToAccount: boolean;
   onSaveToAccountChange: (v: boolean) => void;
 }) {
@@ -317,6 +340,7 @@ function AddressSection({
             <NewAddressForm
               form={newForm}
               onChange={onNewFormChange}
+              onLocationChange={onNewFormLocationChange}
               saveToAccount={saveToAccount}
               onSaveToAccountChange={onSaveToAccountChange}
             />
@@ -484,6 +508,10 @@ export default function CheckoutPage() {
     setNewForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function setNewFormLocation(lat: number, lng: number) {
+    setNewForm((prev) => ({ ...prev, lat, lng }));
+  }
+
   function handleSelectSaved(id: string) {
     setSelectedId(id);
     setShowNewForm(false);
@@ -509,7 +537,7 @@ export default function CheckoutPage() {
   const freeShippingAbove = settingsQuery.data?.freeShippingAboveInr ?? 999;
 
   const shippingQuery = trpc.order.estimateShipping.useQuery(
-    { pincode: currentPincode, subtotal, items: items.map((i) => ({ sizeMl: i.sizeMl, quantity: i.quantity })) },
+    { pincode: currentPincode, subtotal, items: items.map((i) => ({ variantId: i.variantId, sizeMl: i.sizeMl, quantity: i.quantity })) },
     { enabled: currentPincode.length === 6, staleTime: 5 * 60 * 1000 },
   );
 
@@ -581,6 +609,8 @@ export default function CheckoutPage() {
           state: addr.state.trim(),
           pincode: addr.pincode.trim(),
           isDefault: (savedAddresses ?? []).length === 0,
+          lat: addr.lat,
+          lng: addr.lng,
         });
         await utils.userData.listAddresses.invalidate();
       }
@@ -602,6 +632,8 @@ export default function CheckoutPage() {
           city: addr.city.trim(),
           state: addr.state.trim(),
           pincode: addr.pincode.trim(),
+          lat: addr.lat ?? null,
+          lng: addr.lng ?? null,
         },
         items: items.map((item) => ({
           variantId: item.variantId,
@@ -734,6 +766,7 @@ export default function CheckoutPage() {
               onShowNewForm={handleShowNewForm}
               newForm={newForm}
               onNewFormChange={setNewFormField}
+              onNewFormLocationChange={setNewFormLocation}
               saveToAccount={saveToAccount}
               onSaveToAccountChange={setSaveToAccount}
             />

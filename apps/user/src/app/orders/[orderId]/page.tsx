@@ -142,23 +142,33 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
           {order.delhiveryWaybill && (
             <section>
               <p className="label-xs mb-3">Shipment</p>
-              <div className="border border-border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
-                    Waybill
-                  </p>
-                  <p className="font-mono text-sm font-semibold mt-0.5">{order.delhiveryWaybill}</p>
+              <div className="border border-border p-4 flex flex-col gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
+                      Waybill
+                    </p>
+                    <p className="font-mono text-sm font-semibold mt-0.5">{order.delhiveryWaybill}</p>
+                  </div>
+                  {order.trackingUrl && (
+                    <a
+                      href={order.trackingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 border border-foreground px-4 py-2 text-[10.5px] font-semibold tracking-[0.14em] uppercase hover:bg-foreground hover:text-background transition-all"
+                    >
+                      Track shipment
+                      <ExternalLink className="size-3" />
+                    </a>
+                  )}
                 </div>
-                {order.trackingUrl && (
-                  <a
-                    href={order.trackingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 border border-foreground px-4 py-2 text-[10.5px] font-semibold tracking-[0.14em] uppercase hover:bg-foreground hover:text-background transition-all"
-                  >
-                    Track shipment
-                    <ExternalLink className="size-3" />
-                  </a>
+                {order.estimatedDeliveryDate && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
+                      Expected delivery
+                    </p>
+                    <p className="text-sm font-semibold mt-0.5">{order.estimatedDeliveryDate}</p>
+                  </div>
                 )}
               </div>
             </section>

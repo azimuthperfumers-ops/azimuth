@@ -4,7 +4,7 @@ import { use, useState } from "react";
 import Link from "next/link";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@azimuth/api";
-import { ArrowLeft, MapPin } from "lucide-react";
+import { AlertTriangle, ArrowLeft, MapPin, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,7 @@ const ORDER_STATUSES = [
   "picked_up", "out_for_delivery", "delivery_attempted",
   "shipped", "delivered", "cancelled", "refunded",
   "rto_initiated", "rto_delivered",
+  "return_requested", "return_approved", "exchange_requested",
 ] as const;
 
 type OrderStatus = (typeof ORDER_STATUSES)[number];
@@ -57,6 +58,9 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   refunded: "Refunded",
   rto_initiated: "RTO initiated",
   rto_delivered: "RTO delivered",
+  return_requested: "Return requested",
+  return_approved: "Return approved",
+  exchange_requested: "Exchange requested",
 };
 
 const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive" | "outline"> = {
@@ -72,18 +76,26 @@ const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive
   refunded: "outline",
   rto_initiated: "destructive",
   rto_delivered: "outline",
+  return_requested: "outline",
+  return_approved: "secondary",
+  exchange_requested: "outline",
 };
 
 // ─── Update status dialog ─────────────────────────────────────────────────────
 
+const PAID_STATUSES: OrderStatus[] = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted", "return_requested", "return_approved"];
+const REFUND_TRIGGERS: OrderStatus[] = ["cancelled", "return_approved"];
+
 function UpdateStatusDialog({
   orderId,
   currentStatus,
+  hasPaid,
   open,
   onOpenChange,
 }: {
   orderId: string;
   currentStatus: OrderStatus;
+  hasPaid: boolean;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
@@ -104,12 +116,17 @@ function UpdateStatusDialog({
     onError: (err) => toast.error(err.message),
   });
 
+  const willTriggerRefund =
+    hasPaid &&
+    REFUND_TRIGGERS.includes(status) &&
+    PAID_STATUSES.includes(currentStatus);
+
   function onSave() {
     update.mutate({
       orderId,
       status,
       note: note || undefined,
-      delhiveryWaybill: waybill || undefined,
+      waybill: waybill || undefined,
       trackingUrl: trackingUrl || undefined,
       gstInvoiceNumber: invoiceNum || undefined,
     });
@@ -137,11 +154,17 @@ function UpdateStatusDialog({
             </Select>
           </div>
 
+          {willTriggerRefund && (
+            <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-300">
+              <strong>Razorpay refund will be initiated automatically.</strong> Full order amount will be refunded to the customer. This cannot be undone.
+            </div>
+          )}
+
           {status === "shipped" && (
             <>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Delhivery waybill
+                  Shiprocket AWB
                 </label>
                 <input
                   type="text"
@@ -225,6 +248,15 @@ export default function AdminOrderDetailPage({
 }) {
   const { orderId } = use(params);
   const [statusDialog, setStatusDialog] = useState(false);
+  const utils = trpc.useUtils();
+
+  const retryBooking = trpc.order.retryShipmentBooking.useMutation({
+    onSuccess: async () => {
+      await utils.order.adminGet.invalidate({ orderId });
+      toast.success("Shipment booking re-queued");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const { data: order, isLoading } = trpc.order.adminGet.useQuery({ orderId });
 
@@ -255,6 +287,20 @@ export default function AdminOrderDetailPage({
     ? [...order.statusHistory].reverse()
     : [];
 
+  // Detect failed shipment booking: processing + no waybill + error note in history
+  const needsShipmentRetry =
+    order.status === "processing" &&
+    !order.delhiveryWaybill;
+
+  const bookingErrorEntry = needsShipmentRetry
+    ? timeline.find(
+        (h) =>
+          h.actorId === "worker:order" &&
+          h.note != null &&
+          h.note.includes("booking failed"),
+      )
+    : undefined;
+
   return (
     <div className="space-y-8">
 
@@ -281,10 +327,22 @@ export default function AdminOrderDetailPage({
               })}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Badge variant={STATUS_VARIANT[order.status as OrderStatus] ?? "outline"}>
               {STATUS_LABEL[order.status as OrderStatus] ?? order.status}
             </Badge>
+            {needsShipmentRetry && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => retryBooking.mutate({ orderId })}
+                disabled={retryBooking.isPending}
+                className="border-orange-400 text-orange-700 hover:bg-orange-50"
+              >
+                <RotateCcw className="size-3.5 mr-1.5" />
+                {retryBooking.isPending ? "Queueing…" : "Retry shipment booking"}
+              </Button>
+            )}
             <Button size="sm" onClick={() => setStatusDialog(true)}>
               Update status
             </Button>
@@ -325,6 +383,23 @@ export default function AdminOrderDetailPage({
               ))}
             </div>
           </section>
+
+          {/* Shipment booking error alert */}
+          {bookingErrorEntry && (
+            <div className="flex items-start gap-3 border border-orange-300 bg-orange-50 p-4 text-[12px]">
+              <AlertTriangle className="size-4 text-orange-500 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-orange-800">Shipment booking failed</p>
+                <p className="text-orange-700">{bookingErrorEntry.note}</p>
+                <p className="text-orange-500/70">
+                  {new Date(bookingErrorEntry.createdAt).toLocaleString("en-IN", {
+                    day: "numeric", month: "short", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Audit trail */}
           {timeline.length > 0 && (
@@ -437,6 +512,12 @@ export default function AdminOrderDetailPage({
                     <span className="font-mono">{order.delhiveryWaybill}</span>
                   </div>
                 )}
+                {order.estimatedDeliveryDate && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground shrink-0">Est. delivery</span>
+                    <span>{order.estimatedDeliveryDate}</span>
+                  </div>
+                )}
                 {order.trackingUrl && (
                   <a
                     href={order.trackingUrl}
@@ -489,6 +570,7 @@ export default function AdminOrderDetailPage({
       <UpdateStatusDialog
         orderId={order.id}
         currentStatus={order.status as OrderStatus}
+        hasPaid={!!order.razorpayPaymentId}
         open={statusDialog}
         onOpenChange={setStatusDialog}
       />

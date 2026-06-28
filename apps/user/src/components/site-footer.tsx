@@ -31,7 +31,7 @@ export function SiteFooter() {
         <div>
           <h5 className="mb-5 text-[10px] font-semibold tracking-[0.2em] uppercase text-foreground">Maison</h5>
           <ul className="space-y-3 text-[13px] text-muted-foreground">
-            <li><span className="cursor-default">Our Story</span></li>
+            <li><Link href="/our-story" className="transition-colors hover:text-foreground">Our Story</Link></li>
             <li><span className="cursor-default">Ingredients</span></li>
             <li><span className="cursor-default">Stores</span></li>
           </ul>

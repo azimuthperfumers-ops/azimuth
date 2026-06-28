@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Menu, ShoppingBag, X } from "lucide-react";
 
 import { useCartCount } from "@/hooks/use-cart";
+import { authClient } from "@/lib/auth-client";
 
 const TICKER_ITEMS = [
   "MINIATURES WITH EVERY PURCHASE",
@@ -17,6 +18,8 @@ const TICKER_ITEMS = [
 export function SiteHeader() {
   const cartCount = useCartCount();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { data: session } = authClient.useSession();
+  const isLoggedIn = !!session?.user;
 
   return (
     <div className="sticky top-0 z-50 bg-background">
@@ -53,7 +56,7 @@ export function SiteHeader() {
               <Link href="/shop" className="text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase transition-opacity hover:opacity-60">
                 Shop
               </Link>
-              <Link href="#" className="text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase transition-opacity hover:opacity-60">
+              <Link href="/our-story" className="text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase transition-opacity hover:opacity-60">
                 Our Story
               </Link>
             </nav>
@@ -69,11 +72,22 @@ export function SiteHeader() {
             </span>
           </Link>
 
-          {/* Right: account (desktop) + cart */}
+          {/* Right: account (desktop) + sign-in (mobile, guest) + cart */}
           <div className="flex items-center gap-4 md:gap-6">
-            <Link href="/account" className="hidden md:block text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase transition-opacity hover:opacity-60">
-              Account
+            <Link
+              href={isLoggedIn ? "/account" : "/account?tab=info"}
+              className="hidden md:block text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase transition-opacity hover:opacity-60"
+            >
+              {isLoggedIn ? "Account" : "Sign in"}
             </Link>
+            {!isLoggedIn && (
+              <Link
+                href="/account?tab=info"
+                className="md:hidden text-[10px] font-semibold tracking-[0.16em] text-foreground uppercase transition-opacity hover:opacity-60"
+              >
+                Sign in
+              </Link>
+            )}
             <Link
               href="/cart"
               className="relative inline-flex items-center gap-2 border border-foreground px-3 md:px-4 py-2 text-[10px] font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-foreground hover:text-background"
@@ -96,8 +110,8 @@ export function SiteHeader() {
           <nav className="flex flex-col px-4">
             {[
               { href: "/shop", label: "Shop" },
-              { href: "#", label: "Our Story" },
-              { href: "/account", label: "Account" },
+              { href: "/our-story", label: "Our Story" },
+              { href: "/account", label: isLoggedIn ? "Account" : "Sign in" },
             ].map(({ href, label }) => (
               <Link
                 key={label}

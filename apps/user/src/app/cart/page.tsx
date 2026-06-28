@@ -395,16 +395,48 @@ function OrderSummary({
   subtotal,
   couponCode,
   couponDiscount,
+  items,
 }: {
   subtotal: number;
   couponCode: string | null;
   couponDiscount: number | null;
+  items: CartItem[];
 }) {
   const router = useRouter();
   const { data: session } = authClient.useSession();
   const discount = couponDiscount ?? 0;
-  const shipping = subtotal >= 999 ? 0 : 99;
-  const total = Math.max(0, subtotal - discount) + shipping;
+
+  const settingsQuery = trpc.settings.get.useQuery(undefined, { staleTime: 10 * 60 * 1000 });
+  const freeShippingAbove = settingsQuery.data?.freeShippingAboveInr ?? 999;
+
+  const { data: addresses } = trpc.userData.listAddresses.useQuery(undefined, {
+    enabled: !!session,
+  });
+  const defaultAddress = addresses?.find((a) => a.isDefault) ?? addresses?.[0];
+  const pincode = defaultAddress?.pincode ?? "";
+
+  const shippingQuery = trpc.order.estimateShipping.useQuery(
+    { pincode, subtotal, items: items.map((i) => ({ variantId: i.variantId, sizeMl: i.sizeMl, quantity: i.quantity })) },
+    { enabled: pincode.length === 6, staleTime: 5 * 60 * 1000 },
+  );
+  const shippingLoading = pincode.length === 6 && shippingQuery.isLoading;
+  const isFreeShipping = subtotal >= freeShippingAbove;
+  const shippingRate: number | null = isFreeShipping
+    ? 0
+    : shippingQuery.data?.available
+    ? shippingQuery.data.chargeInr
+    : null;
+
+  const shippingForTotal = shippingRate ?? 0;
+  const total = Math.max(0, subtotal - discount) + shippingForTotal;
+
+  const shippingDisplay = () => {
+    if (isFreeShipping) return <span className="text-green-600 font-semibold text-xs">Free</span>;
+    if (!session || !pincode) return <span className="text-xs italic">Calculated at checkout</span>;
+    if (shippingLoading) return <span className="animate-pulse">Calculating…</span>;
+    if (shippingRate === null) return <span className="text-xs italic">Calculated at checkout</span>;
+    return <span>{formatInr(shippingRate)}</span>;
+  };
 
   return (
     <div className="border border-border lg:sticky lg:top-24">
@@ -432,19 +464,21 @@ function OrderSummary({
 
         <div className="flex justify-between text-sm text-muted-foreground/60">
           <span>Shipping</span>
-          <span className="tabular-nums">{shipping === 0 ? "Free" : formatInr(shipping)}</span>
+          <span className="tabular-nums">{shippingDisplay()}</span>
         </div>
 
-        {subtotal < 999 && (
-          <p className="text-[10.5px] text-muted-foreground/50 border border-dashed border-border rounded-sm px-3 py-2 text-center">
-            Add {formatInr(999 - subtotal)} more for free shipping
+        {!isFreeShipping && (
+          <p className="text-[10.5px] text-muted-foreground/50 border border-dashed border-border px-3 py-2 text-center">
+            Add {formatInr(freeShippingAbove - subtotal)} more for free shipping
           </p>
         )}
 
         <div className="border-t border-border pt-4 flex justify-between">
           <span className="font-semibold text-base">Total</span>
           <div className="text-right">
-            <span className="font-bold text-xl tabular-nums">{formatInr(total)}</span>
+            <span className="font-bold text-xl tabular-nums">
+              {shippingLoading ? "—" : formatInr(total)}
+            </span>
             <p className="text-[10px] text-muted-foreground/40 mt-0.5">Incl. of all taxes</p>
           </div>
         </div>
@@ -606,6 +640,7 @@ export default function CartPage() {
               subtotal={subtotal}
               couponCode={couponCode}
               couponDiscount={couponDiscount}
+              items={items}
             />
           )}
         </div>

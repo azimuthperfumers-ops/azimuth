@@ -6,6 +6,7 @@ import { useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
+import { BannerCarousel } from "@/components/banner-carousel";
 import { ProductCard } from "@/components/product-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -188,6 +189,7 @@ function ShopPageInner() {
   const { category, concentration, gender, search, hasFilters } = filter;
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  const shopBanners = trpc.content.listBanners.useQuery({ page: "shop" });
   const categories = trpc.catalog.listCategories.useQuery();
   const products = trpc.catalog.listProducts.useQuery({
     status: "active",
@@ -212,14 +214,20 @@ function ShopPageInner() {
       <SiteHeader />
 
       {/* Cover photo — full bleed */}
-      <div className="relative h-[33vh] md:h-[40vh] w-full overflow-hidden">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/shop-cover.jpg"
-          alt="Azimuth collection"
-          className="h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/30" />
+      <div className="relative h-[33vh] md:h-[40vh] w-full overflow-hidden bg-muted">
+        {(shopBanners.data ?? []).filter((b) => b.active).length > 0 ? (
+          <BannerCarousel banners={shopBanners.data ?? []} />
+        ) : (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/shop-cover.jpg"
+              alt="Azimuth collection"
+              className="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/30" />
+          </>
+        )}
       </div>
 
       <main className="mx-auto max-w-[1400px] px-4 md:px-10 py-10 md:py-16 pb-32">

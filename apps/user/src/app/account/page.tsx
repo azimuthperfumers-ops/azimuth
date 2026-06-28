@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { type FormEvent, useState, Suspense } from "react";
 import Link from "next/link";
+import dynamicImport from "next/dynamic";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ChevronRight, Heart, LogOut, MapPin, Package, TicketIcon, User } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +16,8 @@ import { SiteHeader } from "@/components/site-header";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+
+const MapPicker = dynamicImport(() => import("@/components/map-picker"), { ssr: false });
 
 // ─── Shared primitives ──────────────────────────────────────────────────────
 
@@ -128,52 +131,179 @@ type Address = {
   state: string;
   pincode: string;
   isDefault: boolean;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 function AddressCard({
   address,
   onDelete,
   onSetDefault,
+  onEdited,
 }: {
   address: Address;
   onDelete: () => void;
   onSetDefault: () => void;
+  onEdited: () => void;
 }) {
-  return (
-    <div className={cn("border p-5 space-y-2 relative", address.isDefault && "border-foreground")}>
-      {address.isDefault && (
-        <span className="absolute right-3 top-3 text-[9px] font-semibold tracking-[0.14em] uppercase text-muted-foreground">
-          Default
-        </span>
-      )}
-      <p className="text-[10px] font-semibold tracking-[0.14em] uppercase text-muted-foreground">
-        {address.label}
-      </p>
-      <p className="text-sm font-semibold">{address.fullName}</p>
-      <p className="text-[13px] text-muted-foreground">
-        {address.line1}{address.line2 ? `, ${address.line2}` : ""}
-        <br />
-        {address.city}, {address.state} — {address.pincode}
-        <br />
-        {address.phone}
-      </p>
-      <div className="flex gap-4 pt-1">
-        {!address.isDefault && (
+  const [editing, setEditing] = useState(false);
+  const utils = trpc.useUtils();
+
+  const [form, setForm] = useState({
+    label: address.label,
+    fullName: address.fullName,
+    phone: address.phone,
+    line1: address.line1,
+    line2: address.line2 ?? "",
+    city: address.city,
+    state: address.state,
+    pincode: address.pincode,
+    lat: address.lat ?? undefined as number | undefined,
+    lng: address.lng ?? undefined as number | undefined,
+  });
+
+  const update = (trpc as any).userData?.updateAddress?.useMutation({
+    onSuccess: async () => {
+      await (utils as any).userData?.listAddresses?.invalidate();
+      toast.success("Address updated");
+      setEditing(false);
+      onEdited();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  function f(key: string, val: string) {
+    setForm((prev) => ({ ...prev, [key]: val }));
+  }
+
+  if (!editing) {
+    return (
+      <div className={cn("border p-5 space-y-2 relative", address.isDefault && "border-foreground")}>
+        {address.isDefault && (
+          <span className="absolute right-3 top-3 text-[9px] font-semibold tracking-[0.14em] uppercase text-muted-foreground">
+            Default
+          </span>
+        )}
+        <p className="text-[10px] font-semibold tracking-[0.14em] uppercase text-muted-foreground">
+          {address.label}
+        </p>
+        <p className="text-sm font-semibold">{address.fullName}</p>
+        <p className="text-[13px] text-muted-foreground">
+          {address.line1}{address.line2 ? `, ${address.line2}` : ""}
+          <br />
+          {address.city}, {address.state} — {address.pincode}
+          <br />
+          {address.phone}
+        </p>
+        <div className="flex gap-4 pt-1">
           <button
-            onClick={onSetDefault}
+            onClick={() => setEditing(true)}
             className="text-[11px] font-semibold text-muted-foreground underline underline-offset-2 hover:text-foreground"
           >
-            Set as default
+            Edit
           </button>
-        )}
+          {!address.isDefault && (
+            <button
+              onClick={onSetDefault}
+              className="text-[11px] font-semibold text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              Set as default
+            </button>
+          )}
+          <button
+            onClick={onDelete}
+            className="text-[11px] font-semibold text-muted-foreground underline underline-offset-2 hover:text-primary"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        update?.mutate({
+          id: address.id,
+          label: form.label,
+          fullName: form.fullName.trim(),
+          phone: form.phone.trim(),
+          line1: form.line1.trim(),
+          line2: form.line2.trim() || null,
+          city: form.city.trim(),
+          state: form.state.trim(),
+          pincode: form.pincode.trim(),
+          lat: form.lat,
+          lng: form.lng,
+        });
+      }}
+      className="border border-foreground/40 p-5 space-y-4"
+    >
+      <p className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">Edit address</p>
+      <div className="grid grid-cols-3 gap-2">
+        {["Home", "Work", "Other"].map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => f("label", l)}
+            className={cn(
+              "border px-2 py-1.5 text-[10px] font-semibold tracking-[0.1em] uppercase transition-colors",
+              form.label === l ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground hover:border-foreground/40",
+            )}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+      {[
+        { key: "fullName", label: "Full name", type: "text" },
+        { key: "phone", label: "Phone", type: "tel" },
+        { key: "line1", label: "Address line 1", type: "text" },
+        { key: "line2", label: "Address line 2 (optional)", type: "text" },
+        { key: "city", label: "City", type: "text" },
+        { key: "state", label: "State", type: "text" },
+        { key: "pincode", label: "Pincode", type: "text", hint: "Enter to auto-locate on map" },
+      ].map(({ key, label, type, hint }) => (
+        <div key={key} className="space-y-1">
+          <label className="text-[10px] font-semibold tracking-[0.1em] uppercase text-muted-foreground flex items-baseline justify-between gap-2">
+            {label}
+            {hint && <span className="text-[10px] normal-case font-normal tracking-normal text-muted-foreground/50">{hint}</span>}
+          </label>
+          <input
+            type={type}
+            value={(form as any)[key]}
+            onChange={(e) => f(key, e.target.value)}
+            required={key !== "line2"}
+            maxLength={key === "pincode" ? 6 : undefined}
+            className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none"
+          />
+        </div>
+      ))}
+      <MapPicker
+        lat={form.lat}
+        lng={form.lng}
+        pincode={form.pincode}
+        onChange={(lat: number, lng: number) => setForm((prev) => ({ ...prev, lat, lng }))}
+      />
+      <div className="flex gap-3 pt-1">
         <button
-          onClick={onDelete}
-          className="text-[11px] font-semibold text-muted-foreground underline underline-offset-2 hover:text-primary"
+          type="submit"
+          disabled={update?.isPending}
+          className="border border-foreground bg-foreground px-5 py-2 text-[10px] font-semibold tracking-[0.14em] text-background uppercase hover:bg-transparent hover:text-foreground transition-all"
         >
-          Remove
+          {update?.isPending ? "Saving…" : "Save changes"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          className="border border-border px-5 py-2 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase hover:border-foreground hover:text-foreground transition-all"
+        >
+          Cancel
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 
@@ -182,6 +312,8 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({
     label: "Home", fullName: "", phone: "", line1: "", line2: "",
     city: "", state: "", pincode: "", isDefault: false,
+    lat: undefined as number | undefined,
+    lng: undefined as number | undefined,
   });
 
   const add = (trpc as any).userData?.addAddress?.useMutation({
@@ -223,16 +355,19 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
         ))}
       </div>
       {[
-        { key: "fullName", label: "Full name", type: "text" },
-        { key: "phone", label: "Phone", type: "tel" },
-        { key: "line1", label: "Address line 1", type: "text" },
-        { key: "line2", label: "Address line 2 (optional)", type: "text" },
-        { key: "city", label: "City", type: "text" },
-        { key: "state", label: "State", type: "text" },
-        { key: "pincode", label: "Pincode", type: "text" },
-      ].map(({ key, label, type }) => (
+        { key: "fullName", label: "Full name", type: "text", hint: undefined },
+        { key: "phone", label: "Phone", type: "tel", hint: undefined },
+        { key: "line1", label: "Address line 1", type: "text", hint: undefined },
+        { key: "line2", label: "Address line 2 (optional)", type: "text", hint: undefined },
+        { key: "city", label: "City", type: "text", hint: undefined },
+        { key: "state", label: "State", type: "text", hint: undefined },
+        { key: "pincode", label: "Pincode", type: "text", hint: "Enter to auto-locate on map" },
+      ].map(({ key, label, type, hint }) => (
         <div key={key} className="space-y-1.5">
-          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">{label}</label>
+          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground flex items-baseline justify-between gap-2">
+            {label}
+            {hint && <span className="text-[10px] normal-case font-normal tracking-normal text-muted-foreground/50">{hint}</span>}
+          </label>
           <input
             type={type}
             value={(form as any)[key]}
@@ -242,6 +377,12 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
           />
         </div>
       ))}
+      <MapPicker
+        lat={form.lat}
+        lng={form.lng}
+        pincode={form.pincode}
+        onChange={(lat: number, lng: number) => setForm((prev) => ({ ...prev, lat, lng }))}
+      />
       <label className="flex items-center gap-2 text-[13px]">
         <input type="checkbox" checked={form.isDefault} onChange={(e) => f("isDefault", e.target.checked)} />
         Set as default address
@@ -319,6 +460,7 @@ function AddressesTab() {
             address={addr}
             onDelete={() => deleteAddr?.mutate({ id: addr.id })}
             onSetDefault={() => setDefault?.mutate({ id: addr.id })}
+            onEdited={() => (utils as any).userData?.listAddresses?.invalidate()}
           />
         ))}
       </div>

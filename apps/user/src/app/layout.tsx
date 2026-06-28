@@ -29,7 +29,7 @@ export default function RootLayout({
       className={cn("font-sans", sans.variable, serif.variable)}
       suppressHydrationWarning
     >
-      <body >
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>

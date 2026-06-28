@@ -58,4 +58,15 @@ export const storageRouter = router({
       const uploadUrl = await getSignedUrl(r2Client(), command, { expiresIn: 300 });
       return { uploadUrl, publicUrl: `${base}/${key}`, key };
     }),
+
+  getBannerUploadUrl: adminProcedure
+    .input(z.object({ filename: z.string().min(1), contentType: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const { bucket, base } = r2BucketAndBase();
+      const ext = input.filename.split(".").pop()?.toLowerCase() ?? "jpg";
+      const key = `banners/${crypto.randomUUID()}.${ext}`;
+      const command = new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: input.contentType });
+      const uploadUrl = await getSignedUrl(r2Client(), command, { expiresIn: 300 });
+      return { uploadUrl, publicUrl: `${base}/${key}`, key };
+    }),
 });

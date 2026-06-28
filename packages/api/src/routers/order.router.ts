@@ -15,6 +15,7 @@ import {
 
 import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import { createLogisticsService } from "../services/logistics.service";
+import { orderQueue } from "../lib/order-queue";
 import {
   advanceOrderStatus,
   createOrder,
@@ -49,7 +50,7 @@ function toOrderInfo(order: OrderRow): OrderInfo {
     totalInr: new Intl.NumberFormat("en-IN", {
       style: "currency", currency: "INR", maximumFractionDigits: 0,
     }).format(Number(order.total)),
-    delhiveryWaybill: order.delhiveryWaybill ?? undefined,
+    waybill: order.delhiveryWaybill ?? undefined,
     trackingUrl: order.trackingUrl ?? undefined,
   };
 }
@@ -63,6 +64,8 @@ const addressSchema = z.object({
   state: z.string().min(1),
   pincode: z.string().length(6),
   label: z.string().optional(),
+  lat: z.number().optional().nullable(),
+  lng: z.number().optional().nullable(),
 });
 
 const checkoutItemSchema = z.object({
@@ -89,6 +92,9 @@ const ORDER_STATUS_VALUES = [
   "refunded",
   "rto_initiated",
   "rto_delivered",
+  "return_requested",
+  "return_approved",
+  "exchange_requested",
 ] as const;
 
 export const orderRouter = router({
@@ -174,29 +180,45 @@ export const orderRouter = router({
       getOrderByNumber(ctx.db, input.orderNumber, ctx.session.user.id),
     ),
 
-  // ── User: estimate shipping cost (Delhivery rate API) ───────────────────────
+  // ── User: estimate shipping cost (Shiprocket rate API) ──────────────────────
 
   estimateShipping: protectedProcedure
     .input(
       z.object({
         pincode: z.string().length(6),
         subtotal: z.number().nonnegative(),
-        items: z.array(z.object({ sizeMl: z.number().int().positive(), quantity: z.number().int().min(1) })),
+        items: z.array(z.object({
+          variantId: z.string().uuid(),
+          sizeMl: z.number().int().positive(),
+          quantity: z.number().int().min(1),
+        })),
       }),
     )
     .query(async ({ ctx, input }) => {
-      // Check free-shipping threshold from DB settings
       const settings = await ctx.db.query.siteSettings.findFirst();
       const threshold = Number(settings?.freeShippingAboveInr ?? 999);
       if (input.subtotal >= threshold) {
         return { available: true, chargeInr: 0, estimatedDays: null, isFree: true };
       }
 
-      // Estimate weight: ~(sizeMl + 300)g per item unit + 200g outer packaging
-      const weightGrams = Math.max(
-        500,
-        input.items.reduce((sum, i) => sum + (i.sizeMl + 300) * i.quantity, 0) + 200,
-      );
+      // Look up actual variant weights from DB — same data booking uses, so estimate matches charge
+      const variantIds = input.items.map((i) => i.variantId);
+      const variants = await ctx.db
+        .select({ id: schema.productVariants.id, weightGrams: schema.productVariants.weightGrams })
+        .from(schema.productVariants)
+        .where(inArray(schema.productVariants.id, variantIds));
+      const weightMap = new Map(variants.map((v) => [v.id, v.weightGrams]));
+
+      const totalGrams = input.items.reduce((sum, i) => {
+        const dbWeight = weightMap.get(i.variantId);
+        // Use DB weight if set; fall back to volumetric formula
+        const itemWeight = dbWeight != null ? Number(dbWeight) : (i.sizeMl + 300);
+        return sum + itemWeight * i.quantity;
+      }, 0);
+
+      // Match booking: +100g packaging buffer, minimum 500g
+      const weightGrams = Math.max(500, totalGrams + 100);
+
       const logistics = createLogisticsService();
       const rate = await logistics.getShippingRate(input.pincode, weightGrams);
       return { ...rate, isFree: false };
@@ -287,19 +309,60 @@ export const orderRouter = router({
         orderId: z.string().uuid(),
         status: z.enum(ORDER_STATUS_VALUES),
         note: z.string().optional(),
-        delhiveryWaybill: z.string().optional(),
+        waybill: z.string().optional(),
         trackingUrl: z.string().url().optional(),
         gstInvoiceNumber: z.string().optional(),
-        // Actual Delhivery charge (₹). Customer pays shippingCharge = half of this.
         shippingCostActual: z.number().positive().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const adminId = ctx.session.user.id;
 
-      if (input.delhiveryWaybill || input.trackingUrl || input.gstInvoiceNumber || input.shippingCostActual) {
+      const currentOrder = await ctx.db.query.orders.findFirst({
+        where: eq(schema.orders.id, input.orderId),
+      });
+      if (!currentOrder) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+
+      const PAID_STATUSES = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted", "return_requested", "return_approved"];
+
+      if (
+        input.status === "cancelled" &&
+        currentOrder.razorpayPaymentId &&
+        PAID_STATUSES.includes(currentOrder.status)
+      ) {
+        await orderQueue.add("initiate_refund", {
+          type: "initiate_refund",
+          orderId: input.orderId,
+          razorpayPaymentId: currentOrder.razorpayPaymentId,
+          amountPaise: Math.round(Number(currentOrder.total) * 100),
+          reason: input.note ?? "Admin cancelled order",
+        });
+        if (currentOrder.delhiveryWaybill) {
+          await orderQueue.add("cancel_shipment", {
+            type: "cancel_shipment",
+            orderId: input.orderId,
+            waybill: currentOrder.delhiveryWaybill,
+          });
+        }
+      }
+
+      if (
+        input.status === "return_approved" &&
+        currentOrder.razorpayPaymentId &&
+        PAID_STATUSES.includes(currentOrder.status)
+      ) {
+        await orderQueue.add("initiate_refund", {
+          type: "initiate_refund",
+          orderId: input.orderId,
+          razorpayPaymentId: currentOrder.razorpayPaymentId,
+          amountPaise: Math.round(Number(currentOrder.total) * 100),
+          reason: input.note ?? "Return approved",
+        });
+      }
+
+      if (input.waybill || input.trackingUrl || input.gstInvoiceNumber || input.shippingCostActual) {
         const update: Record<string, string> = {};
-        if (input.delhiveryWaybill) update.delhiveryWaybill = input.delhiveryWaybill;
+        if (input.waybill) update.delhiveryWaybill = input.waybill;
         if (input.trackingUrl) update.trackingUrl = input.trackingUrl;
         if (input.gstInvoiceNumber) update.gstInvoiceNumber = input.gstInvoiceNumber;
         if (input.shippingCostActual) update.shippingCostActual = String(input.shippingCostActual);
@@ -327,6 +390,39 @@ export const orderRouter = router({
       }
 
       return result;
+    }),
+
+  // ── Admin: manually retry shipment booking after all queue attempts exhausted ──
+
+  retryShipmentBooking: adminProcedure
+    .input(z.object({ orderId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const order = await ctx.db.query.orders.findFirst({
+        where: eq(schema.orders.id, input.orderId),
+      });
+
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      if (order.delhiveryWaybill) throw new TRPCError({ code: "BAD_REQUEST", message: "Order already has a waybill" });
+
+      const TERMINAL = ["delivered", "cancelled", "refunded", "rto_delivered"];
+      if (TERMINAL.includes(order.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Cannot retry shipment for ${order.status} order` });
+      }
+
+      await orderQueue.add("book_shipment", {
+        type: "book_shipment",
+        orderId: input.orderId,
+      });
+
+      await advanceOrderStatus(
+        ctx.db,
+        input.orderId,
+        "processing",
+        ctx.session.user.id,
+        "Shipment booking manually re-queued by admin",
+      );
+
+      return { queued: true };
     }),
 
   // ── Admin: store razorpay IDs after webhook confirms payment ─────────────────
@@ -358,4 +454,5 @@ export const orderRouter = router({
         `Payment captured: ${input.razorpayPaymentId}`,
       );
     }),
+
 });

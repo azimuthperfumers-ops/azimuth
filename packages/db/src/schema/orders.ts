@@ -20,6 +20,9 @@ export const orderStatusEnum = pgEnum("order_status", [
   "refunded",
   "rto_initiated",
   "rto_delivered",
+  "return_requested",
+  "return_approved",
+  "exchange_requested",
 ]);
 
 export const paymentGatewayEnum = pgEnum("payment_gateway", ["razorpay", "manual"]);
@@ -66,8 +69,10 @@ export const orders = pgTable(
     // Shipping
     delhiveryWaybill: text("delhivery_waybill"),
     trackingUrl: text("tracking_url"),
+    estimatedDeliveryDate: text("estimated_delivery_date"),
     podImageUrl: text("pod_image_url"),
-    // Actual cost Delhivery charges us. shippingCharge (above) = what customer pays = half of this.
+    // Actual shipping cost Shiprocket charges us. Filled in by admin after dispatch.
+    // shippingCharge (above) = what customer paid: 0 if cart >= free-shipping threshold, full rate otherwise.
     shippingCostActual: numeric("shipping_cost_actual", { precision: 10, scale: 2 }),
 
     // GST

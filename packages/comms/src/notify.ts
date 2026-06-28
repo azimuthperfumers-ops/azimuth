@@ -14,7 +14,7 @@ export interface CustomerContact {
 export interface OrderInfo {
   orderNumber: string;
   totalInr: string;       // formatted, e.g. "₹1,234"
-  delhiveryWaybill?: string | null;
+  waybill?: string | null;
   trackingUrl?: string | null;
 }
 
@@ -82,7 +82,7 @@ export async function notifyShipped(
   order: OrderInfo,
 ): Promise<void> {
   const mobile = customer.phone ? toMobile(customer.phone) : null;
-  const waybill = order.delhiveryWaybill ?? "";
+  const waybill = order.waybill ?? "";
   const trackUrl = order.trackingUrl ?? "";
 
   if (mobile && env.MSG91_SMS_FLOW_SHIPPED) {
