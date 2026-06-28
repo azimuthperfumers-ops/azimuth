@@ -266,7 +266,7 @@ function AddressCard({
           lng: form.lng,
         });
       }}
-      className="border border-foreground/40 p-5 space-y-4"
+      className="border border-foreground/40 p-5 space-y-4 sm:col-span-2"
     >
       <p className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">Edit address</p>
       <div className="grid grid-cols-3 gap-2">
