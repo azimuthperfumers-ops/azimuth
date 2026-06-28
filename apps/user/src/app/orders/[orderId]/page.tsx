@@ -218,15 +218,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{item.productName}</p>
-                    <p className="text-[11px] text-muted-foreground/60 mt-0.5">
-                      {item.sizeMl}ml · qty {item.quantity}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
                     <p className="text-sm font-semibold tabular-nums">{formatInr(item.lineTotal)}</p>
-                    <p className="text-[11px] text-muted-foreground/50 mt-0.5">
-                      {formatInr(item.unitPrice)} each
+                    <p className="text-[13px] font-medium truncate mt-0.5">{item.productName}</p>
+                    <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                      {item.sizeMl}ml · qty {item.quantity} · {formatInr(item.unitPrice)} each
                     </p>
                   </div>
                 </div>

@@ -54,6 +54,7 @@ async function guardReferenced<T>(fn: () => Promise<T>, message: string): Promis
 }
 
 function imageUrl(key: string) {
+  if (key.startsWith("https://") || key.startsWith("http://")) return key;
   const base = env.R2_PUBLIC_URL?.replace(/\/$/, "") ?? "";
   return `${base}/${key}`;
 }

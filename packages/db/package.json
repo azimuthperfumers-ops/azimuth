@@ -12,6 +12,8 @@
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio",
     "seed": "tsx src/seed.ts",
+    "seed:perfumes": "tsx src/seed-perfumes.ts",
+    "seed:images": "tsx src/seed-images.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -13,7 +13,9 @@
     "db:generate": "pnpm --filter @azimuth/db generate",
     "db:migrate": "pnpm --filter @azimuth/db migrate",
     "db:studio": "pnpm --filter @azimuth/db studio",
-    "db:seed": "pnpm --filter @azimuth/db seed"
+    "db:seed": "pnpm --filter @azimuth/db seed",
+    "db:seed:perfumes": "pnpm --filter @azimuth/db seed:perfumes",
+    "db:seed:images": "pnpm --filter @azimuth/db seed:images"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

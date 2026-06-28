@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 
 import type { Database } from "@azimuth/db";
 import { schema } from "@azimuth/db";
@@ -172,12 +172,51 @@ export async function getUserOrders(db: Database, userId: string) {
   });
 }
 
+function resolveImageKey(key: string) {
+  if (key.startsWith("https://") || key.startsWith("http://")) return key;
+  const base = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
+  return `${base}/${key}`;
+}
+
+async function enrichItemImages<T extends { items: { variantId: string | null; imageUrl: string | null }[] }>(
+  db: Database,
+  order: T | undefined,
+): Promise<T | undefined> {
+  if (!order) return order;
+  const variantIds = order.items.map((i) => i.variantId).filter(Boolean) as string[];
+  if (variantIds.length === 0) return order;
+
+  // variantId → productId via product_variants
+  const variants = await db.query.productVariants.findMany({
+    where: inArray(schema.productVariants.id, variantIds),
+    columns: { id: true, productId: true },
+  });
+  const variantToProduct = new Map(variants.map((v) => [v.id, v.productId]));
+  const productIds = [...new Set(variants.map((v) => v.productId))];
+  if (productIds.length === 0) return order;
+
+  const images = await db.query.productImages.findMany({
+    where: and(inArray(schema.productImages.productId, productIds), eq(schema.productImages.isPrimary, true)),
+  });
+  const productToImage = new Map(images.map((img) => [img.productId, img.key]));
+
+  return {
+    ...order,
+    items: order.items.map((item) => {
+      if (item.imageUrl) return item;
+      const productId = item.variantId ? variantToProduct.get(item.variantId) : undefined;
+      const key = productId ? productToImage.get(productId) : undefined;
+      return { ...item, imageUrl: key ? resolveImageKey(key) : item.imageUrl };
+    }),
+  };
+}
+
 export async function getOrderById(db: Database, orderId: string, userId?: string) {
   const where = userId
     ? and(eq(schema.orders.id, orderId), eq(schema.orders.userId, userId))
     : eq(schema.orders.id, orderId);
 
-  return db.query.orders.findFirst({
+  const order = await db.query.orders.findFirst({
     where,
     with: {
       items: true,
@@ -185,6 +224,7 @@ export async function getOrderById(db: Database, orderId: string, userId?: strin
       paymentAttempts: { orderBy: desc(schema.paymentAttempts.createdAt) },
     },
   });
+  return enrichItemImages(db, order);
 }
 
 export async function getOrderByNumber(db: Database, orderNumber: string, userId?: string) {
@@ -192,7 +232,7 @@ export async function getOrderByNumber(db: Database, orderNumber: string, userId
     ? and(eq(schema.orders.orderNumber, orderNumber), eq(schema.orders.userId, userId))
     : eq(schema.orders.orderNumber, orderNumber);
 
-  return db.query.orders.findFirst({
+  const order = await db.query.orders.findFirst({
     where,
     with: {
       items: true,
@@ -200,6 +240,7 @@ export async function getOrderByNumber(db: Database, orderNumber: string, userId
       paymentAttempts: { orderBy: desc(schema.paymentAttempts.createdAt) },
     },
   });
+  return enrichItemImages(db, order);
 }
 
 export async function getAllOrders(

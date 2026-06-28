@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { ProductCard } from "@/components/product-card";
+import { CollectionCarousel } from "@/components/collection-carousel";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { trpc } from "@/lib/trpc";
@@ -15,7 +15,7 @@ const HERO_BG = [
 ].join(", ");
 
 export default function HomePage() {
-  const products = trpc.catalog.listProducts.useQuery({ status: "active", limit: 6 });
+  const products = trpc.catalog.listProducts.useQuery({ status: "active", limit: 12 });
 
   return (
     <>
@@ -76,54 +76,58 @@ export default function HomePage() {
         </section>
 
         {/* ─── Collection ─── */}
-        <section className="py-20">
+        <section className="py-20 overflow-hidden">
+          {/* Heading */}
           <div className="mx-auto mb-12 px-4 md:px-8 text-center">
-            <h2 className="text-[20px] font-semibold tracking-[0.3em] text-foreground uppercase">
-              The{" "}
-              <em className="font-heading not-italic text-primary font-extrabold" style={{ fontStyle: "italic"}}>
+            <p className="mb-3 text-[10px] font-semibold tracking-[0.36em] text-muted-foreground/50 uppercase">
+              Azimuth Perfumers
+            </p>
+            <h2 className="leading-none">
+              <span className="block text-[clamp(2rem,5vw,3.5rem)] font-semibold tracking-[0.22em] text-foreground uppercase">
+                The
+              </span>
+              <span className="font-heading block text-[clamp(3rem,9vw,7rem)] font-extrabold italic leading-[0.9] text-primary uppercase tracking-tight">
                 Collection
-              </em>
+              </span>
             </h2>
           </div>
 
-          <div className="mx-auto max-w-[1400px] px-4 md:px-8">
-            {products.isLoading && (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="animate-pulse">
-                    <div className="aspect-[3/4] bg-muted" />
-                    <div className="mt-3 h-3 w-24 bg-muted" />
-                    <div className="mt-1.5 h-2.5 w-16 bg-muted" />
-                  </div>
-                ))}
+          {/* Skeleton */}
+          {products.isLoading && (
+            <div className="flex gap-4 px-4 md:px-8 overflow-hidden">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="w-[78vw] sm:w-[320px] lg:w-[360px] shrink-0 animate-pulse">
+                  <div className="aspect-[3/4] bg-muted" />
+                  <div className="mt-4 h-4 w-32 bg-muted" />
+                  <div className="mt-2 h-3 w-20 bg-muted" />
+                  <div className="mt-4 h-11 bg-muted" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Empty */}
+          {!products.isLoading && (products.data?.length ?? 0) === 0 && (
+            <p className="py-20 text-center text-sm text-muted-foreground">
+              Nothing&apos;s live in the catalog yet — check back soon.
+            </p>
+          )}
+
+          {/* Carousel */}
+          {(products.data?.length ?? 0) > 0 && (
+            <div className="relative mx-auto max-w-[1500px] px-0 md:px-6">
+              <CollectionCarousel products={products.data ?? []} />
+
+              <div className="mt-12 text-center">
+                <Link
+                  href="/shop"
+                  className="inline-flex h-11 items-center border border-foreground px-10 text-[10.5px] font-semibold tracking-[0.2em] text-foreground uppercase transition-all hover:bg-foreground hover:text-background"
+                >
+                  View all fragrances
+                </Link>
               </div>
-            )}
-
-            {!products.isLoading && (products.data?.length ?? 0) === 0 && (
-              <p className="py-20 text-center text-sm text-muted-foreground">
-                Nothing&apos;s live in the catalog yet — check back soon.
-              </p>
-            )}
-
-            {(products.data?.length ?? 0) > 0 && (
-              <>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                  {products.data?.map((p) => (
-                    <ProductCard key={p.id} product={p} />
-                  ))}
-                </div>
-
-                <div className="mt-14 text-center">
-                  <Link
-                    href="/shop"
-                    className="inline-flex h-11 items-center border border-foreground px-10 text-[10.5px] font-semibold tracking-[0.2em] text-foreground uppercase transition-all hover:bg-foreground hover:text-background"
-                  >
-                    View all fragrances
-                  </Link>
-                </div>
-              </>
-            )}
-          </div>
+            </div>
+          )}
         </section>
 
         {/* ─── Brand statement ─── */}
