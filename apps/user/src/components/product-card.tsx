@@ -9,7 +9,7 @@ type Product = {
   gender: string;
   category: { name: string } | null;
   images: { url: string; isPrimary: boolean }[];
-  variants: { effectivePrice: number; mrp: string; status: string }[];
+  variants: { effectivePrice: number | string; mrp: string; status: string }[];
 };
 
 const CONCENTRATION_LABEL: Record<string, string> = {
@@ -29,7 +29,7 @@ const GENDER_SHORT: Record<string, string> = {
 export function ProductCard({ product }: { product: Product }) {
   const image = product.images.find((i) => i.isPrimary) ?? product.images[0];
   const activeVariants = product.variants.filter((v) => v.status === "active");
-  const prices = activeVariants.map((v) => v.effectivePrice);
+  const prices = activeVariants.map((v) => Number(v.effectivePrice));
   const mrps = activeVariants.map((v) => Number(v.mrp));
   const fromPrice = prices.length > 0 ? Math.min(...prices) : null;
   const fromMrp = mrps.length > 0 ? Math.min(...mrps) : null;

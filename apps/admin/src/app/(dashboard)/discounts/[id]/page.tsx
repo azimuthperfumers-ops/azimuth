@@ -197,7 +197,7 @@ type LinkedEntry = {
   productId: string;
   variantId: string;
   product: { id: string; name: string; themeColor: string | null; concentration: string; status: string };
-  variant: { id: string; sizeMl: number | null; isDefault: boolean; sellingPrice?: string | number } | null;
+  variant: { id: string; sizeMl: number | null; isDefault: boolean; mrp?: string | number } | null;
 };
 
 interface VariantTableProps {
@@ -213,7 +213,7 @@ type AllProduct = {
   concentration: string;
   status: string;
   category: { name: string } | null;
-  variants: Array<{ id: string; sizeMl: number | null; isDefault: boolean; sellingPrice: string | number }>;
+  variants: Array<{ id: string; sizeMl: number | null; isDefault: boolean; mrp: string | number }>;
 };
 
 function VariantTable({ discountId, discountProducts, onDone }: VariantTableProps) {
@@ -378,7 +378,7 @@ function VariantTable({ discountId, discountProducts, onDone }: VariantTableProp
                     {vi === 0 ? (p.category?.name ?? "—") : ""}
                   </TableCell>
                   <TableCell className="text-body-sm tabular-nums">
-                    {formatInr(Number(v.sellingPrice))}
+                    {formatInr(Number(v.mrp))}
                   </TableCell>
                 </TableRow>
               );

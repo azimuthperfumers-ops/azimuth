@@ -46,11 +46,11 @@ export default function ProductDetailPage() {
       ]),
   );
 
-  function discountedPrice(sellingPrice: number | string, variantId: string): number | null {
+  function discountedPrice(mrp: number | string, variantId: string): number | null {
     const disc = discountByVariant.get(variantId);
     if (!disc) return null;
-    const sp = Number(sellingPrice);
-    return disc.type === "percentage" ? sp * (1 - disc.value / 100) : sp - disc.value;
+    const base = Number(mrp);
+    return disc.type === "percentage" ? base * (1 - disc.value / 100) : base - disc.value;
   }
 
   if (product.isLoading) {
@@ -116,7 +116,6 @@ export default function ProductDetailPage() {
                 <TableHead>SKU</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>MRP</TableHead>
-                <TableHead>Price</TableHead>
                 <TableHead>Discounted</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Discount</TableHead>
@@ -127,7 +126,7 @@ export default function ProductDetailPage() {
             <TableBody>
               {data.variants.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
                     No variants yet — add one to start tracking stock.
                   </TableCell>
                 </TableRow>
@@ -144,10 +143,9 @@ export default function ProductDetailPage() {
                   </TableCell>
                   <TableCell>{variant.sizeMl}ml</TableCell>
                   <TableCell>{formatInr(variant.mrp)}</TableCell>
-                  <TableCell>{formatInr(variant.sellingPrice)}</TableCell>
                   <TableCell>
                     {(() => {
-                      const dp = discountedPrice(variant.sellingPrice, variant.id);
+                      const dp = discountedPrice(variant.mrp, variant.id);
                       return dp !== null ? (
                         <span className="font-semibold text-emerald-600 tabular-nums">{formatInr(dp)}</span>
                       ) : (

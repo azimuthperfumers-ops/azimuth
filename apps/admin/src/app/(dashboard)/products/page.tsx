@@ -61,10 +61,10 @@ export default function ProductsPage() {
       .map((lv) => [lv.variantId, { type: lv.discount.type, value: Number(lv.discount.value) }]),
   );
 
-  function discountedPrice(sellingPrice: number, variantId: string): number | null {
+  function discountedPrice(mrp: number, variantId: string): number | null {
     const d = discountMap.get(variantId);
     if (!d) return null;
-    return d.type === "percentage" ? sellingPrice * (1 - d.value / 100) : sellingPrice - d.value;
+    return d.type === "percentage" ? mrp * (1 - d.value / 100) : mrp - d.value;
   }
 
   return (
@@ -134,7 +134,7 @@ export default function ProductsPage() {
 
             {products.data?.map((product) => {
               const totalStock = product.variants.reduce((sum, v) => sum + v.stockCached, 0);
-              const prices = product.variants.map((v) => Number(v.sellingPrice)).filter(Boolean);
+              const prices = product.variants.map((v) => Number(v.mrp)).filter(Boolean);
               const minPrice = prices.length ? Math.min(...prices) : null;
               const maxPrice = prices.length ? Math.max(...prices) : null;
               const priceRange =
@@ -145,7 +145,7 @@ export default function ProductsPage() {
                     : `${formatInr(minPrice)} – ${formatInr(maxPrice!)}`;
 
               const discPrices = product.variants
-                .map((v) => discountedPrice(Number(v.sellingPrice), v.id))
+                .map((v) => discountedPrice(Number(v.mrp), v.id))
                 .filter((p): p is number => p !== null);
               const minDisc = discPrices.length ? Math.min(...discPrices) : null;
               const maxDisc = discPrices.length ? Math.max(...discPrices) : null;

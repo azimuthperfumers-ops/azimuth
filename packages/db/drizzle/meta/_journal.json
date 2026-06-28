@@ -22,6 +22,20 @@
       "when": 1782640948459,
       "tag": "0002_order_return_statuses",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782727348459,
+      "tag": "0003_drop_selling_price",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782813748459,
+      "tag": "0004_user_addresses_lat_lng",
+      "breakpoints": true
     }
   ]
 }

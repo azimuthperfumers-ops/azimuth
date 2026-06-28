@@ -13,7 +13,7 @@ type Variant = {
   sku: string;
   sizeMl: number;
   mrp: string;
-  effectivePrice: number;
+  effectivePrice: number | string;
   status: string;
   isDefault: boolean;
 };
@@ -48,7 +48,7 @@ function CarouselCard({ product }: { product: Product }) {
   const defaultVariant =
     activeVariants.find((v) => v.isDefault) ?? activeVariants[0];
 
-  const prices = activeVariants.map((v) => v.effectivePrice);
+  const prices = activeVariants.map((v) => Number(v.effectivePrice));
   const mrps = activeVariants.map((v) => Number(v.mrp));
   const fromPrice = prices.length > 0 ? Math.min(...prices) : null;
   const fromMrp = mrps.length > 0 ? Math.min(...mrps) : null;
@@ -74,7 +74,7 @@ function CarouselCard({ product }: { product: Product }) {
         productName: product.name,
         variantSku: defaultVariant.sku,
         sizeMl: defaultVariant.sizeMl,
-        effectivePrice: defaultVariant.effectivePrice,
+        effectivePrice: Number(defaultVariant.effectivePrice),
         mrp: Number(defaultVariant.mrp),
         imageUrl: image?.url,
         themeColor: product.themeColor ?? undefined,

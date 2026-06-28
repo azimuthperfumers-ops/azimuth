@@ -97,7 +97,6 @@ export const productVariants = pgTable("product_variants", {
   sku: text("sku").notNull().unique(),
   sizeMl: integer("size_ml").notNull(),
   mrp: numeric("mrp", { precision: 10, scale: 2 }).notNull(),
-  sellingPrice: numeric("selling_price", { precision: 10, scale: 2 }).notNull(),
   weightGrams: integer("weight_grams").notNull(),
   // Packed/shipping box dimensions (outer corrugated box, ready for courier — NOT bottle dimensions)
   boxLengthCm: integer("box_length_cm"),

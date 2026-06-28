@@ -179,7 +179,6 @@ export function createCatalogRepository(db: Database) {
           .values({
             ...input,
             mrp: mrpStr,
-            sellingPrice: mrpStr,
           })
           .returning();
 
@@ -208,7 +207,7 @@ export function createCatalogRepository(db: Database) {
         const mrpStr = mrp !== undefined ? mrp.toString() : undefined;
         const updateFields = {
           ...rest,
-          ...(mrpStr !== undefined ? { mrp: mrpStr, sellingPrice: mrpStr } : {}),
+          ...(mrpStr !== undefined ? { mrp: mrpStr } : {}),
           ...(isDefault !== undefined ? { isDefault } : {}),
         };
 

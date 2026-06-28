@@ -107,7 +107,7 @@ export default function CategoryDetailPage() {
             )}
             {data.map((product) => {
               const totalStock = product.variants.reduce((sum, v) => sum + v.stockCached, 0);
-              const prices = product.variants.map((v) => Number(v.sellingPrice)).filter(Boolean);
+              const prices = product.variants.map((v) => Number(v.mrp)).filter(Boolean);
               const minPrice = prices.length ? Math.min(...prices) : null;
               const maxPrice = prices.length ? Math.max(...prices) : null;
               const priceRange =

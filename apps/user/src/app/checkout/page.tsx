@@ -145,6 +145,7 @@ function NewAddressForm({
   saveToAccount,
   onSaveToAccountChange,
   formRef,
+  errors = {},
 }: {
   form: AddressForm;
   onChange: (key: keyof AddressForm, value: string) => void;
@@ -152,6 +153,7 @@ function NewAddressForm({
   saveToAccount: boolean;
   onSaveToAccountChange: (v: boolean) => void;
   formRef?: React.RefObject<HTMLFormElement | null>;
+  errors?: Partial<Record<keyof AddressForm, string>>;
 }) {
   return (
     <div className="border border-border p-5 space-y-4 mt-3">
@@ -186,10 +188,15 @@ function NewAddressForm({
               type={type}
               value={form[key]}
               onChange={(e) => onChange(key, e.target.value)}
-              required
-              className="w-full border border-border bg-background px-3 py-2.5 text-sm focus:border-foreground focus:outline-none transition-colors"
+              className={cn(
+                "w-full border bg-background px-3 py-2.5 text-sm focus:outline-none transition-colors",
+                errors[key] ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+              )}
             />
-            {hint && <p className="text-[10.5px] text-muted-foreground/40">{hint}</p>}
+            {errors[key]
+              ? <p className="mt-1 text-[11px] text-primary">{errors[key]}</p>
+              : hint && <p className="text-[10.5px] text-muted-foreground/40">{hint}</p>
+            }
           </div>
         ))}
       </div>
@@ -200,9 +207,12 @@ function NewAddressForm({
           type="text"
           value={form.line1}
           onChange={(e) => onChange("line1", e.target.value)}
-          required
-          className="w-full border border-border bg-background px-3 py-2.5 text-sm focus:border-foreground focus:outline-none transition-colors"
+          className={cn(
+            "w-full border bg-background px-3 py-2.5 text-sm focus:outline-none transition-colors",
+            errors.line1 ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+          )}
         />
+        {errors.line1 && <p className="mt-1 text-[11px] text-primary">{errors.line1}</p>}
       </div>
 
       <div className="space-y-1.5">
@@ -226,16 +236,19 @@ function NewAddressForm({
           <div key={key} className="space-y-1.5">
             <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground flex items-baseline justify-between gap-2">
               {label}
-              {hint && <span className="text-[10px] normal-case font-normal tracking-normal text-muted-foreground/50">{hint}</span>}
+              {!errors[key] && hint && <span className="text-[10px] normal-case font-normal tracking-normal text-muted-foreground/50">{hint}</span>}
             </label>
             <input
               type="text"
               value={form[key]}
               onChange={(e) => onChange(key, e.target.value)}
-              required
               maxLength={maxLength}
-              className="w-full border border-border bg-background px-3 py-2.5 text-sm focus:border-foreground focus:outline-none transition-colors"
+              className={cn(
+                "w-full border bg-background px-3 py-2.5 text-sm focus:outline-none transition-colors",
+                errors[key] ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+              )}
             />
+            {errors[key] && <p className="mt-1 text-[11px] text-primary">{errors[key]}</p>}
           </div>
         ))}
       </div>
@@ -274,6 +287,7 @@ function AddressSection({
   onNewFormLocationChange,
   saveToAccount,
   onSaveToAccountChange,
+  newFormErrors,
 }: {
   addresses: SavedAddress[];
   loadingAddresses: boolean;
@@ -286,6 +300,7 @@ function AddressSection({
   onNewFormLocationChange: (lat: number, lng: number) => void;
   saveToAccount: boolean;
   onSaveToAccountChange: (v: boolean) => void;
+  newFormErrors?: Partial<Record<keyof AddressForm, string>>;
 }) {
   return (
     <div className="space-y-3">
@@ -343,6 +358,7 @@ function AddressSection({
               onLocationChange={onNewFormLocationChange}
               saveToAccount={saveToAccount}
               onSaveToAccountChange={onSaveToAccountChange}
+              errors={newFormErrors}
             />
           )}
         </>
@@ -477,6 +493,7 @@ export default function CheckoutPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newForm, setNewForm] = useState<AddressForm>({ ...EMPTY_FORM });
+  const [newFormErrors, setNewFormErrors] = useState<Partial<Record<keyof AddressForm, string>>>({});
   const [saveToAccount, setSaveToAccount] = useState(false);
   const [paying, setPaying] = useState(false);
   const newFormRef = useRef<HTMLDivElement>(null);
@@ -506,6 +523,7 @@ export default function CheckoutPage() {
 
   function setNewFormField(key: keyof AddressForm, value: string) {
     setNewForm((prev) => ({ ...prev, [key]: value }));
+    if (newFormErrors[key]) setNewFormErrors((p) => { const n = { ...p }; delete n[key]; return n; });
   }
 
   function setNewFormLocation(lat: number, lng: number) {
@@ -576,7 +594,21 @@ export default function CheckoutPage() {
     }
 
     if (!validateAddress(addr)) {
-      toast.error("Fill in all required address fields");
+      if (showNewForm) {
+        const errs: Partial<Record<keyof AddressForm, string>> = {};
+        if (!addr.fullName.trim()) errs.fullName = "Required";
+        if (!addr.phone.trim()) errs.phone = "Required";
+        else if (!/^\d{10}$/.test(addr.phone.replace(/[\s-]/g, ""))) errs.phone = "Enter a valid 10-digit number";
+        if (!addr.line1.trim()) errs.line1 = "Required";
+        if (!addr.city.trim()) errs.city = "Required";
+        if (!addr.state.trim()) errs.state = "Required";
+        if (!addr.pincode.trim()) errs.pincode = "Required";
+        else if (!/^\d{6}$/.test(addr.pincode)) errs.pincode = "Enter a valid 6-digit pincode";
+        setNewFormErrors(errs);
+        newFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } else {
+        toast.error("Fill in all required address fields");
+      }
       return;
     }
 
@@ -769,6 +801,7 @@ export default function CheckoutPage() {
               onNewFormLocationChange={setNewFormLocation}
               saveToAccount={saveToAccount}
               onSaveToAccountChange={setSaveToAccount}
+              newFormErrors={newFormErrors}
             />
 
             {/* Items preview */}

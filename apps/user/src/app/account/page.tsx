@@ -37,19 +37,24 @@ function PersonalInfoTab({ user }: { user: { name: string; email: string; image?
   const [name, setName] = useState(user.name ?? "");
   const [phone, setPhone] = useState((user as any).phone ?? "");
   const [pending, setPending] = useState(false);
+  const [nameError, setNameError] = useState("");
 
   const isDirty = name.trim() !== user.name || phone.trim() !== ((user as any).phone ?? "");
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      setNameError("Full name is required");
+      return;
+    }
+    setNameError("");
     setPending(true);
     const { error } = await (authClient as any).updateUser({
       name: name.trim(),
       phone: phone.trim() || null,
     });
     setPending(false);
-    if (error) toast.error(error.message ?? "Update failed");
+    if (error) toast.error("Couldn't update profile. Please try again.");
     else toast.success("Profile updated");
   }
 
@@ -68,10 +73,14 @@ function PersonalInfoTab({ user }: { user: { name: string; email: string; image?
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => { setName(e.target.value); setNameError(""); }}
             placeholder="Your name"
-            className="w-full border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-foreground focus:outline-none"
+            className={cn(
+              "w-full border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none",
+              nameError ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+            )}
           />
+          {nameError && <p className="mt-1 text-[11px] text-primary">{nameError}</p>}
         </div>
 
         <div className="space-y-1.5">
@@ -148,6 +157,7 @@ function AddressCard({
 }) {
   const [editing, setEditing] = useState(false);
   const utils = trpc.useUtils();
+  const [addrErrors, setAddrErrors] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({
     label: address.label,
@@ -169,11 +179,25 @@ function AddressCard({
       setEditing(false);
       onEdited();
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: () => toast.error("Couldn't save the address. Please try again."),
   });
 
   function f(key: string, val: string) {
     setForm((prev) => ({ ...prev, [key]: val }));
+    if (addrErrors[key]) setAddrErrors((p) => { const n = { ...p }; delete n[key]; return n; });
+  }
+
+  function validateAddr() {
+    const errs: Record<string, string> = {};
+    if (!form.fullName.trim()) errs.fullName = "Required";
+    if (!form.phone.trim()) errs.phone = "Required";
+    else if (!/^\d{10}$/.test(form.phone.replace(/[\s-]/g, ""))) errs.phone = "Enter a valid 10-digit number";
+    if (!form.line1.trim()) errs.line1 = "Required";
+    if (!form.city.trim()) errs.city = "Required";
+    if (!form.state.trim()) errs.state = "Required";
+    if (!form.pincode.trim()) errs.pincode = "Required";
+    else if (!/^\d{6}$/.test(form.pincode)) errs.pincode = "Enter a valid 6-digit pincode";
+    return errs;
   }
 
   if (!editing) {
@@ -225,6 +249,9 @@ function AddressCard({
     <form
       onSubmit={(e) => {
         e.preventDefault();
+        const errs = validateAddr();
+        if (Object.keys(errs).length > 0) { setAddrErrors(errs); return; }
+        setAddrErrors({});
         update?.mutate({
           id: address.id,
           label: form.label,
@@ -275,10 +302,13 @@ function AddressCard({
             type={type}
             value={(form as any)[key]}
             onChange={(e) => f(key, e.target.value)}
-            required={key !== "line2"}
             maxLength={key === "pincode" ? 6 : undefined}
-            className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none"
+            className={cn(
+              "w-full border bg-background px-3 py-2 text-sm focus:outline-none",
+              addrErrors[key] ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+            )}
           />
+          {addrErrors[key] && <p className="mt-1 text-[11px] text-primary">{addrErrors[key]}</p>}
         </div>
       ))}
       <MapPicker
@@ -315,6 +345,7 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
     lat: undefined as number | undefined,
     lng: undefined as number | undefined,
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const add = (trpc as any).userData?.addAddress?.useMutation({
     onSuccess: async () => {
@@ -322,11 +353,25 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
       toast.success("Address saved");
       onDone();
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: () => toast.error("Couldn't save the address. Please try again."),
   });
 
   function f(key: string, val: string | boolean) {
     setForm((prev) => ({ ...prev, [key]: val }));
+    if (typeof val === "string" && errors[key]) setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
+  }
+
+  function validate() {
+    const errs: Record<string, string> = {};
+    if (!form.fullName.trim()) errs.fullName = "Required";
+    if (!form.phone.trim()) errs.phone = "Required";
+    else if (!/^\d{10}$/.test(form.phone.replace(/[\s-]/g, ""))) errs.phone = "Enter a valid 10-digit number";
+    if (!form.line1.trim()) errs.line1 = "Required";
+    if (!form.city.trim()) errs.city = "Required";
+    if (!form.state.trim()) errs.state = "Required";
+    if (!form.pincode.trim()) errs.pincode = "Required";
+    else if (!/^\d{6}$/.test(form.pincode)) errs.pincode = "Enter a valid 6-digit pincode";
+    return errs;
   }
 
   if (!add) {
@@ -335,7 +380,13 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
 
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); add.mutate(form); }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const errs = validate();
+        if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+        setErrors({});
+        add.mutate(form);
+      }}
       className="space-y-4 border border-border p-5"
     >
       <p className="text-sm font-semibold">New address</p>
@@ -372,9 +423,12 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
             type={type}
             value={(form as any)[key]}
             onChange={(e) => f(key, e.target.value)}
-            required={key !== "line2"}
-            className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none"
+            className={cn(
+              "w-full border bg-background px-3 py-2 text-sm focus:outline-none",
+              errors[key] ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+            )}
           />
+          {errors[key] && <p className="mt-1 text-[11px] text-primary">{errors[key]}</p>}
         </div>
       ))}
       <MapPicker
@@ -416,12 +470,12 @@ function AddressesTab() {
 
   const deleteAddr = (trpc as any).userData?.deleteAddress?.useMutation({
     onSuccess: async () => { await (utils as any).userData?.listAddresses?.invalidate(); toast.success("Address removed"); },
-    onError: (err: any) => toast.error(err.message),
+    onError: () => toast.error("Couldn't remove address. Please try again."),
   });
 
   const setDefault = (trpc as any).userData?.setDefaultAddress?.useMutation({
     onSuccess: async () => { await (utils as any).userData?.listAddresses?.invalidate(); toast.success("Default updated"); },
-    onError: (err: any) => toast.error(err.message),
+    onError: () => toast.error("Couldn't update default address. Please try again."),
   });
 
   const available = !!(trpc as any).userData?.listAddresses;
@@ -652,8 +706,7 @@ function WishlistTab() {
                     category: product.category ?? null,
                     images: (product.images ?? []).map((i: any) => ({ url: i.url ?? "", isPrimary: !!i.isPrimary })),
                     variants: (product.variants ?? []).map((v: any) => ({
-                      sellingPrice: String(v.sellingPrice ?? 0),
-                      mrp: String(v.mrp ?? v.sellingPrice ?? 0),
+                      mrp: String(v.mrp ?? 0),
                       status: v.status ?? "active",
                     })),
                   }}

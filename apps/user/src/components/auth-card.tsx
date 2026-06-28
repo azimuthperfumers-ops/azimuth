@@ -17,6 +17,7 @@ function Field({
   value,
   onChange,
   placeholder,
+  error,
 }: {
   label: string;
   id: string;
@@ -24,6 +25,7 @@ function Field({
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  error?: string;
 }) {
   return (
     <div className="space-y-1.5">
@@ -36,8 +38,12 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full border border-border bg-background px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground/30 focus:border-foreground focus:outline-none transition-colors"
+        className={cn(
+          "w-full border bg-background px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground/30 focus:outline-none transition-colors",
+          error ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+        )}
       />
+      {error && <p className="mt-1 text-[11px] text-primary">{error}</p>}
     </div>
   );
 }
@@ -65,15 +71,26 @@ function EmailAuthForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function clearErr(key: string) {
+    if (errors[key]) setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     const schema = mode === "sign-up" ? emailSignUpSchema : emailSignInSchema;
     const parsed = schema.safeParse({ name, email, password });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Check form and try again");
+      const errs: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = String(issue.path[0] ?? "");
+        if (key && !errs[key]) errs[key] = issue.message;
+      }
+      setErrors(errs);
       return;
     }
+    setErrors({});
     setPending(true);
     const { error } =
       mode === "sign-up"
@@ -86,14 +103,14 @@ function EmailAuthForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       {mode === "sign-up" && (
-        <Field label="Full name" id="name" value={name} onChange={setName} />
+        <Field label="Full name" id="name" value={name} onChange={(v) => { setName(v); clearErr("name"); }} error={errors.name} />
       )}
-      <Field label="Email" id="email" type="email" value={email} onChange={setEmail} />
-      <Field label="Password" id="password" type="password" value={password} onChange={setPassword} />
+      <Field label="Email" id="email" type="email" value={email} onChange={(v) => { setEmail(v); clearErr("email"); }} error={errors.email} />
+      <Field label="Password" id="password" type="password" value={password} onChange={(v) => { setPassword(v); clearErr("password"); }} error={errors.password} />
       <SubmitBtn pending={pending} label={mode === "sign-up" ? "Create account" : "Sign in"} />
       <button
         type="button"
-        onClick={() => setMode(mode === "sign-up" ? "sign-in" : "sign-up")}
+        onClick={() => { setMode(mode === "sign-up" ? "sign-in" : "sign-up"); setErrors({}); }}
         className="w-full text-center text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors"
       >
         {mode === "sign-up" ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
@@ -109,14 +126,17 @@ function PhoneAuthForm() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  const [codeError, setCodeError] = useState("");
 
   async function sendCode(e: FormEvent) {
     e.preventDefault();
     const parsed = phoneNumberSchema.safeParse({ phoneNumber });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Enter a valid phone number");
+      setPhoneError(parsed.error.issues[0]?.message ?? "Enter a valid phone number");
       return;
     }
+    setPhoneError("");
     setPending(true);
     const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber });
     setPending(false);
@@ -129,9 +149,10 @@ function PhoneAuthForm() {
     e.preventDefault();
     const parsed = otpCodeSchema.safeParse({ code });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Enter the 6-digit code");
+      setCodeError(parsed.error.issues[0]?.message ?? "Enter the 6-digit code");
       return;
     }
+    setCodeError("");
     setPending(true);
     const { error } = await authClient.phoneNumber.verify({ phoneNumber, code });
     setPending(false);
@@ -141,7 +162,13 @@ function PhoneAuthForm() {
   if (step === "phone") {
     return (
       <form onSubmit={sendCode} className="space-y-4">
-        <Field label="Phone number" id="phone" type="tel" value={phoneNumber} onChange={setPhoneNumber} placeholder="+91 98765 43210" />
+        <Field
+          label="Phone number" id="phone" type="tel"
+          value={phoneNumber}
+          onChange={(v) => { setPhoneNumber(v); setPhoneError(""); }}
+          placeholder="+91 98765 43210"
+          error={phoneError}
+        />
         <SubmitBtn pending={pending} label="Send code" />
       </form>
     );
@@ -153,7 +180,7 @@ function PhoneAuthForm() {
         <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-muted-foreground">
           Code sent to {phoneNumber}
         </p>
-        <InputOTP maxLength={6} value={code} onChange={setCode}>
+        <InputOTP maxLength={6} value={code} onChange={(v) => { setCode(v); setCodeError(""); }}>
           <InputOTPGroup>
             <InputOTPSlot index={0} />
             <InputOTPSlot index={1} />
@@ -163,6 +190,7 @@ function PhoneAuthForm() {
             <InputOTPSlot index={5} />
           </InputOTPGroup>
         </InputOTP>
+        {codeError && <p className="mt-1 text-[11px] text-primary">{codeError}</p>}
       </div>
       <SubmitBtn pending={pending} label="Verify" />
       <button type="button" onClick={() => setStep("phone")} className="w-full text-center text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors">
