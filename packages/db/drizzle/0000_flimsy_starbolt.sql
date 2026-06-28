@@ -6,7 +6,7 @@ CREATE TYPE "public"."product_status" AS ENUM('draft', 'active', 'archived');-->
 CREATE TYPE "public"."variant_status" AS ENUM('active', 'discontinued');--> statement-breakpoint
 CREATE TYPE "public"."inventory_reason" AS ENUM('restock', 'sale', 'return', 'replacement_out', 'replacement_in', 'adjustment', 'damage');--> statement-breakpoint
 CREATE TYPE "public"."discount_type" AS ENUM('percentage', 'flat');--> statement-breakpoint
-CREATE TYPE "public"."order_status" AS ENUM('pending_payment', 'paid', 'processing', 'picked_up', 'out_for_delivery', 'delivery_attempted', 'shipped', 'delivered', 'cancelled', 'refunded', 'rto_initiated', 'rto_delivered');--> statement-breakpoint
+CREATE TYPE "public"."order_status" AS ENUM('pending_payment', 'paid', 'processing', 'picked_up', 'out_for_delivery', 'delivery_attempted', 'shipped', 'delivered', 'cancelled', 'refunded', 'rto_initiated', 'rto_delivered', 'return_requested', 'return_approved', 'exchange_requested');--> statement-breakpoint
 CREATE TYPE "public"."payment_attempt_status" AS ENUM('created', 'authorized', 'captured', 'failed', 'refunded');--> statement-breakpoint
 CREATE TYPE "public"."payment_gateway" AS ENUM('razorpay', 'manual');--> statement-breakpoint
 CREATE TYPE "public"."ticket_status" AS ENUM('open', 'awaiting_admin', 'awaiting_user', 'resolved', 'closed');--> statement-breakpoint
@@ -113,7 +113,6 @@ CREATE TABLE "product_variants" (
 	"sku" text NOT NULL,
 	"size_ml" integer NOT NULL,
 	"mrp" numeric(10, 2) NOT NULL,
-	"selling_price" numeric(10, 2) NOT NULL,
 	"weight_grams" integer NOT NULL,
 	"box_length_cm" integer,
 	"box_width_cm" integer,
@@ -228,6 +227,8 @@ CREATE TABLE "user_addresses" (
 	"state" text NOT NULL,
 	"pincode" text NOT NULL,
 	"is_default" boolean DEFAULT false NOT NULL,
+	"lat" double precision,
+	"lng" double precision,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
@@ -281,6 +282,7 @@ CREATE TABLE "orders" (
 	"razorpay_payment_id" text,
 	"delhivery_waybill" text,
 	"tracking_url" text,
+	"estimated_delivery_date" text,
 	"pod_image_url" text,
 	"shipping_cost_actual" numeric(10, 2),
 	"gst_invoice_number" text,
@@ -351,6 +353,22 @@ CREATE TABLE "site_settings" (
 	"updated_at" timestamp with time zone DEFAULT now()
 );
 --> statement-breakpoint
+CREATE TABLE "banners" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"page" text NOT NULL,
+	"image_url" text NOT NULL,
+	"alt" text DEFAULT '' NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE "site_content" (
+	"section" text PRIMARY KEY NOT NULL,
+	"data" jsonb DEFAULT '{}' NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now()
+);
+--> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "categories" ADD CONSTRAINT "categories_parent_id_categories_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."categories"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -407,4 +425,5 @@ CREATE INDEX "ticket_actions_ticket_idx" ON "ticket_actions" USING btree ("ticke
 CREATE INDEX "ticket_messages_ticket_idx" ON "ticket_messages" USING btree ("ticket_id");--> statement-breakpoint
 CREATE INDEX "tickets_user_idx" ON "support_tickets" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "tickets_order_idx" ON "support_tickets" USING btree ("order_id");--> statement-breakpoint
-CREATE INDEX "tickets_status_idx" ON "support_tickets" USING btree ("status");
+CREATE INDEX "tickets_status_idx" ON "support_tickets" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "banners_page_order_idx" ON "banners" USING btree ("page","sort_order");

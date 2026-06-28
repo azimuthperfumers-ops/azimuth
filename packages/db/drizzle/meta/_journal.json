@@ -5,43 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1782554448459,
-      "tag": "0000_round_gladiator",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1782640848459,
-      "tag": "0001_site_content_banners",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1782640948459,
-      "tag": "0002_order_return_statuses",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1782727348459,
-      "tag": "0003_drop_selling_price",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1782813748459,
-      "tag": "0004_user_addresses_lat_lng",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1782813848459,
-      "tag": "0005_orders_estimated_delivery_date",
+      "when": 1782669334092,
+      "tag": "0000_flimsy_starbolt",
       "breakpoints": true
     }
   ]
