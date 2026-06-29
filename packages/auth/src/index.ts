@@ -1,7 +1,7 @@
 import { db, schema } from "@azimuth/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { phoneNumber } from "better-auth/plugins";
+import { bearer, phoneNumber } from "better-auth/plugins";
 
 import { env } from "./env";
 
@@ -24,6 +24,7 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    bearer(),
     phoneNumber({
       // TODO: wire a real SMS provider (e.g. Twilio) before production —
       // logging the code is fine for local dev since there's nowhere else to read it.
