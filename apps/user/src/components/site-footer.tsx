@@ -22,8 +22,6 @@ export function SiteFooter() {
           <h5 className="mb-5 text-[10px] font-semibold tracking-[0.2em] uppercase text-foreground">Shop</h5>
           <ul className="space-y-3 text-[13px] text-muted-foreground">
             <li><Link href="/shop" className="transition-colors hover:text-foreground">All fragrances</Link></li>
-            <li><span className="cursor-default">Discovery sets</span></li>
-            <li><span className="cursor-default">Gift cards</span></li>
           </ul>
         </div>
 
@@ -32,7 +30,6 @@ export function SiteFooter() {
           <h5 className="mb-5 text-[10px] font-semibold tracking-[0.2em] uppercase text-foreground">Maison</h5>
           <ul className="space-y-3 text-[13px] text-muted-foreground">
             <li><Link href="/our-story" className="transition-colors hover:text-foreground">Our Story</Link></li>
-            <li><span className="cursor-default">Ingredients</span></li>
             <li><span className="cursor-default">Stores</span></li>
           </ul>
         </div>
@@ -42,7 +39,6 @@ export function SiteFooter() {
           <h5 className="mb-5 text-[10px] font-semibold tracking-[0.2em] uppercase text-foreground">Care</h5>
           <ul className="space-y-3 text-[13px] text-muted-foreground">
             <li><span className="cursor-default">Contact us</span></li>
-            <li><span className="cursor-default">Shipping & Returns</span></li>
             <li><span className="cursor-default">FAQ</span></li>
           </ul>
         </div>
