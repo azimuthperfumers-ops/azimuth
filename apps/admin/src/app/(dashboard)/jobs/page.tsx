@@ -1,13 +1,21 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useCallback } from "react";
-import { RefreshCw, RotateCcw } from "lucide-react";
+import { useCallback, useState } from "react";
+import { RefreshCw, RotateCcw, XCircle } from "lucide-react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@azimuth/api";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -71,43 +79,130 @@ function fmt(date: Date | string) {
   });
 }
 
-function JobRow({ job, onRetry }: { job: Job; onRetry: (id: string) => void }) {
+function CancelDialog({
+  open,
+  jobType,
+  isRunning,
+  isPending,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  jobType: string;
+  isRunning: boolean;
+  isPending: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
   return (
-    <TableRow>
-      <TableCell className="font-mono text-xs text-muted-foreground">{job.id.slice(0, 8)}</TableCell>
-      <TableCell className="text-sm">{TYPE_LABEL[job.type] ?? job.type}</TableCell>
-      <TableCell>
-        <Badge variant={STATUS_VARIANT[job.status] ?? "outline"}>
-          {STATUS_LABEL[job.status] ?? job.status}
-        </Badge>
-      </TableCell>
-      <TableCell className="font-mono text-sm text-muted-foreground">
-        {job.order?.orderNumber ?? "—"}
-      </TableCell>
-      <TableCell className="font-mono text-sm text-muted-foreground">
-        {job.ticket?.ticketNumber ?? "—"}
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground tabular-nums">
-        {job.attempts} / {job.maxAttempts}
-      </TableCell>
-      <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground" title={job.errorMessage ?? ""}>
-        {job.errorMessage ?? "—"}
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground">{fmt(job.createdAt)}</TableCell>
-      <TableCell>
-        {job.status === "failed" && (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Cancel job?</DialogTitle>
+          <DialogDescription className="space-y-2 pt-1">
+            <span className="block">
+              This will permanently cancel the <strong>{TYPE_LABEL[jobType] ?? jobType}</strong> job.
+              No further attempts will be made.
+            </span>
+            {isRunning && (
+              <span className="block rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950/30 dark:text-yellow-300">
+                This job is currently <strong>running</strong>. The active execution may still complete,
+                but no retries will follow and the job will be marked cancelled.
+              </span>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" size="sm" onClick={onCancel}>Keep job</Button>
           <Button
+            variant="destructive"
             size="sm"
-            variant="outline"
-            className="h-7 gap-1.5 text-xs"
-            onClick={() => onRetry(job.id)}
+            disabled={isPending}
+            onClick={onConfirm}
           >
-            <RotateCcw className="size-3" />
-            Retry
+            {isPending ? "Cancelling…" : "Cancel job"}
           </Button>
-        )}
-      </TableCell>
-    </TableRow>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function JobRow({
+  job,
+  onRetry,
+  onCancel,
+}: {
+  job: Job;
+  onRetry: (id: string) => void;
+  onCancel: (id: string) => void;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const cancelMutation = trpc.job.adminCancel.useMutation({
+    onSuccess: () => { setConfirmOpen(false); onCancel(job.id); },
+  });
+
+  const canCancel = job.status === "pending" || job.status === "running";
+
+  return (
+    <>
+      <TableRow>
+        <TableCell className="font-mono text-xs text-muted-foreground">{job.id.slice(0, 8)}</TableCell>
+        <TableCell className="text-sm">{TYPE_LABEL[job.type] ?? job.type}</TableCell>
+        <TableCell>
+          <Badge variant={STATUS_VARIANT[job.status] ?? "outline"}>
+            {STATUS_LABEL[job.status] ?? job.status}
+          </Badge>
+        </TableCell>
+        <TableCell className="font-mono text-sm text-muted-foreground">
+          {job.order?.orderNumber ?? "—"}
+        </TableCell>
+        <TableCell className="font-mono text-sm text-muted-foreground">
+          {job.ticket?.ticketNumber ?? "—"}
+        </TableCell>
+        <TableCell className="text-xs text-muted-foreground tabular-nums">
+          {job.attempts} / {job.maxAttempts}
+        </TableCell>
+        <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground" title={job.errorMessage ?? ""}>
+          {job.errorMessage ?? "—"}
+        </TableCell>
+        <TableCell className="text-xs text-muted-foreground">{fmt(job.createdAt)}</TableCell>
+        <TableCell>
+          <div className="flex items-center gap-1.5">
+            {job.status === "failed" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => onRetry(job.id)}
+              >
+                <RotateCcw className="size-3" />
+                Retry
+              </Button>
+            )}
+            {canCancel && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 gap-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setConfirmOpen(true)}
+              >
+                <XCircle className="size-3" />
+                Cancel
+              </Button>
+            )}
+          </div>
+        </TableCell>
+      </TableRow>
+      <CancelDialog
+        open={confirmOpen}
+        jobType={job.type}
+        isRunning={job.status === "running"}
+        isPending={cancelMutation.isPending}
+        onConfirm={() => cancelMutation.mutate({ jobId: job.id })}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </>
   );
 }
 
@@ -154,6 +249,8 @@ export default function AdminJobsPage() {
   const retryMutation = trpc.job.adminRetry.useMutation({
     onSuccess: () => { void refetch(); },
   });
+
+  function handleCancel() { void refetch(); }
 
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
 
@@ -231,6 +328,7 @@ export default function AdminJobsPage() {
                 key={job.id}
                 job={job}
                 onRetry={(id) => retryMutation.mutate({ jobId: id })}
+                onCancel={handleCancel}
               />
             ))}
           </TableBody>

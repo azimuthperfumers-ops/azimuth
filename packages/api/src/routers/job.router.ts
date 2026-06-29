@@ -47,6 +47,43 @@ export const jobRouter = router({
       return { jobs, total: countResult[0]?.count ?? 0 };
     }),
 
+  adminCancel: adminProcedure
+    .input(z.object({ jobId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const job = await ctx.db.query.backgroundJobs.findFirst({
+        where: eq(schema.backgroundJobs.id, input.jobId),
+      });
+
+      if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+      if (job.status === "completed") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Completed jobs cannot be cancelled" });
+      }
+      if (job.status === "failed") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Already failed — no active job to cancel" });
+      }
+
+      // Remove from BullMQ queue if we have a job ID
+      if (job.bullmqJobId) {
+        try {
+          const bullJob = await orderQueue.getJob(job.bullmqJobId);
+          if (bullJob) await bullJob.remove();
+        } catch {
+          // Best-effort — job may already be processing or removed
+        }
+      }
+
+      await ctx.db
+        .update(schema.backgroundJobs)
+        .set({
+          status: "failed",
+          errorMessage: "Cancelled by admin",
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.backgroundJobs.id, input.jobId));
+
+      return { ok: true };
+    }),
+
   adminRetry: adminProcedure
     .input(z.object({ jobId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
