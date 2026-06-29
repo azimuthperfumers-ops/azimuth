@@ -55,28 +55,17 @@ export const jobRouter = router({
       });
 
       if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-      if (job.status === "completed") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Completed jobs cannot be cancelled" });
-      }
-      if (job.status === "failed") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Already failed — no active job to cancel" });
+      if (job.status !== "failed") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Only failed jobs can be cancelled" });
       }
 
-      // Remove from BullMQ queue if we have a job ID
-      if (job.bullmqJobId) {
-        try {
-          const bullJob = await orderQueue.getJob(job.bullmqJobId);
-          if (bullJob) await bullJob.remove();
-        } catch {
-          // Best-effort — job may already be processing or removed
-        }
-      }
-
+      // Mark completed so retry is blocked
       await ctx.db
         .update(schema.backgroundJobs)
         .set({
-          status: "failed",
-          errorMessage: "Cancelled by admin",
+          status: "completed",
+          result: { note: "Dismissed by admin" },
+          completedAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(schema.backgroundJobs.id, input.jobId));

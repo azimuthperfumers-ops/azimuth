@@ -82,14 +82,12 @@ function fmt(date: Date | string) {
 function CancelDialog({
   open,
   jobType,
-  isRunning,
   isPending,
   onConfirm,
   onCancel,
 }: {
   open: boolean;
   jobType: string;
-  isRunning: boolean;
   isPending: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -98,18 +96,10 @@ function CancelDialog({
     <Dialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Cancel job?</DialogTitle>
-          <DialogDescription className="space-y-2 pt-1">
-            <span className="block">
-              This will permanently cancel the <strong>{TYPE_LABEL[jobType] ?? jobType}</strong> job.
-              No further attempts will be made.
-            </span>
-            {isRunning && (
-              <span className="block rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950/30 dark:text-yellow-300">
-                This job is currently <strong>running</strong>. The active execution may still complete,
-                but no retries will follow and the job will be marked cancelled.
-              </span>
-            )}
+          <DialogTitle>Dismiss job?</DialogTitle>
+          <DialogDescription className="pt-1">
+            This will permanently dismiss the <strong>{TYPE_LABEL[jobType] ?? jobType}</strong> job.
+            It will be marked completed and cannot be retried.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2">
@@ -120,7 +110,7 @@ function CancelDialog({
             disabled={isPending}
             onClick={onConfirm}
           >
-            {isPending ? "Cancelling…" : "Cancel job"}
+            {isPending ? "Dismissing…" : "Dismiss job"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -141,8 +131,6 @@ function JobRow({
   const cancelMutation = trpc.job.adminCancel.useMutation({
     onSuccess: () => { setConfirmOpen(false); onCancel(job.id); },
   });
-
-  const canCancel = job.status === "pending" || job.status === "running";
 
   return (
     <>
@@ -168,8 +156,8 @@ function JobRow({
         </TableCell>
         <TableCell className="text-xs text-muted-foreground">{fmt(job.createdAt)}</TableCell>
         <TableCell>
-          <div className="flex items-center gap-1.5">
-            {job.status === "failed" && (
+          {job.status === "failed" && (
+            <div className="flex items-center gap-1.5">
               <Button
                 size="sm"
                 variant="outline"
@@ -179,8 +167,6 @@ function JobRow({
                 <RotateCcw className="size-3" />
                 Retry
               </Button>
-            )}
-            {canCancel && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -188,16 +174,15 @@ function JobRow({
                 onClick={() => setConfirmOpen(true)}
               >
                 <XCircle className="size-3" />
-                Cancel
+                Dismiss
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </TableCell>
       </TableRow>
       <CancelDialog
         open={confirmOpen}
         jobType={job.type}
-        isRunning={job.status === "running"}
         isPending={cancelMutation.isPending}
         onConfirm={() => cancelMutation.mutate({ jobId: job.id })}
         onCancel={() => setConfirmOpen(false)}
