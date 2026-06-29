@@ -2,14 +2,8 @@ import { eq } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
 import { advanceOrderStatus } from "@azimuth/api";
-import {
-  alertAdminDeliveryFailed,
-  notifyDelivered,
-  notifyDeliveryFailed,
-  notifyOutForDelivery,
-  notifyShipped,
-} from "@azimuth/comms";
-import { getCustomerContact, orderInfo } from "@azimuth/queue";
+import { alertAdminDeliveryFailed } from "@azimuth/comms";
+import { orderInfo } from "@azimuth/queue";
 
 type OurOrderStatus = typeof schema.orders.$inferSelect["status"];
 
@@ -116,16 +110,10 @@ export async function processForwardShipment(body: ShiprocketBody) {
   await advanceOrderStatus(db, order.id, targetStatus, "webhook:shiprocket", note || undefined);
   console.log(`[webhook:shiprocket] order ${order.orderNumber} → ${targetStatus}`);
 
-  const contact = await getCustomerContact(order);
-  const info = orderInfo(order);
-
-  if (targetStatus === "picked_up") {
-    await notifyShipped(contact, { ...info, trackingUrl: order.trackingUrl ?? undefined });
-  } else if (targetStatus === "out_for_delivery") {
-    await notifyOutForDelivery(contact, info);
-  } else if (targetStatus === "delivered") {
-    await notifyDelivered(contact, info);
-  } else if (targetStatus === "delivery_attempted") {
-    await Promise.all([notifyDeliveryFailed(contact, info), alertAdminDeliveryFailed(info)]);
+  // Shiprocket sends courier tracking notifications (shipped/OFD/delivered/NDR) to customers directly.
+  // We only alert admin on delivery failure.
+  if (targetStatus === "delivery_attempted") {
+    const info = orderInfo(order);
+    await alertAdminDeliveryFailed(info);
   }
 }

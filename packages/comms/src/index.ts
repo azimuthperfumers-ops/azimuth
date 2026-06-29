@@ -3,10 +3,6 @@ export { sendWhatsapp } from "./whatsapp.js";
 export { sendEmail } from "./email.js";
 export {
   notifyOrderPlaced,
-  notifyShipped,
-  notifyOutForDelivery,
-  notifyDelivered,
-  notifyDeliveryFailed,
   notifyRefundInitiated,
   sendOtp,
   sendPasswordReset,

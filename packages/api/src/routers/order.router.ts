@@ -7,10 +7,8 @@ import { computeEffectivePrice, fetchActiveDiscountMap } from "../utils/pricing"
 import { createCouponService } from "../services/coupon.service";
 import {
   alertAdminNewOrder,
-  alertAdminRefund,
   notifyOrderPlaced,
   notifyRefundInitiated,
-  notifyShipped,
   type CustomerContact,
   type OrderInfo,
 } from "@azimuth/comms";
@@ -407,13 +405,9 @@ export const orderRouter = router({
       if (order) {
         const contact = await getOrderContact(ctx.db, order);
         const info = toOrderInfo(order);
-        if (input.status === "shipped") {
-          notifyShipped(contact, info).catch((e: unknown) => console.error("[comms] notifyShipped:", e));
-        } else if (input.status === "refunded") {
-          Promise.all([
-            notifyRefundInitiated(contact, info),
-            alertAdminRefund(info),
-          ]).catch((e: unknown) => console.error("[comms] refund notify:", e));
+        if (input.status === "refunded") {
+          notifyRefundInitiated(contact, info)
+            .catch((e: unknown) => console.error("[comms] refund notify:", e));
         }
       }
 
