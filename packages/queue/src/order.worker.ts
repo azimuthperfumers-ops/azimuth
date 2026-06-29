@@ -301,12 +301,27 @@ async function processInitiateRefund(data: InitiateRefundJob) {
   }
 
   const svc = createRazorpayService();
-  const refund = await svc.refundPayment({
-    paymentId: razorpayPaymentId,
-    amountPaise,
-    receipt: `refund-${order.orderNumber}`,
-    notes: { orderId, orderNumber: order.orderNumber, reason },
-  });
+  let refund: { id: string; amount: number };
+  try {
+    refund = await svc.refundPayment({
+      paymentId: razorpayPaymentId,
+      amountPaise,
+      receipt: `refund-${order.orderNumber}`,
+      notes: { orderId, orderNumber: order.orderNumber, reason },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message.toLowerCase().includes("duplicate receipt")) {
+      // Refund already submitted in a prior attempt (crash/timeout before job completed).
+      // Idempotent: advance order to refund_processing so webhook can close the loop.
+      console.warn(`[order-worker] initiate_refund: duplicate receipt for order ${order.orderNumber} — refund already exists, completing idempotently`);
+      await advanceOrderStatus(
+        db, orderId, "refund_processing", "worker:order",
+        "Razorpay refund previously submitted (recovered from duplicate receipt on retry)",
+      );
+      return { note: "duplicate_receipt_idempotent" };
+    }
+    throw err;
+  }
 
   // Mark refund_processing — webhook refund.processed will advance to refunded
   await advanceOrderStatus(
