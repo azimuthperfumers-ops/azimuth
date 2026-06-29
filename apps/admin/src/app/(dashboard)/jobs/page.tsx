@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback, useState } from "react";
+import Link from "next/link";
 import { RefreshCw, RotateCcw, XCircle } from "lucide-react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@azimuth/api";
@@ -135,15 +136,24 @@ function JobRow({
   return (
     <>
       <TableRow>
-        <TableCell className="font-mono text-xs text-muted-foreground">{job.id.slice(0, 8)}</TableCell>
+        <TableCell
+          className="font-mono text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+          title={job.id}
+          onClick={() => void navigator.clipboard.writeText(job.id)}
+        >
+          {job.id.slice(0, 8)}
+        </TableCell>
         <TableCell className="text-sm">{TYPE_LABEL[job.type] ?? job.type}</TableCell>
         <TableCell>
           <Badge variant={STATUS_VARIANT[job.status] ?? "outline"}>
             {STATUS_LABEL[job.status] ?? job.status}
           </Badge>
         </TableCell>
-        <TableCell className="font-mono text-sm text-muted-foreground">
-          {job.order?.orderNumber ?? "—"}
+        <TableCell className="font-mono text-sm">
+          {job.order?.id
+            ? <Link href={`/orders/${job.order.id}`} className="text-foreground hover:underline">{job.order.orderNumber}</Link>
+            : <span className="text-muted-foreground">—</span>
+          }
         </TableCell>
         <TableCell className="font-mono text-sm text-muted-foreground">
           {job.ticket?.ticketNumber ?? "—"}

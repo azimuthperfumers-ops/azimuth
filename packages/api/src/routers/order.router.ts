@@ -6,7 +6,9 @@ import { and, count, eq, gte, inArray, sql, sum } from "drizzle-orm";
 import { computeEffectivePrice, fetchActiveDiscountMap } from "../utils/pricing";
 import { createCouponService } from "../services/coupon.service";
 import {
+  alertAdminNewOrder,
   alertAdminRefund,
+  notifyOrderPlaced,
   notifyRefundInitiated,
   notifyShipped,
   type CustomerContact,
@@ -455,34 +457,50 @@ export const orderRouter = router({
       return { queued: true };
     }),
 
-  // ── Admin: store razorpay IDs after webhook confirms payment ─────────────────
+  // ── Admin: manually mark order as paid when webhook was missed ───────────────
+  // Mirrors the payment_captured webhook flow: paid → processing → notifications → book_shipment.
+  // If razorpayPaymentId is already on the order, refunds work normally later.
+  // If not, admin handles refunds manually for this order.
 
   confirmPayment: adminProcedure
-    .input(
-      z.object({
-        orderId: z.string().uuid(),
-        razorpayOrderId: z.string(),
-        razorpayPaymentId: z.string(),
-        gstInvoiceNumber: z.string().optional(),
-      }),
-    )
+    .input(z.object({ orderId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.db
-        .update(schema.orders)
-        .set({
-          razorpayOrderId: input.razorpayOrderId,
-          razorpayPaymentId: input.razorpayPaymentId,
-          gstInvoiceNumber: input.gstInvoiceNumber ?? null,
-        })
-        .where(eq(schema.orders.id, input.orderId));
+      const order = await ctx.db.query.orders.findFirst({
+        where: eq(schema.orders.id, input.orderId),
+      });
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      if (order.status !== "pending_payment") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Order is already ${order.status}` });
+      }
 
-      return advanceOrderStatus(
-        ctx.db,
-        input.orderId,
-        "paid",
-        ctx.session.user.id,
-        `Payment captured: ${input.razorpayPaymentId}`,
-      );
+      // Advance paid → processing (same as worker processPaymentCaptured)
+      await advanceOrderStatus(ctx.db, input.orderId, "paid", ctx.session.user.id, "Manually marked paid by admin");
+      await advanceOrderStatus(ctx.db, input.orderId, "processing", ctx.session.user.id, "Shipment booking queued");
+
+      // Send order notifications
+      const updatedOrder = await ctx.db.query.orders.findFirst({ where: eq(schema.orders.id, input.orderId) });
+      if (updatedOrder) {
+        const contact = await getOrderContact(ctx.db, updatedOrder);
+        const info = toOrderInfo(updatedOrder);
+        Promise.all([notifyOrderPlaced(contact, info), alertAdminNewOrder(info)])
+          .catch((e: unknown) => console.error("[order] confirmPayment notify:", e));
+      }
+
+      // Queue book_shipment
+      const bookPayload = { type: "book_shipment" as const, orderId: input.orderId };
+      const [bookJob] = await ctx.db
+        .insert(schema.backgroundJobs)
+        .values({ type: "book_shipment", status: "pending", payload: bookPayload, orderId: input.orderId })
+        .returning({ id: schema.backgroundJobs.id });
+      const bullJob = await orderQueue.add("book_shipment", { ...bookPayload, dbJobId: bookJob?.id });
+      if (bookJob) {
+        await ctx.db.update(schema.backgroundJobs)
+          .set({ bullmqJobId: bullJob.id?.toString() })
+          .where(eq(schema.backgroundJobs.id, bookJob.id))
+          .catch(() => {});
+      }
+
+      return { ok: true };
     }),
 
 });

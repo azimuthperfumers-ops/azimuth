@@ -267,6 +267,14 @@ export default function AdminOrderDetailPage({
     onError: (err) => toast.error(err.message),
   });
 
+  const markPaid = trpc.order.confirmPayment.useMutation({
+    onSuccess: async () => {
+      await utils.order.adminGet.invalidate({ orderId });
+      toast.success("Marked as paid — shipment booking queued");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const { data: order, isLoading } = trpc.order.adminGet.useQuery({ orderId });
 
   if (isLoading) {
@@ -350,6 +358,17 @@ export default function AdminOrderDetailPage({
               >
                 <RotateCcw className="size-3.5 mr-1.5" />
                 {retryBooking.isPending ? "Queueing…" : "Retry shipment booking"}
+              </Button>
+            )}
+            {order.status === "pending_payment" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-green-500 text-green-700 hover:bg-green-50"
+                onClick={() => markPaid.mutate({ orderId })}
+                disabled={markPaid.isPending}
+              >
+                {markPaid.isPending ? "Processing…" : "Mark as paid"}
               </Button>
             )}
             <Button size="sm" onClick={() => setStatusDialog(true)}>

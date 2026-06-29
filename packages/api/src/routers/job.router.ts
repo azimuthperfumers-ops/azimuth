@@ -34,7 +34,7 @@ export const jobRouter = router({
           limit: input.limit,
           offset: input.offset,
           with: {
-            order: { columns: { orderNumber: true } },
+            order: { columns: { id: true, orderNumber: true } },
             ticket: { columns: { ticketNumber: true } },
           },
         }),
