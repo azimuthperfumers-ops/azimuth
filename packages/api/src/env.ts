@@ -18,6 +18,11 @@ const schema = z.object({
   SHIPROCKET_PICKUP_LOCATION: z.string().optional(),
   SHIPROCKET_CHANNEL_ID: z.coerce.number().optional(),
   SHIPROCKET_WAREHOUSE_PINCODE: z.string().optional(),
+  SHIPROCKET_WAREHOUSE_PHONE: z.string().optional(),
+  SHIPROCKET_WAREHOUSE_CITY: z.string().optional(),
+  SHIPROCKET_WAREHOUSE_STATE: z.string().optional(),
+  SHIPROCKET_WAREHOUSE_ADDRESS: z.string().optional(),
+  SHIPROCKET_LOCATION_ID: z.string().optional(),
   // Worker service
   WORKER_URL: z.string().optional(),
 });

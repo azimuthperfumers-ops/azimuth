@@ -66,6 +66,18 @@ export type CreateReturnShipmentInput = {
   lengthCm: number;
   widthCm: number;
   heightCm: number;
+  pickupDate?: string;
+};
+
+export type ExchangeShipmentResult = {
+  status: "created" | "failed";
+  errorMessage?: string;
+  returnOrderId?: number;
+  forwardOrderId?: number;
+  returnShipmentId?: number;
+  forwardShipmentId?: number;
+  returnAwb?: string;
+  forwardAwb?: string;
 };
 
 // ── Interface ─────────────────────────────────────────────────────────────────
@@ -76,6 +88,7 @@ export interface ILogisticsService {
   createShipment(input: CreateShipmentInput): Promise<ShipmentResult>;
   trackShipment(waybill: string): Promise<TrackingResult>;
   createReturnShipment(input: CreateReturnShipmentInput): Promise<ShipmentResult>;
+  createExchangeShipment(input: CreateReturnShipmentInput & { items: { name: string; sku: string; units: number; price: number }[] }): Promise<ExchangeShipmentResult>;
   cancelShipment(waybill: string): Promise<{ cancelled: boolean; message?: string }>;
 }
 

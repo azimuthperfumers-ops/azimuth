@@ -54,14 +54,16 @@ function ActionDialog({
 }) {
   const [note, setNote] = useState("");
   const [returnReason, setReturnReason] = useState("Customer requested return");
+  const [pickupDate, setPickupDate] = useState("");
   const utils = trpc.useUtils();
+  const minDate = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
   const act = trpc.ticket.adminAction.useMutation({
     onSuccess: async (data) => {
       toast.success(data.detail);
       await utils.ticket.get.invalidate({ ticketId });
       onOpenChange(false);
-      setNote("");
+      setNote(""); setPickupDate("");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -90,17 +92,34 @@ function ActionDialog({
         <p className="text-sm text-muted-foreground">{DESC[action]}</p>
 
         {(action === "return" || action === "exchange") && (
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Return reason (sent to Delhivery)
-            </label>
-            <input
-              type="text"
-              value={returnReason}
-              onChange={(e) => setReturnReason(e.target.value)}
-              className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none"
-            />
-          </div>
+          <>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Preferred pickup date <span className="text-destructive">*</span>
+              </label>
+              <input
+                type="date"
+                value={pickupDate}
+                min={minDate}
+                onChange={(e) => setPickupDate(e.target.value)}
+                className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none"
+              />
+              <p className="text-[11px] text-muted-foreground/60">
+                Date when customer will be home for pickup. Sent to courier.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Return reason (sent to courier)
+              </label>
+              <input
+                type="text"
+                value={returnReason}
+                onChange={(e) => setReturnReason(e.target.value)}
+                className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none"
+              />
+            </div>
+          </>
         )}
 
         <div className="space-y-1.5">
@@ -121,9 +140,9 @@ function ActionDialog({
           <Button
             variant={action === "refund" || action === "return" || action === "exchange" ? "destructive" : "default"}
             onClick={() =>
-              act.mutate({ ticketId, action, note: note || undefined, returnReason })
+              act.mutate({ ticketId, action, note: note || undefined, returnReason, pickupDate: pickupDate || undefined })
             }
-            disabled={act.isPending}
+            disabled={act.isPending || ((action === "return" || action === "exchange") && !pickupDate)}
           >
             {act.isPending ? "Processing…" : TITLE[action]}
           </Button>

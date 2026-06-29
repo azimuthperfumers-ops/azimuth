@@ -6,6 +6,7 @@ import type {
   ShipmentResult,
   TrackingResult,
   CreateReturnShipmentInput,
+  ExchangeShipmentResult,
 } from "../logistics.service";
 
 
@@ -34,6 +35,19 @@ export class StubLogisticsProvider implements ILogisticsService {
     const waybill = `STUBRET${Date.now()}`;
     console.log(`[logistics:stub] return — ${input.originalOrderNumber} → ${waybill}`);
     return { waybill, trackingUrl: `https://shiprocket.co/tracking/${waybill}`, status: "created" };
+  }
+
+  async createExchangeShipment(input: CreateReturnShipmentInput): Promise<ExchangeShipmentResult> {
+    console.log(`[logistics:stub] exchange — ${input.originalOrderNumber}`);
+    return {
+      status: "created",
+      returnOrderId: 1,
+      forwardOrderId: 2,
+      returnShipmentId: 11,
+      forwardShipmentId: 22,
+      returnAwb: `STUBRET${Date.now()}`,
+      forwardAwb: `STUBFWD${Date.now()}`,
+    };
   }
 
   async cancelShipment(waybill: string): Promise<{ cancelled: boolean; message?: string }> {

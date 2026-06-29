@@ -236,8 +236,8 @@ export const ticketRouter = router({
         ticketId: z.string().uuid(),
         action: z.enum(["refund", "return", "exchange", "close", "reopen"]),
         note: z.string().optional(),
-        // For return/exchange — reason sent to Delhivery
         returnReason: z.string().optional(),
+        pickupDate: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -339,6 +339,7 @@ export const ticketRouter = router({
           },
           returnReason: input.returnReason ?? "Customer requested return",
           adminId,
+          pickupDate: input.pickupDate,
         };
 
         const [dbJob] = await ctx.db

@@ -56,6 +56,7 @@ export type ReturnShipmentJob = {
   };
   returnReason: string;
   adminId: string;
+  pickupDate?: string;
 };
 
 export type OrderJobData =

@@ -17,6 +17,7 @@ import type {
   ShipmentResult,
   TrackingResult,
   CreateReturnShipmentInput,
+  ExchangeShipmentResult,
 } from "../logistics.service";
 import { env } from "../../env";
 
@@ -105,11 +106,21 @@ export class ShiprocketProvider implements ILogisticsService {
   private readonly pickupLocation: string;
   private readonly channelId: number | undefined;
   private readonly warehousePincode: string;
+  private readonly warehousePhone: string;
+  private readonly warehouseCity: string;
+  private readonly warehouseState: string;
+  private readonly warehouseAddress: string;
+  private readonly locationId: string | undefined;
 
   constructor() {
     this.pickupLocation = env.SHIPROCKET_PICKUP_LOCATION ?? "Primary";
     this.channelId = env.SHIPROCKET_CHANNEL_ID;
     this.warehousePincode = env.SHIPROCKET_WAREHOUSE_PINCODE ?? "110001";
+    this.warehousePhone = env.SHIPROCKET_WAREHOUSE_PHONE ?? "";
+    this.warehouseCity = env.SHIPROCKET_WAREHOUSE_CITY ?? "";
+    this.warehouseState = env.SHIPROCKET_WAREHOUSE_STATE ?? "";
+    this.warehouseAddress = env.SHIPROCKET_WAREHOUSE_ADDRESS ?? "Warehouse";
+    this.locationId = env.SHIPROCKET_LOCATION_ID;
   }
 
   async checkServiceability(pincode: string): Promise<ServiceabilityResult> {
@@ -308,7 +319,7 @@ export class ShiprocketProvider implements ILogisticsService {
 
     try {
       const awbResp = await apiPost<AwbResp>("/courier/assign/awb", {
-        shipment_id: String(shipmentId),
+        shipment_id: shipmentId,
         ...(cheapestCourierId ? { courier_id: cheapestCourierId } : {}),
       });
 
@@ -404,15 +415,16 @@ export class ShiprocketProvider implements ILogisticsService {
         pickup_country: "India",
         pickup_pincode: input.pickupAddress.pincode,
         shipping_customer_name: "Azimuth Perfumers",
-        shipping_phone: env.SHIPROCKET_WAREHOUSE_PINCODE ?? "",
-        shipping_address: "Warehouse",
-        shipping_city: "",
-        shipping_state: "",
+        shipping_phone: this.warehousePhone,
+        shipping_address: this.warehouseAddress,
+        shipping_city: this.warehouseCity,
+        shipping_state: this.warehouseState,
         shipping_country: "India",
         shipping_pincode: this.warehousePincode,
         payment_method: "Prepaid",
         sub_total: 0,
         return_reason: input.returnReason,
+        pickup_date: input.pickupDate ?? new Date(Date.now() + 86400000).toISOString().split("T")[0],
         order_items: [{ name: "Return", sku: `RET-${input.originalOrderNumber}`, units: 1, selling_price: 0 }],
         length: input.lengthCm,
         breadth: input.widthCm,
@@ -434,6 +446,111 @@ export class ShiprocketProvider implements ILogisticsService {
       };
     } catch (err) {
       return { waybill: "", trackingUrl: "", status: "failed", errorMessage: String(err) };
+    }
+  }
+
+  async createExchangeShipment(
+    input: CreateReturnShipmentInput & { items: { name: string; sku: string; units: number; price: number }[] },
+  ): Promise<ExchangeShipmentResult> {
+    type ExchangeResp = {
+      success?: boolean;
+      message?: string | string[];
+      data?: {
+        forward_orders?: { order_id?: number; shipment_id?: number; awb_code?: string };
+        return_orders?: { order_id?: number; shipment_id?: number; awb_code?: string };
+      };
+    };
+
+    try {
+      const nameParts = input.customerName.trim().split(" ");
+      const firstName = nameParts[0] ?? input.customerName;
+      const lastName = nameParts.slice(1).join(" ") || firstName;
+
+      const addr = input.pickupAddress.line1 + (input.pickupAddress.line2 ? ` ${input.pickupAddress.line2}` : "");
+      const weightKg = input.weightGrams / 1000;
+      const subTotal = input.items.reduce((s, i) => s + i.price * i.units, 0);
+
+      const resp = await apiPost<ExchangeResp>("/orders/create/exchange", {
+        exchange_order_id: `EX-${input.originalOrderNumber}`,
+        return_order_id: `R-${input.originalOrderNumber}`,
+        order_date: new Date().toISOString().split("T")[0],
+        channel_id: this.channelId,
+        payment_method: "prepaid",
+
+        // pickup = collect return from customer
+        buyer_pickup_first_name: firstName,
+        buyer_pickup_last_name: lastName,
+        buyer_pickup_address: addr,
+        buyer_pickup_address_2: "",
+        buyer_pickup_city: input.pickupAddress.city,
+        buyer_pickup_state: input.pickupAddress.state,
+        buyer_pickup_country: "India",
+        buyer_pickup_pincode: input.pickupAddress.pincode,
+        buyer_pickup_phone: input.customerPhone,
+
+        // shipping = deliver replacement to customer (same address)
+        buyer_shipping_first_name: firstName,
+        buyer_shipping_last_name: lastName,
+        buyer_shipping_address: addr,
+        buyer_shipping_address_2: "",
+        buyer_shipping_city: input.pickupAddress.city,
+        buyer_shipping_state: input.pickupAddress.state,
+        buyer_shipping_country: "India",
+        buyer_shipping_pincode: input.pickupAddress.pincode,
+        buyer_shipping_phone: input.customerPhone,
+
+        seller_pickup_location_id: this.locationId,
+        seller_shipping_location_id: this.locationId,
+
+        sub_total: subTotal,
+        total_discount: 0,
+        return_reason: "29",
+        qc_check: "true",
+
+        order_items: input.items.map((i) => ({
+          name: i.name,
+          sku: i.sku,
+          units: i.units,
+          selling_price: String(i.price),
+          hsn: 3303,
+          exchange_item_name: i.name,
+          exchange_item_sku: i.sku,
+        })),
+
+        // return package dims
+        return_length: input.lengthCm,
+        return_breadth: input.widthCm,
+        return_height: input.heightCm,
+        return_weight: weightKg,
+
+        // exchange (forward) package dims — same product
+        exchange_length: input.lengthCm,
+        exchange_breadth: input.widthCm,
+        exchange_height: input.heightCm,
+        exchange_weight: weightKg,
+      });
+
+      if (!resp.success || !resp.data) {
+        const msg = Array.isArray(resp.message) ? resp.message.join(", ") : (resp.message ?? "Exchange shipment failed");
+        return { status: "failed", errorMessage: msg };
+      }
+
+      const returnAwb = resp.data.return_orders?.awb_code?.trim() || undefined;
+      const forwardAwb = resp.data.forward_orders?.awb_code?.trim() || undefined;
+      if (returnAwb) console.log(`[shiprocket] exchange return AWB=${returnAwb}`);
+      if (forwardAwb) console.log(`[shiprocket] exchange forward AWB=${forwardAwb}`);
+
+      return {
+        status: "created",
+        returnOrderId: resp.data.return_orders?.order_id,
+        forwardOrderId: resp.data.forward_orders?.order_id,
+        returnShipmentId: resp.data.return_orders?.shipment_id,
+        forwardShipmentId: resp.data.forward_orders?.shipment_id,
+        returnAwb,
+        forwardAwb,
+      };
+    } catch (err) {
+      return { status: "failed", errorMessage: String(err) };
     }
   }
 

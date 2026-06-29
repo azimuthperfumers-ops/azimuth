@@ -84,12 +84,12 @@ const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive
 // ─── Update status dialog ─────────────────────────────────────────────────────
 
 const PAID_STATUSES: OrderStatus[] = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted", "return_requested", "return_approved"];
-const REFUND_TRIGGERS: OrderStatus[] = ["cancelled", "return_approved"];
+const REFUND_TRIGGERS: OrderStatus[] = ["cancelled", "rto_delivered"];
 
 // Statuses an admin can manually set — excludes system/payment/courier-driven states
 const ADMIN_SETTABLE_STATUSES: OrderStatus[] = [
   "processing", "picked_up", "out_for_delivery", "delivery_attempted",
-  "shipped", "delivered", "cancelled", "return_approved",
+  "shipped", "delivered", "cancelled", "return_approved", "rto_delivered",
 ];
 
 function UpdateStatusDialog({
@@ -257,12 +257,24 @@ export default function AdminOrderDetailPage({
 }) {
   const { orderId } = use(params);
   const [statusDialog, setStatusDialog] = useState(false);
+  const [refundDialog, setRefundDialog] = useState(false);
+  const [refundNote, setRefundNote] = useState("");
   const utils = trpc.useUtils();
 
   const retryBooking = trpc.order.retryShipmentBooking.useMutation({
     onSuccess: async () => {
       await utils.order.adminGet.invalidate({ orderId });
       toast.success("Shipment booking re-queued");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const issueRefund = trpc.order.issueRefund.useMutation({
+    onSuccess: async () => {
+      await utils.order.adminGet.invalidate({ orderId });
+      toast.success("Refund queued — processing via Razorpay");
+      setRefundDialog(false);
+      setRefundNote("");
     },
     onError: (err) => toast.error(err.message),
   });
@@ -369,6 +381,17 @@ export default function AdminOrderDetailPage({
                 disabled={markPaid.isPending}
               >
                 {markPaid.isPending ? "Processing…" : "Mark as paid"}
+              </Button>
+            )}
+            {order.razorpayPaymentId &&
+              !["refund_processing", "refunded", "cancelled", "pending_payment"].includes(order.status) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-red-400 text-red-700 hover:bg-red-50"
+                onClick={() => setRefundDialog(true)}
+              >
+                Issue refund
               </Button>
             )}
             <Button size="sm" onClick={() => setStatusDialog(true)}>
@@ -602,6 +625,45 @@ export default function AdminOrderDetailPage({
         open={statusDialog}
         onOpenChange={setStatusDialog}
       />
+
+      <Dialog open={refundDialog} onOpenChange={setRefundDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Issue direct refund</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Full refund of <strong className="text-foreground">{formatInr(Number(order.total))}</strong> via Razorpay.
+              Use for damaged / incorrect product — no return required.
+            </p>
+            <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-300">
+              Cannot be undone once queued.
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Reason (internal note)
+              </label>
+              <textarea
+                value={refundNote}
+                onChange={(e) => setRefundNote(e.target.value)}
+                rows={2}
+                placeholder="e.g. Bottle arrived damaged"
+                className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRefundDialog(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={issueRefund.isPending}
+              onClick={() => issueRefund.mutate({ orderId: order.id, note: refundNote || undefined })}
+            >
+              {issueRefund.isPending ? "Queuing…" : "Issue refund"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

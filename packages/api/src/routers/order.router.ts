@@ -365,17 +365,18 @@ export const orderRouter = router({
         }
       }
 
+      // Return arrived at warehouse → refund now
       if (
-        input.status === "return_approved" &&
+        input.status === "rto_delivered" &&
         currentOrder.razorpayPaymentId &&
-        PAID_STATUSES.includes(currentOrder.status)
+        !["refund_processing", "refunded"].includes(currentOrder.status)
       ) {
         const refundPayload = {
           type: "initiate_refund" as const,
           orderId: input.orderId,
           razorpayPaymentId: currentOrder.razorpayPaymentId,
           amountPaise: Math.round(Number(currentOrder.total) * 100),
-          reason: input.note ?? "Return approved",
+          reason: input.note ?? "Return received at warehouse",
         };
         const [refundJob] = await ctx.db
           .insert(schema.backgroundJobs)
@@ -500,6 +501,43 @@ export const orderRouter = router({
           .catch(() => {});
       }
 
+      return { ok: true };
+    }),
+
+  // ── Admin: direct refund (no return — e.g. damaged product) ─────────────────
+
+  issueRefund: adminProcedure
+    .input(z.object({ orderId: z.string().uuid(), note: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const order = await ctx.db.query.orders.findFirst({
+        where: eq(schema.orders.id, input.orderId),
+      });
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      if (!order.razorpayPaymentId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No Razorpay payment on this order — refund manually via dashboard" });
+      }
+      const BLOCKED = ["refund_processing", "refunded", "cancelled"];
+      if (BLOCKED.includes(order.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Cannot refund: order is already ${order.status}` });
+      }
+
+      const refundPayload = {
+        type: "initiate_refund" as const,
+        orderId: input.orderId,
+        razorpayPaymentId: order.razorpayPaymentId,
+        amountPaise: Math.round(Number(order.total) * 100),
+        reason: input.note ?? "Direct refund by admin",
+      };
+      const [refundJob] = await ctx.db
+        .insert(schema.backgroundJobs)
+        .values({ type: "initiate_refund", status: "pending", payload: refundPayload, orderId: input.orderId })
+        .returning({ id: schema.backgroundJobs.id });
+      const refundBullJob = await orderQueue.add("initiate_refund", { ...refundPayload, dbJobId: refundJob?.id });
+      if (refundJob) {
+        await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
+      }
+
+      await advanceOrderStatus(ctx.db, input.orderId, "refund_processing", ctx.session.user.id, input.note ?? "Direct refund initiated by admin");
       return { ok: true };
     }),
 

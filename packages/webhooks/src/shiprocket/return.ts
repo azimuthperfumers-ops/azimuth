@@ -1,7 +1,10 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
 import { advanceOrderStatus } from "@azimuth/api";
+import { orderQueue } from "@azimuth/queue";
+import { alertAdminExchangeReceived, alertAdminRefund, notifyRefundInitiated } from "@azimuth/comms";
+import { getCustomerContact, orderInfo } from "@azimuth/queue";
 
 import type { ShiprocketBody } from "./forward.js";
 
@@ -71,4 +74,50 @@ export async function processReturnShipment(body: ShiprocketBody) {
 
   await advanceOrderStatus(db, order.id, targetStatus, "webhook:shiprocket", note);
   console.log(`[webhook:shiprocket] [RETURN] order ${order.orderNumber} → ${targetStatus}`);
+
+  if (targetStatus === "rto_delivered") {
+    // Check if this was an exchange (ship replacement) or plain return (refund)
+    const exchangeAction = order.id
+      ? await db.query.ticketActions.findFirst({
+          where: and(
+            eq(schema.ticketActions.actionType, "exchange_scheduled"),
+          ),
+          with: {
+            ticket: { columns: { orderId: true } },
+          },
+        }).then((a) => a?.ticket?.orderId === order.id ? a : null)
+      : null;
+
+    if (exchangeAction) {
+      // Exchange: item back at warehouse — alert admin to ship replacement
+      const info = orderInfo(order);
+      await alertAdminExchangeReceived(info).catch((e) =>
+        console.error("[webhook:shiprocket] [RETURN] exchange alert:", e),
+      );
+      console.log(`[webhook:shiprocket] [RETURN] exchange item received for ${order.orderNumber} — alert admin to ship`);
+    } else if (order.razorpayPaymentId) {
+      // Plain return: trigger refund
+      const refundPayload = {
+        type: "initiate_refund" as const,
+        orderId: order.id,
+        razorpayPaymentId: order.razorpayPaymentId,
+        amountPaise: Math.round(Number(order.total) * 100),
+        reason: "Return received at warehouse",
+      };
+      const [refundJob] = await db
+        .insert(schema.backgroundJobs)
+        .values({ type: "initiate_refund", status: "pending", payload: refundPayload, orderId: order.id })
+        .returning({ id: schema.backgroundJobs.id });
+      const refundBullJob = await orderQueue.add("initiate_refund", { ...refundPayload, dbJobId: refundJob?.id });
+      if (refundJob) {
+        await db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
+      }
+      const contact = await getCustomerContact(order);
+      const info = orderInfo(order);
+      await Promise.all([notifyRefundInitiated(contact, info), alertAdminRefund(info)]).catch((e) =>
+        console.error("[webhook:shiprocket] [RETURN] refund notify:", e),
+      );
+      console.log(`[webhook:shiprocket] [RETURN] refund queued for ${order.orderNumber}`);
+    }
+  }
 }

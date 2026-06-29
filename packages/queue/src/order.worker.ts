@@ -368,7 +368,7 @@ async function processReturnShipment(data: ReturnShipmentJob) {
   const {
     orderId, ticketId, action,
     originalOrderNumber, customerName, customerPhone,
-    pickupAddress, returnReason, adminId,
+    pickupAddress, returnReason, adminId, pickupDate,
   } = data;
 
   const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, orderId) });
@@ -383,6 +383,73 @@ async function processReturnShipment(data: ReturnShipmentJob) {
   }
 
   const delvSvc = createLogisticsService();
+
+  if (action === "exchange") {
+    // ── Exchange: creates reverse pickup + new forward shipment in one call ───
+    const orderWithItems = await db.query.orders.findFirst({
+      where: eq(schema.orders.id, orderId),
+      with: { items: true },
+    });
+    if (!orderWithItems) throw new UnrecoverableError(`exchange_shipment: order ${orderId} missing items`);
+
+    const exchangeResult = await delvSvc.createExchangeShipment({
+      originalOrderNumber,
+      customerName,
+      customerPhone,
+      pickupAddress,
+      returnReason,
+      weightGrams: 500,
+      lengthCm: 15,
+      widthCm: 10,
+      heightCm: 10,
+      pickupDate,
+      items: orderWithItems.items.map((i) => ({
+        name: i.productName,
+        sku: i.variantSku,
+        units: i.quantity,
+        price: Number(i.unitPrice),
+      })),
+    });
+
+    if (exchangeResult.status === "failed") {
+      throw new Error(`Exchange shipment failed: ${exchangeResult.errorMessage}`);
+    }
+
+    // Store exchange return AWB in returnWaybill so the is_return=1 webhook can find this order
+    if (exchangeResult.returnAwb) {
+      await db
+        .update(schema.orders)
+        .set({ returnWaybill: exchangeResult.returnAwb })
+        .where(eq(schema.orders.id, orderId));
+    }
+
+    await advanceOrderStatus(db, orderId, "rto_initiated", "worker:order", "Exchange pickup scheduled");
+
+    await db.insert(schema.ticketActions).values({
+      ticketId,
+      adminId,
+      actionType: "exchange_scheduled",
+      metadata: {
+        returnOrderId: exchangeResult.returnOrderId,
+        forwardOrderId: exchangeResult.forwardOrderId,
+        returnShipmentId: exchangeResult.returnShipmentId,
+        forwardShipmentId: exchangeResult.forwardShipmentId,
+        returnAwb: exchangeResult.returnAwb,
+        forwardAwb: exchangeResult.forwardAwb,
+      },
+    });
+
+    await db.update(schema.tickets).set({ status: "awaiting_user", updatedAt: new Date() }).where(eq(schema.tickets.id, ticketId));
+    await db.insert(schema.ticketMessages).values({
+      ticketId, senderId: adminId, senderRole: "admin",
+      content: `We've scheduled a return pickup for your order. A replacement will be shipped once we receive the item back.`,
+    });
+
+    console.log(`[order-worker] Exchange scheduled for order ${orderId}: returnShipment=${exchangeResult.returnShipmentId}, forwardShipment=${exchangeResult.forwardShipmentId}`);
+    return { returnShipmentId: exchangeResult.returnShipmentId, forwardShipmentId: exchangeResult.forwardShipmentId };
+  }
+
+  // ── Return: reverse pickup only ─────────────────────────────────────────────
   const returnResult = await delvSvc.createReturnShipment({
     originalOrderNumber,
     customerName,
@@ -393,6 +460,7 @@ async function processReturnShipment(data: ReturnShipmentJob) {
     lengthCm: 15,
     widthCm: 10,
     heightCm: 10,
+    pickupDate,
   });
 
   if (returnResult.status === "failed") {
@@ -409,28 +477,15 @@ async function processReturnShipment(data: ReturnShipmentJob) {
     `Return pickup scheduled. Reverse AWB: ${returnResult.waybill}`,
   );
 
-  const actionType = action === "exchange" ? "exchange_scheduled" : "return_scheduled";
   await db.insert(schema.ticketActions).values({
-    ticketId,
-    adminId,
-    actionType,
+    ticketId, adminId, actionType: "return_scheduled",
     metadata: { reverseWaybill: returnResult.waybill, trackingUrl: returnResult.trackingUrl },
   });
 
-  await db
-    .update(schema.tickets)
-    .set({ status: "awaiting_user", updatedAt: new Date() })
-    .where(eq(schema.tickets.id, ticketId));
-
-  const msgContent = action === "exchange"
-    ? `We've scheduled a return pickup for your order. Reverse AWB: ${returnResult.waybill}. Once we receive the item, we'll ship your replacement.`
-    : `We've scheduled a return pickup for your order. Reverse AWB: ${returnResult.waybill}. Track at ${returnResult.trackingUrl}`;
-
+  await db.update(schema.tickets).set({ status: "awaiting_user", updatedAt: new Date() }).where(eq(schema.tickets.id, ticketId));
   await db.insert(schema.ticketMessages).values({
-    ticketId,
-    senderId: adminId,
-    senderRole: "admin",
-    content: msgContent,
+    ticketId, senderId: adminId, senderRole: "admin",
+    content: `We've scheduled a return pickup for your order. Reverse AWB: ${returnResult.waybill}. Track at ${returnResult.trackingUrl}`,
   });
 
   console.log(`[order-worker] Return pickup scheduled for order ${orderId}: AWB=${returnResult.waybill}`);

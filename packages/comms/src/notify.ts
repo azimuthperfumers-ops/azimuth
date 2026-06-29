@@ -341,3 +341,13 @@ export async function alertAdminDeliveryFailed(order: OrderInfo): Promise<void> 
     );
   }
 }
+
+export async function alertAdminExchangeReceived(order: OrderInfo): Promise<void> {
+  const adminWhatsapp = env.ADMIN_WHATSAPP;
+  if (adminWhatsapp) {
+    await fire(
+      `wa:admin:exchange_received:${order.orderNumber}`,
+      sendWhatsapp(adminWhatsapp, "exchange_received_v1", [order.orderNumber]),
+    );
+  }
+}
