@@ -76,12 +76,27 @@ class RazorpayService implements IRazorpayService {
     receipt: string;
     notes?: Record<string, string>;
   }): Promise<{ id: string; amount: number }> {
-    const refund = await this.rzp.payments.refund(params.paymentId, {
-      amount: params.amountPaise,
-      speed: "normal",
-      receipt: params.receipt,
-      notes: params.notes ?? {},
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let refund: any;
+    try {
+      refund = await this.rzp.payments.refund(params.paymentId, {
+        amount: params.amountPaise,
+        speed: "normal",
+        receipt: params.receipt,
+        notes: params.notes ?? {},
+      });
+    } catch (raw) {
+      // Razorpay SDK throws plain objects, not Error instances
+      const msg =
+        raw instanceof Error
+          ? raw.message
+          : typeof raw === "object" && raw !== null
+            ? ((raw as { error?: { description?: string }; message?: string }).error?.description ??
+              (raw as { message?: string }).message ??
+              JSON.stringify(raw))
+            : String(raw);
+      throw new Error(`Razorpay refund failed: ${msg}`);
+    }
     return { id: refund.id, amount: Number(refund.amount) };
   }
 

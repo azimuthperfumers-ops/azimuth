@@ -466,16 +466,16 @@ export function startOrderWorker() {
   });
 
   worker.on("failed", async (job, err) => {
+    const errMsg = err instanceof Error ? err.message : String(err);
     console.error(
-      `[order-worker] Job ${job?.id} (${job?.data.type}) failed attempt ${job?.attemptsMade}/${job?.opts.attempts}:`,
-      err.message,
+      `[order-worker] Job ${job?.id} (${job?.data.type}) failed attempt ${job?.attemptsMade}/${job?.opts.attempts}: ${errMsg}`,
     );
 
     const dbJobId = (job?.data as { dbJobId?: string } | undefined)?.dbJobId;
     const isFinal = (job?.attemptsMade ?? 0) >= (job?.opts.attempts ?? 1);
 
     if (dbJobId) {
-      await dbJobFailed(dbJobId, err.message, isFinal, job?.attemptsMade ?? 0);
+      await dbJobFailed(dbJobId, errMsg, isFinal, job?.attemptsMade ?? 0);
     }
 
     if (
