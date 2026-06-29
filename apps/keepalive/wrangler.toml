@@ -7,6 +7,7 @@ crons = ["*/5 * * * *"]
 
 [vars]
 SERVER_URL = "https://api.azimuth.net.in"
+WORKER_URL = "https://worker.azimuth.net.in"
 
 [observability]
 enabled = false
