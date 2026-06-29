@@ -29,9 +29,9 @@ class RazorpayService implements IRazorpayService {
   private rzp: Razorpay;
   private keyId: string;
   private keySecret: string;
-  private webhookSecret: string;
+  private webhookSecret: string | undefined;
 
-  constructor(keyId: string, keySecret: string, webhookSecret: string) {
+  constructor(keyId: string, keySecret: string, webhookSecret?: string) {
     this.rzp = new Razorpay({ key_id: keyId, key_secret: keySecret });
     this.keyId = keyId;
     this.keySecret = keySecret;
@@ -86,6 +86,7 @@ class RazorpayService implements IRazorpayService {
   }
 
   verifyWebhookSignature(rawBody: Buffer, signature: string): boolean {
+    if (!this.webhookSecret) throw new Error("RAZORPAY_WEBHOOK_SECRET not configured");
     const expected = crypto
       .createHmac("sha256", this.webhookSecret)
       .update(rawBody)
@@ -100,17 +101,16 @@ class RazorpayService implements IRazorpayService {
 export function createRazorpayService(): IRazorpayService {
   const keyId = env.RAZORPAY_KEY_ID;
   const keySecret = env.RAZORPAY_KEY_SECRET;
-  const webhookSecret = env.RAZORPAY_WEBHOOK_SECRET;
 
   const missing = [
     !keyId && "RAZORPAY_KEY_ID",
     !keySecret && "RAZORPAY_KEY_SECRET",
-    !webhookSecret && "RAZORPAY_WEBHOOK_SECRET",
   ]
     .filter(Boolean)
     .join(", ");
 
   if (missing) throw new Error(`Razorpay not configured: ${missing} missing`);
 
-  return new RazorpayService(keyId!, keySecret!, webhookSecret!);
+  // webhookSecret optional at init — only required when verifyWebhookSignature is called (webhooks package)
+  return new RazorpayService(keyId!, keySecret!, env.RAZORPAY_WEBHOOK_SECRET);
 }
