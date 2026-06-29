@@ -18,11 +18,13 @@ export type PaymentFailedJob = {
 
 export type BookShipmentJob = {
   type: "book_shipment";
+  dbJobId?: string;
   orderId: string;
 };
 
 export type InitiateRefundJob = {
   type: "initiate_refund";
+  dbJobId?: string;
   orderId: string;
   razorpayPaymentId: string;
   amountPaise: number;
@@ -31,11 +33,38 @@ export type InitiateRefundJob = {
 
 export type CancelShipmentJob = {
   type: "cancel_shipment";
+  dbJobId?: string;
   orderId: string;
   waybill: string;
 };
 
-export type OrderJobData = PaymentCapturedJob | PaymentFailedJob | BookShipmentJob | InitiateRefundJob | CancelShipmentJob;
+export type ReturnShipmentJob = {
+  type: "return_shipment";
+  dbJobId?: string;
+  orderId: string;
+  ticketId: string;
+  action: "return" | "exchange";
+  originalOrderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  pickupAddress: {
+    line1: string;
+    line2?: string | null;
+    city: string;
+    state: string;
+    pincode: string;
+  };
+  returnReason: string;
+  adminId: string;
+};
+
+export type OrderJobData =
+  | PaymentCapturedJob
+  | PaymentFailedJob
+  | BookShipmentJob
+  | InitiateRefundJob
+  | CancelShipmentJob
+  | ReturnShipmentJob;
 
 export const orderQueue = new Queue<OrderJobData>("order-events", {
   connection: redisOpts(),

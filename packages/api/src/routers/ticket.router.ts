@@ -3,11 +3,10 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 import { schema } from "@azimuth/db";
-import { createRazorpayService } from "../services/razorpay.service";
-import { createLogisticsService } from "../services/logistics.service";
 import { advanceOrderStatus } from "../repositories/order.repository";
 import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import { router } from "../trpc";
+import { orderQueue } from "../lib/order-queue";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -264,32 +263,37 @@ export const ticketRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "No Razorpay payment ID on order" });
         }
 
-        let rzpSvc;
-        try {
-          rzpSvc = createRazorpayService();
-        } catch {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Razorpay not configured" });
-        }
-
         const amountPaise = Math.round(Number(order.total) * 100);
-        const refund = await rzpSvc.refundPayment({
-          paymentId: order.razorpayPaymentId,
+        const payload = {
+          type: "initiate_refund" as const,
+          orderId: order.id,
+          razorpayPaymentId: order.razorpayPaymentId,
           amountPaise,
-          receipt: ticket.ticketNumber,
-          notes: { ticketId: ticket.id, reason: input.note ?? "Customer requested refund" },
-        });
+          reason: input.note ?? "Customer requested refund",
+        };
 
-        await advanceOrderStatus(ctx.db, order.id, "refunded", adminId, `Refund via ticket ${ticket.ticketNumber}: ${refund.id}`);
+        const [dbJob] = await ctx.db
+          .insert(schema.backgroundJobs)
+          .values({ type: "initiate_refund", status: "pending", payload, orderId: order.id, ticketId: ticket.id })
+          .returning({ id: schema.backgroundJobs.id });
+
+        if (!dbJob) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+        const bullJob = await orderQueue.add("initiate_refund", { ...payload, dbJobId: dbJob.id });
+        await ctx.db
+          .update(schema.backgroundJobs)
+          .set({ bullmqJobId: bullJob.id?.toString() })
+          .where(eq(schema.backgroundJobs.id, dbJob.id));
 
         await ctx.db.insert(schema.ticketActions).values({
           ticketId: ticket.id,
           adminId,
           actionType: "refund_initiated",
-          metadata: { razorpayRefundId: refund.id, amountPaise: refund.amount },
+          metadata: { dbJobId: dbJob.id, amountPaise },
         });
 
         await ctx.db.update(schema.tickets)
-          .set({ status: "resolved", updatedAt: new Date() })
+          .set({ status: "awaiting_user", updatedAt: new Date() })
           .where(eq(schema.tickets.id, ticket.id));
 
         if (input.note) {
@@ -299,7 +303,7 @@ export const ticketRouter = router({
           });
         }
 
-        return { ok: true, detail: `Refund ₹${Number(order.total)} initiated (${refund.id})` };
+        return { ok: true, detail: `Refund ₹${Number(order.total)} queued — processing in background` };
       }
 
       // ── Return or Exchange ────────────────────────────────────────────────
@@ -317,60 +321,44 @@ export const ticketRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Order has incomplete shipping address" });
         }
 
-        const delvSvc = createLogisticsService();
-        const returnResult = await delvSvc.createReturnShipment({
+        const jobType = input.action === "exchange" ? "exchange_shipment" : "return_shipment";
+        const payload = {
+          type: "return_shipment" as const,
+          orderId: order.id,
+          ticketId: ticket.id,
+          action: input.action as "return" | "exchange",
           originalOrderNumber: order.orderNumber,
           customerName: shippingAddr.fullName ?? ticket.user?.name ?? "Customer",
           customerPhone: shippingAddr.phone ?? ticket.user?.phoneNumber ?? ticket.user?.phone ?? "",
           pickupAddress: {
-            line1: shippingAddr.line1,
+            line1: shippingAddr.line1!,
             line2: shippingAddr.line2,
-            city: shippingAddr.city,
+            city: shippingAddr.city!,
             state: shippingAddr.state ?? "",
-            pincode: shippingAddr.pincode,
+            pincode: shippingAddr.pincode!,
           },
           returnReason: input.returnReason ?? "Customer requested return",
-          weightGrams: 500,
-          lengthCm: 15,
-          widthCm: 10,
-          heightCm: 10,
-        });
+          adminId,
+        };
 
-        if (returnResult.status === "failed") {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: `Return shipment failed: ${returnResult.errorMessage}`,
-          });
-        }
+        const [dbJob] = await ctx.db
+          .insert(schema.backgroundJobs)
+          .values({ type: jobType, status: "pending", payload, orderId: order.id, ticketId: ticket.id })
+          .returning({ id: schema.backgroundJobs.id });
 
-        // Save reverse waybill on order (reuse trackingUrl field as returnTrackingUrl)
-        await ctx.db.update(schema.orders)
-          .set({ delhiveryWaybill: returnResult.waybill })
-          .where(eq(schema.orders.id, order.id));
+        if (!dbJob) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-        await advanceOrderStatus(ctx.db, order.id, "rto_initiated", adminId,
-          `Return pickup scheduled. Reverse AWB: ${returnResult.waybill}`);
-
-        const actionType = input.action === "exchange" ? "exchange_scheduled" : "return_scheduled";
-        await ctx.db.insert(schema.ticketActions).values({
-          ticketId: ticket.id, adminId, actionType,
-          metadata: { reverseWaybill: returnResult.waybill, trackingUrl: returnResult.trackingUrl },
-        });
+        const bullJob = await orderQueue.add("return_shipment", { ...payload, dbJobId: dbJob.id });
+        await ctx.db
+          .update(schema.backgroundJobs)
+          .set({ bullmqJobId: bullJob.id?.toString() })
+          .where(eq(schema.backgroundJobs.id, dbJob.id));
 
         await ctx.db.update(schema.tickets)
           .set({ status: "awaiting_user", updatedAt: new Date() })
           .where(eq(schema.tickets.id, ticket.id));
 
-        const msgContent = input.action === "exchange"
-          ? `We've scheduled a return pickup for your order. Reverse AWB: ${returnResult.waybill}. Once we receive the item, we'll ship your replacement.`
-          : `We've scheduled a return pickup for your order. Reverse AWB: ${returnResult.waybill}. Track at ${returnResult.trackingUrl}`;
-
-        await ctx.db.insert(schema.ticketMessages).values({
-          ticketId: ticket.id, senderId: adminId, senderRole: "admin",
-          content: msgContent,
-        });
-
-        return { ok: true, detail: `Return pickup scheduled. AWB: ${returnResult.waybill}` };
+        return { ok: true, detail: `${input.action === "exchange" ? "Exchange" : "Return"} pickup queued — processing in background` };
       }
 
       // ── Close ─────────────────────────────────────────────────────────────

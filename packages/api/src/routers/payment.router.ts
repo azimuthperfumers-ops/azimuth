@@ -4,7 +4,6 @@ import { and, eq } from "drizzle-orm";
 
 import { schema } from "@azimuth/db";
 import { protectedProcedure } from "../middleware/auth.middleware";
-import { advanceOrderStatus } from "../repositories/order.repository";
 import { createLogisticsService } from "../services/logistics.service";
 import { createRazorpayService } from "../services/razorpay.service";
 import { publicProcedure, router } from "../trpc";
@@ -71,8 +70,9 @@ export const paymentRouter = router({
       };
     }),
 
-  // Frontend calls after Razorpay modal success — belt-and-suspenders alongside webhooks.
-  // Idempotent: if webhook already captured payment, returns success without double-advancing.
+  // Frontend calls after Razorpay modal success to validate HMAC signature.
+  // Does NOT advance order status — payment.captured webhook is authoritative for paid status.
+  // Returns success once signature verified; webhook handles paid → processing → book_shipment.
   verifyAndConfirmPayment: protectedProcedure
     .input(
       z.object({
@@ -91,8 +91,8 @@ export const paymentRouter = router({
       });
       if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
 
-      // Webhook may have already captured — idempotent success
-      if (order.status === "paid") return { success: true };
+      // Already processed by webhook — idempotent
+      if (order.status !== "pending_payment") return { success: true };
 
       const svc = getRazorpay();
       const valid = svc.verifyPaymentSignature(
@@ -114,6 +114,7 @@ export const paymentRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Payment signature invalid" });
       }
 
+      // Store payment ID + mark attempt captured — webhook advances the order status
       await ctx.db
         .update(schema.orders)
         .set({ razorpayPaymentId: input.razorpayPaymentId })
@@ -123,14 +124,6 @@ export const paymentRouter = router({
         .update(schema.paymentAttempts)
         .set({ gatewayPaymentId: input.razorpayPaymentId, status: "captured" })
         .where(eq(schema.paymentAttempts.gatewayOrderId, input.razorpayOrderId));
-
-      await advanceOrderStatus(
-        ctx.db,
-        input.orderId,
-        "paid",
-        ctx.session.user.id,
-        `Payment captured via checkout: ${input.razorpayPaymentId}`,
-      );
 
       return { success: true };
     }),

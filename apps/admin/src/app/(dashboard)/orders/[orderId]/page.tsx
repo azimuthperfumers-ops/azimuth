@@ -86,6 +86,12 @@ const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive
 const PAID_STATUSES: OrderStatus[] = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted", "return_requested", "return_approved"];
 const REFUND_TRIGGERS: OrderStatus[] = ["cancelled", "return_approved"];
 
+// Statuses an admin can manually set — excludes system/payment/courier-driven states
+const ADMIN_SETTABLE_STATUSES: OrderStatus[] = [
+  "processing", "picked_up", "out_for_delivery", "delivery_attempted",
+  "shipped", "delivered", "cancelled", "return_approved",
+];
+
 function UpdateStatusDialog({
   orderId,
   currentStatus,
@@ -100,7 +106,10 @@ function UpdateStatusDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const utils = trpc.useUtils();
-  const [status, setStatus] = useState<OrderStatus>(currentStatus);
+  const defaultStatus = ADMIN_SETTABLE_STATUSES.includes(currentStatus)
+    ? currentStatus
+    : ADMIN_SETTABLE_STATUSES[0];
+  const [status, setStatus] = useState<OrderStatus>(defaultStatus);
   const [note, setNote] = useState("");
   const [waybill, setWaybill] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
@@ -147,7 +156,7 @@ function UpdateStatusDialog({
             <Select value={status} onValueChange={(v) => setStatus(v as OrderStatus)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ORDER_STATUSES.map((s) => (
+                {ADMIN_SETTABLE_STATUSES.map((s) => (
                   <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
                 ))}
               </SelectContent>

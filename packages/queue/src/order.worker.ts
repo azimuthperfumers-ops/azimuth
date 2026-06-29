@@ -3,13 +3,54 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
 import { advanceOrderStatus } from "@azimuth/api";
-import { alertAdminNewOrder, alertAdminRefund, notifyOrderPlaced, notifyRefundInitiated, notifyShipped } from "@azimuth/comms";
+import { alertAdminNewOrder, alertAdminRefund, notifyOrderPlaced, notifyRefundInitiated } from "@azimuth/comms";
 import { createLogisticsService, createRazorpayService } from "@azimuth/api";
 
 import { redisOpts } from "./connection.js";
 import { getCustomerContact, orderInfo } from "./comms.js";
 import { orderQueue } from "./order.queue.js";
-import type { OrderJobData, PaymentCapturedJob, PaymentFailedJob, BookShipmentJob, InitiateRefundJob, CancelShipmentJob } from "./order.queue.js";
+import type {
+  OrderJobData,
+  PaymentCapturedJob,
+  PaymentFailedJob,
+  BookShipmentJob,
+  InitiateRefundJob,
+  CancelShipmentJob,
+  ReturnShipmentJob,
+} from "./order.queue.js";
+
+// ── DB job tracking helpers ───────────────────────────────────────────────────
+
+async function dbJobRunning(dbJobId: string, attempt: number) {
+  await db
+    .update(schema.backgroundJobs)
+    .set({ status: "running", attempts: attempt, updatedAt: new Date() })
+    .where(eq(schema.backgroundJobs.id, dbJobId))
+    .catch((e: unknown) => console.warn("[worker] dbJobRunning:", e));
+}
+
+async function dbJobCompleted(dbJobId: string, result: Record<string, unknown>) {
+  await db
+    .update(schema.backgroundJobs)
+    .set({ status: "completed", result, completedAt: new Date(), updatedAt: new Date() })
+    .where(eq(schema.backgroundJobs.id, dbJobId))
+    .catch((e: unknown) => console.warn("[worker] dbJobCompleted:", e));
+}
+
+async function dbJobFailed(dbJobId: string, errorMessage: string, isFinal: boolean, attempt: number) {
+  await db
+    .update(schema.backgroundJobs)
+    .set({
+      status: isFinal ? "failed" : "pending",
+      attempts: attempt,
+      errorMessage,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.backgroundJobs.id, dbJobId))
+    .catch((e: unknown) => console.warn("[worker] dbJobFailed:", e));
+}
+
+// ── Job processors ────────────────────────────────────────────────────────────
 
 async function processPaymentCaptured(data: PaymentCapturedJob) {
   const { razorpayOrderId, razorpayPaymentId, amountPaise } = data;
@@ -20,17 +61,15 @@ async function processPaymentCaptured(data: PaymentCapturedJob) {
 
   if (!order) {
     console.warn(`[order-worker] No order for razorpay_order_id=${razorpayOrderId}`);
-    return;
+    return {};
   }
 
-  // Idempotent — frontend verify may have already advanced status
   if (order.status !== "pending_payment") {
     console.log(`[order-worker] Order ${order.orderNumber} already ${order.status}, skipping capture`);
-    // Still enqueue shipment booking if not yet booked
     if ((order.status === "paid" || order.status === "processing") && !order.delhiveryWaybill) {
-      await orderQueue.add("book_shipment", { type: "book_shipment", orderId: order.id });
+      await enqueueBookShipment(order.id);
     }
-    return;
+    return {};
   }
 
   await db
@@ -61,7 +100,6 @@ async function processPaymentCaptured(data: PaymentCapturedJob) {
 
   console.log(`[order-worker] Order ${order.orderNumber} marked paid → processing`);
 
-  // Send notifications + enqueue Shiprocket booking in parallel
   const updatedOrder = await db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) });
   if (updatedOrder) {
     const contact = await getCustomerContact(updatedOrder);
@@ -72,9 +110,35 @@ async function processPaymentCaptured(data: PaymentCapturedJob) {
     ]);
   }
 
-  // Shiprocket booking is separate job — own retry budget, decoupled from payment capture
-  await orderQueue.add("book_shipment", { type: "book_shipment", orderId: order.id });
+  await enqueueBookShipment(order.id);
   console.log(`[order-worker] Enqueued book_shipment for order=${order.id}`);
+  return {};
+}
+
+async function enqueueBookShipment(orderId: string) {
+  const [dbJob] = await db
+    .insert(schema.backgroundJobs)
+    .values({
+      type: "book_shipment",
+      status: "pending",
+      payload: { type: "book_shipment", orderId },
+      orderId,
+    })
+    .returning({ id: schema.backgroundJobs.id });
+
+  const bullJob = await orderQueue.add("book_shipment", {
+    type: "book_shipment",
+    orderId,
+    dbJobId: dbJob?.id,
+  });
+
+  if (dbJob) {
+    await db
+      .update(schema.backgroundJobs)
+      .set({ bullmqJobId: bullJob.id?.toString() })
+      .where(eq(schema.backgroundJobs.id, dbJob.id))
+      .catch(() => {});
+  }
 }
 
 async function processPaymentFailed(data: PaymentFailedJob) {
@@ -86,6 +150,7 @@ async function processPaymentFailed(data: PaymentFailedJob) {
     .where(eq(schema.paymentAttempts.gatewayOrderId, razorpayOrderId));
 
   console.log(`[order-worker] Payment failed for rzp_order_id=${razorpayOrderId}`);
+  return {};
 }
 
 async function processBookShipment(data: BookShipmentJob) {
@@ -98,19 +163,18 @@ async function processBookShipment(data: BookShipmentJob) {
 
   if (!order) {
     console.warn(`[order-worker] book_shipment: order ${orderId} not found`);
-    return;
+    return {};
   }
 
-  // Idempotent — already booked
   if (order.delhiveryWaybill) {
     console.log(`[order-worker] Order ${order.orderNumber} already has waybill ${order.delhiveryWaybill}, skipping`);
-    return;
+    return { waybill: order.delhiveryWaybill };
   }
 
-  const TERMINAL = ["delivered", "cancelled", "refunded", "rto_delivered"];
-  if (TERMINAL.includes(order.status)) {
-    console.log(`[order-worker] book_shipment: order ${order.orderNumber} already ${order.status}, skip`);
-    return;
+  const BOOK_SHIPMENT_BLOCKED = ["delivered", "cancelled", "refunded", "rto_initiated", "rto_delivered", "refund_processing"];
+  if (BOOK_SHIPMENT_BLOCKED.includes(order.status)) {
+    console.log(`[order-worker] book_shipment: order ${order.orderNumber} is ${order.status} — skipping, nothing to do`);
+    return {};
   }
 
   const addr = order.shippingAddress as {
@@ -119,7 +183,6 @@ async function processBookShipment(data: BookShipmentJob) {
     city?: string; state?: string; pincode?: string;
   };
 
-  // Fetch variant dimensions — box dimensions for packed shipment
   const variantIds = order.items
     .map((i) => i.variantId)
     .filter((id): id is string => id != null);
@@ -139,10 +202,9 @@ async function processBookShipment(data: BookShipmentJob) {
 
   const variantMap = new Map(variants.map((v) => [v.id, v]));
 
-  // Aggregate weight across all items; use box dimensions of heaviest item
   let totalWeightGrams = 0;
   let maxWeight = 0;
-  let boxL = 15, boxW = 10, boxH = 10; // safe defaults (cm)
+  let boxL = 15, boxW = 10, boxH = 10;
 
   for (const item of order.items) {
     const v = item.variantId ? variantMap.get(item.variantId) : undefined;
@@ -156,7 +218,6 @@ async function processBookShipment(data: BookShipmentJob) {
     }
   }
 
-  // Add 100g packaging buffer
   totalWeightGrams += 100;
 
   const logistics = createLogisticsService();
@@ -186,7 +247,6 @@ async function processBookShipment(data: BookShipmentJob) {
       heightCm: boxH,
     });
   } catch (err) {
-    // Auth/credential errors must not be retried — they trigger Shiprocket login-block
     const msg = err instanceof Error ? err.message : String(err);
     if (
       (err instanceof Error && (err as { unrecoverable?: boolean }).unrecoverable) ||
@@ -207,7 +267,6 @@ async function processBookShipment(data: BookShipmentJob) {
     throw new Error(msg);
   }
 
-  // Persist waybill + tracking URL, advance status to "processing"
   await db
     .update(schema.orders)
     .set({
@@ -221,12 +280,7 @@ async function processBookShipment(data: BookShipmentJob) {
 
   console.log(`[order-worker] Order ${order.orderNumber} booked → waybill=${result.waybill}`);
 
-  // Notify customer with tracking link
-  const contact = await getCustomerContact(order);
-  const info = orderInfo({ ...order, delhiveryWaybill: result.waybill, trackingUrl: result.trackingUrl });
-  await notifyShipped(contact, info).catch((err) =>
-    console.error(`[order-worker] notifyShipped failed for ${order.orderNumber}:`, err),
-  );
+  return { waybill: result.waybill, trackingUrl: result.trackingUrl };
 }
 
 async function processInitiateRefund(data: InitiateRefundJob) {
@@ -235,11 +289,15 @@ async function processInitiateRefund(data: InitiateRefundJob) {
   const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, orderId) });
   if (!order) {
     console.warn(`[order-worker] initiate_refund: order ${orderId} not found`);
-    return;
+    return {};
   }
   if (order.status === "refunded") {
     console.log(`[order-worker] Order ${order.orderNumber} already refunded, skipping`);
-    return;
+    return {};
+  }
+  if (order.status === "refund_processing") {
+    console.log(`[order-worker] initiate_refund: order ${order.orderNumber} refund already in progress — skipping`);
+    return {};
   }
 
   const svc = createRazorpayService();
@@ -250,48 +308,141 @@ async function processInitiateRefund(data: InitiateRefundJob) {
     notes: { orderId, orderNumber: order.orderNumber, reason },
   });
 
+  // Mark refund_processing — webhook refund.processed will advance to refunded
   await advanceOrderStatus(
-    db, orderId, "refunded", "worker:order",
-    `Razorpay refund initiated: ${refund.id} (₹${(amountPaise / 100).toFixed(2)})`,
+    db, orderId, "refund_processing", "worker:order",
+    `Razorpay refund initiated: ${refund.id} (₹${(amountPaise / 100).toFixed(2)}) — awaiting refund.processed webhook`,
   );
 
+  // Notify customer now (they care that refund was submitted; money arrives in 5-7 days)
   const contact = await getCustomerContact(order);
   const info = orderInfo(order);
-  await Promise.all([
-    notifyRefundInitiated(contact, info),
-    alertAdminRefund(info),
-  ]).catch((e: unknown) => console.error("[order-worker] refund notify:", e));
+  await notifyRefundInitiated(contact, info)
+    .catch((e: unknown) => console.error("[order-worker] refund notify:", e));
 
   console.log(`[order-worker] Refund initiated for order ${order.orderNumber}: ${refund.id}`);
+  return { razorpayRefundId: refund.id, amountPaise: refund.amount };
 }
 
 async function processCancelShipment(data: CancelShipmentJob) {
   const { orderId, waybill } = data;
-  const logistics = createLogisticsService();
-  try {
-    await logistics.cancelShipment(waybill);
-    console.log(`[order-worker] Cancelled shipment waybill=${waybill} for order ${orderId}`);
-  } catch (err) {
-    console.error(`[order-worker] cancelShipment failed for ${waybill}:`, err);
+
+  const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, orderId) });
+  if (!order) {
+    throw new UnrecoverableError(`cancel_shipment: order ${orderId} not found`);
   }
+
+  const CANCEL_BLOCKED = ["delivered", "rto_delivered"];
+  if (CANCEL_BLOCKED.includes(order.status)) {
+    console.log(`[order-worker] cancel_shipment: order ${order.orderNumber} is ${order.status} — skipping`);
+    return {};
+  }
+
+  if (order.delhiveryWaybill !== waybill) {
+    console.log(`[order-worker] cancel_shipment: waybill mismatch for order ${order.orderNumber} (job=${waybill}, current=${order.delhiveryWaybill ?? "none"}) — skipping`);
+    return {};
+  }
+
+  const logistics = createLogisticsService();
+  await logistics.cancelShipment(waybill);
+  console.log(`[order-worker] Cancelled shipment waybill=${waybill} for order ${orderId}`);
+  return { waybill };
 }
 
+async function processReturnShipment(data: ReturnShipmentJob) {
+  const {
+    orderId, ticketId, action,
+    originalOrderNumber, customerName, customerPhone,
+    pickupAddress, returnReason, adminId,
+  } = data;
+
+  const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, orderId) });
+  if (!order) {
+    throw new UnrecoverableError(`return_shipment: order ${orderId} not found`);
+  }
+
+  const RETURN_BLOCKED = ["rto_initiated", "rto_delivered", "refunded", "refund_processing", "cancelled"];
+  if (RETURN_BLOCKED.includes(order.status)) {
+    console.log(`[order-worker] return_shipment: order ${order.orderNumber} is ${order.status} — skipping, nothing to do`);
+    return {};
+  }
+
+  const delvSvc = createLogisticsService();
+  const returnResult = await delvSvc.createReturnShipment({
+    originalOrderNumber,
+    customerName,
+    customerPhone,
+    pickupAddress,
+    returnReason,
+    weightGrams: 500,
+    lengthCm: 15,
+    widthCm: 10,
+    heightCm: 10,
+  });
+
+  if (returnResult.status === "failed") {
+    throw new Error(`Return shipment failed: ${returnResult.errorMessage}`);
+  }
+
+  await db
+    .update(schema.orders)
+    .set({ returnWaybill: returnResult.waybill })
+    .where(eq(schema.orders.id, orderId));
+
+  await advanceOrderStatus(
+    db, orderId, "rto_initiated", "worker:order",
+    `Return pickup scheduled. Reverse AWB: ${returnResult.waybill}`,
+  );
+
+  const actionType = action === "exchange" ? "exchange_scheduled" : "return_scheduled";
+  await db.insert(schema.ticketActions).values({
+    ticketId,
+    adminId,
+    actionType,
+    metadata: { reverseWaybill: returnResult.waybill, trackingUrl: returnResult.trackingUrl },
+  });
+
+  await db
+    .update(schema.tickets)
+    .set({ status: "awaiting_user", updatedAt: new Date() })
+    .where(eq(schema.tickets.id, ticketId));
+
+  const msgContent = action === "exchange"
+    ? `We've scheduled a return pickup for your order. Reverse AWB: ${returnResult.waybill}. Once we receive the item, we'll ship your replacement.`
+    : `We've scheduled a return pickup for your order. Reverse AWB: ${returnResult.waybill}. Track at ${returnResult.trackingUrl}`;
+
+  await db.insert(schema.ticketMessages).values({
+    ticketId,
+    senderId: adminId,
+    senderRole: "admin",
+    content: msgContent,
+  });
+
+  console.log(`[order-worker] Return pickup scheduled for order ${orderId}: AWB=${returnResult.waybill}`);
+  return { waybill: returnResult.waybill, trackingUrl: returnResult.trackingUrl };
+}
+
+// ── Worker ────────────────────────────────────────────────────────────────────
+
 export function startOrderWorker() {
-  const worker = new Worker<OrderJobData>(
+  const worker = new Worker<OrderJobData, Record<string, unknown>>(
     "order-events",
     async (job) => {
       const { data } = job;
       if (data.type === "payment_captured") {
-        await processPaymentCaptured(data);
+        return await processPaymentCaptured(data);
       } else if (data.type === "payment_failed") {
-        await processPaymentFailed(data);
+        return await processPaymentFailed(data);
       } else if (data.type === "book_shipment") {
-        await processBookShipment(data);
+        return await processBookShipment(data);
       } else if (data.type === "initiate_refund") {
-        await processInitiateRefund(data);
+        return await processInitiateRefund(data);
       } else if (data.type === "cancel_shipment") {
-        await processCancelShipment(data);
+        return await processCancelShipment(data);
+      } else if (data.type === "return_shipment") {
+        return await processReturnShipment(data);
       }
+      return {};
     },
     {
       connection: redisOpts(),
@@ -299,16 +450,38 @@ export function startOrderWorker() {
     },
   );
 
+  worker.on("active", async (job) => {
+    const dbJobId = (job.data as { dbJobId?: string }).dbJobId;
+    if (dbJobId) {
+      await dbJobRunning(dbJobId, job.attemptsMade + 1);
+    }
+  });
+
+  worker.on("completed", async (job) => {
+    const dbJobId = (job.data as { dbJobId?: string }).dbJobId;
+    if (dbJobId) {
+      await dbJobCompleted(dbJobId, (job.returnvalue as Record<string, unknown>) ?? {});
+    }
+    console.log(`[order-worker] Job ${job.id} (${job.data.type}) done`);
+  });
+
   worker.on("failed", async (job, err) => {
     console.error(
       `[order-worker] Job ${job?.id} (${job?.data.type}) failed attempt ${job?.attemptsMade}/${job?.opts.attempts}:`,
       err.message,
     );
-    // On final exhausted retry for book_shipment, write error to order history so admin can see + retry
+
+    const dbJobId = (job?.data as { dbJobId?: string } | undefined)?.dbJobId;
+    const isFinal = (job?.attemptsMade ?? 0) >= (job?.opts.attempts ?? 1);
+
+    if (dbJobId) {
+      await dbJobFailed(dbJobId, err.message, isFinal, job?.attemptsMade ?? 0);
+    }
+
     if (
       job &&
       job.name === "book_shipment" &&
-      job.attemptsMade >= (job.opts.attempts ?? 1)
+      isFinal
     ) {
       const { orderId } = job.data as BookShipmentJob;
       try {
@@ -323,10 +496,6 @@ export function startOrderWorker() {
         console.error("[order-worker] Failed to record booking error to DB:", dbErr);
       }
     }
-  });
-
-  worker.on("completed", (job) => {
-    console.log(`[order-worker] Job ${job.id} (${job.data.type}) done`);
   });
 
   return worker;

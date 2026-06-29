@@ -17,6 +17,7 @@ export const orderStatusEnum = pgEnum("order_status", [
   "shipped",
   "delivered",
   "cancelled",
+  "refund_processing",
   "refunded",
   "rto_initiated",
   "rto_delivered",
@@ -68,6 +69,7 @@ export const orders = pgTable(
 
     // Shipping
     delhiveryWaybill: text("delhivery_waybill"),
+    returnWaybill: text("return_waybill"),
     trackingUrl: text("tracking_url"),
     estimatedDeliveryDate: text("estimated_delivery_date"),
     podImageUrl: text("pod_image_url"),

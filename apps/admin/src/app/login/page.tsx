@@ -32,12 +32,11 @@ export default function LoginPage() {
       return;
     }
     setPending(true);
-    const { error } = await authClient.signIn.email({ email, password });
+    const { data, error } = await authClient.signIn.email({ email, password });
     setPending(false);
     if (error) {
       toast.error(error.message ?? "Sign in failed");
-    } else if (session?.user.role !== "admin") {
-      // Signed in but not an admin — sign out and block
+    } else if ((data?.user as { role?: string })?.role !== "admin") {
       await authClient.signOut();
       toast.error("This account does not have admin access.");
     }

@@ -117,15 +117,15 @@ INSERT INTO public.products (id, name, slug, description, gender, concentration,
 ON CONFLICT (id) DO NOTHING;
 
 -- Variants
-INSERT INTO public.product_variants (id, product_id, sku, size_ml, mrp, selling_price, weight_grams, stock_cached, is_default, status, created_at, updated_at) VALUES
+INSERT INTO public.product_variants (id, product_id, sku, size_ml, mrp, weight_grams, stock_cached, is_default, status, created_at, updated_at) VALUES
   -- Solene
-  ('bdf06f07-06cd-44e4-8132-06e879c51215', '0eaf3bcc-1b33-4727-a685-279cc93c7dfc', 'AZ-SOLN-50',  50,  1100.00,  900.00, 1200, 150, true,  'active', NOW(), NOW()),
-  ('bdf06f07-06cd-44e4-8132-06e879c51216', '0eaf3bcc-1b33-4727-a685-279cc93c7dfc', 'AZ-SOLN-100', 100, 1900.00, 1600.00, 2000,  80, false, 'active', NOW(), NOW()),
+  ('bdf06f07-06cd-44e4-8132-06e879c51215', '0eaf3bcc-1b33-4727-a685-279cc93c7dfc', 'AZ-SOLN-50',  50,  1100.00, 1200, 150, true,  'active', NOW(), NOW()),
+  ('bdf06f07-06cd-44e4-8132-06e879c51216', '0eaf3bcc-1b33-4727-a685-279cc93c7dfc', 'AZ-SOLN-100', 100, 1900.00, 2000,  80, false, 'active', NOW(), NOW()),
   -- Carlton 609
-  ('cf1a2b3c-4d5e-6f70-8901-234567890001', 'fe51439d-ab11-43fa-86af-18f5dd9dafce', 'AZ-C609-50',  50,   950.00,  799.00, 1150,  60, true,  'active', NOW(), NOW()),
-  ('cf1a2b3c-4d5e-6f70-8901-234567890002', 'fe51439d-ab11-43fa-86af-18f5dd9dafce', 'AZ-C609-100', 100, 1750.00, 1499.00, 1950,  40, false, 'active', NOW(), NOW()),
+  ('cf1a2b3c-4d5e-6f70-8901-234567890001', 'fe51439d-ab11-43fa-86af-18f5dd9dafce', 'AZ-C609-50',  50,   950.00, 1150,  60, true,  'active', NOW(), NOW()),
+  ('cf1a2b3c-4d5e-6f70-8901-234567890002', 'fe51439d-ab11-43fa-86af-18f5dd9dafce', 'AZ-C609-100', 100, 1750.00, 1950,  40, false, 'active', NOW(), NOW()),
   -- Lumière Noire
-  ('d1a2b3c4-4d5e-6f70-8901-234567890001', 'a2b3c4d5-e6f7-8901-bcde-f12345678901', 'AZ-LN-50',    50,  1250.00, 1050.00, 1200,  35, true,  'active', NOW(), NOW())
+  ('d1a2b3c4-4d5e-6f70-8901-234567890001', 'a2b3c4d5-e6f7-8901-bcde-f12345678901', 'AZ-LN-50',    50,  1250.00, 1200,  35, true,  'active', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- Product notes (top/mid/base — note_position enum, has own id column)

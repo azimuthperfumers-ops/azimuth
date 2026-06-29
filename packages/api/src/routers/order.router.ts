@@ -330,19 +330,36 @@ export const orderRouter = router({
         currentOrder.razorpayPaymentId &&
         PAID_STATUSES.includes(currentOrder.status)
       ) {
-        await orderQueue.add("initiate_refund", {
-          type: "initiate_refund",
+        const refundPayload = {
+          type: "initiate_refund" as const,
           orderId: input.orderId,
           razorpayPaymentId: currentOrder.razorpayPaymentId,
           amountPaise: Math.round(Number(currentOrder.total) * 100),
           reason: input.note ?? "Admin cancelled order",
-        });
+        };
+        const [refundJob] = await ctx.db
+          .insert(schema.backgroundJobs)
+          .values({ type: "initiate_refund", status: "pending", payload: refundPayload, orderId: input.orderId })
+          .returning({ id: schema.backgroundJobs.id });
+        const refundBullJob = await orderQueue.add("initiate_refund", { ...refundPayload, dbJobId: refundJob?.id });
+        if (refundJob) {
+          await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
+        }
+
         if (currentOrder.delhiveryWaybill) {
-          await orderQueue.add("cancel_shipment", {
-            type: "cancel_shipment",
+          const cancelPayload = {
+            type: "cancel_shipment" as const,
             orderId: input.orderId,
             waybill: currentOrder.delhiveryWaybill,
-          });
+          };
+          const [cancelJob] = await ctx.db
+            .insert(schema.backgroundJobs)
+            .values({ type: "cancel_shipment", status: "pending", payload: cancelPayload, orderId: input.orderId })
+            .returning({ id: schema.backgroundJobs.id });
+          const cancelBullJob = await orderQueue.add("cancel_shipment", { ...cancelPayload, dbJobId: cancelJob?.id });
+          if (cancelJob) {
+            await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: cancelBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, cancelJob.id));
+          }
         }
       }
 
@@ -351,13 +368,21 @@ export const orderRouter = router({
         currentOrder.razorpayPaymentId &&
         PAID_STATUSES.includes(currentOrder.status)
       ) {
-        await orderQueue.add("initiate_refund", {
-          type: "initiate_refund",
+        const refundPayload = {
+          type: "initiate_refund" as const,
           orderId: input.orderId,
           razorpayPaymentId: currentOrder.razorpayPaymentId,
           amountPaise: Math.round(Number(currentOrder.total) * 100),
           reason: input.note ?? "Return approved",
-        });
+        };
+        const [refundJob] = await ctx.db
+          .insert(schema.backgroundJobs)
+          .values({ type: "initiate_refund", status: "pending", payload: refundPayload, orderId: input.orderId })
+          .returning({ id: schema.backgroundJobs.id });
+        const refundBullJob = await orderQueue.add("initiate_refund", { ...refundPayload, dbJobId: refundJob?.id });
+        if (refundJob) {
+          await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
+        }
       }
 
       if (input.waybill || input.trackingUrl || input.gstInvoiceNumber || input.shippingCostActual) {
@@ -409,10 +434,15 @@ export const orderRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: `Cannot retry shipment for ${order.status} order` });
       }
 
-      await orderQueue.add("book_shipment", {
-        type: "book_shipment",
-        orderId: input.orderId,
-      });
+      const bookPayload = { type: "book_shipment" as const, orderId: input.orderId };
+      const [bookJob] = await ctx.db
+        .insert(schema.backgroundJobs)
+        .values({ type: "book_shipment", status: "pending", payload: bookPayload, orderId: input.orderId })
+        .returning({ id: schema.backgroundJobs.id });
+      const bookBullJob = await orderQueue.add("book_shipment", { ...bookPayload, dbJobId: bookJob?.id });
+      if (bookJob) {
+        await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: bookBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, bookJob.id));
+      }
 
       await advanceOrderStatus(
         ctx.db,

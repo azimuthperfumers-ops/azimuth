@@ -8,6 +8,27 @@
       "when": 1782669334092,
       "tag": "0000_flimsy_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782800000000,
+      "tag": "0001_background_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782800001000,
+      "tag": "0002_order_status_refund_processing",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782800002000,
+      "tag": "0003_return_waybill",
+      "breakpoints": true
     }
   ]
 }

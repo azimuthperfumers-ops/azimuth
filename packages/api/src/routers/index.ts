@@ -16,6 +16,7 @@ import { adminUserRouter } from "./admin-user.router";
 import { analyticsRouter } from "./analytics.router";
 import { settingsRouter } from "./settings.router";
 import { contentRouter } from "./content.router";
+import { jobRouter } from "./job.router";
 
 export const appRouter = router({
   analytics: analyticsRouter,
@@ -35,6 +36,7 @@ export const appRouter = router({
   ticket: ticketRouter,
   settings: settingsRouter,
   content: contentRouter,
+  job: jobRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -6,8 +6,7 @@ import cors from "cors";
 import express from "express";
 
 import { loginRateLimitMiddleware } from "./middleware/rate-limit";
-import { shiprocketWebhookHandler } from "./webhooks/shiprocket";
-import { razorpayWebhookHandler } from "./webhooks/razorpay";
+import { razorpayWebhookHandler, shiprocketWebhookHandler } from "@azimuth/webhooks";
 
 export const app = express();
 
