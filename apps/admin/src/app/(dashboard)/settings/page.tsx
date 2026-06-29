@@ -24,6 +24,7 @@ type HealthData = {
   db: CheckResult;
   redis: CheckResult;
   queue: CheckResult;
+  worker: CheckResult;
 };
 
 function StatusBadge({ ok, error }: { ok: boolean; error?: string | null }) {
@@ -126,6 +127,7 @@ function HealthCheckCard() {
         {data && !check.isFetching && (
           <div>
             <HealthRow label="Server" result={data.server} />
+            <HealthRow label="Worker" result={data.worker} />
             <HealthRow label="Database (PostgreSQL)" result={data.db} />
             <HealthRow label="Cache (Redis)" result={data.redis} />
             <HealthRow label="Job Queue (BullMQ)" result={data.queue} />
