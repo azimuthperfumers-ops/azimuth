@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart2, Boxes, FlaskConical, LayoutDashboard, Package, Paintbrush, PercentCircle, Settings, ShoppingBag, Tag, Tags, TicketIcon, Users, Cpu } from "lucide-react";
+import { BarChart2, Boxes, FlaskConical, LayoutDashboard, LogOut, Package, Paintbrush, PercentCircle, Settings, ShoppingBag, Tag, Tags, TicketIcon, Users, Cpu } from "lucide-react";
 
 import { ModeToggle } from "@/components/mode-toggle";
 import { Separator } from "@/components/ui/separator";
@@ -160,7 +160,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius)] bg-primary text-[10px] font-bold text-primary-foreground">
               {initials(session.user.name || session.user.email)}
             </div>
-            <div className="flex min-w-0 flex-col gap-0.5">
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="truncate text-[12px] font-semibold leading-none text-sidebar-foreground">
                 {session.user.name}
               </span>
@@ -168,6 +168,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 Studio admin
               </span>
             </div>
+            <button
+              onClick={() => authClient.signOut()}
+              className="shrink-0 text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="size-3.5" />
+            </button>
           </div>
         </SidebarFooter>
       </Sidebar>

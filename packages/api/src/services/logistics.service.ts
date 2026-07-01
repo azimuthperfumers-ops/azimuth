@@ -96,12 +96,28 @@ export interface ILogisticsService {
 
 import { StubLogisticsProvider } from "./providers/stub.provider";
 import { ShiprocketProvider } from "./providers/shiprocket.provider";
+import { DelhiveryProvider } from "./providers/delhivery.provider";
 import { env } from "../env";
 
 export function createLogisticsService(): ILogisticsService {
-  if (!env.SHIPROCKET_EMAIL || !env.SHIPROCKET_PASSWORD) {
-    console.warn("[logistics] SHIPROCKET_EMAIL or SHIPROCKET_PASSWORD not set — using stub");
-    return new StubLogisticsProvider();
+  const provider = env.LOGISTICS_PROVIDER;
+
+  if (provider === "delhivery") {
+    if (!env.DELHIVERY_TOKEN) {
+      console.warn("[logistics] DELHIVERY_TOKEN not set — using stub");
+      return new StubLogisticsProvider();
+    }
+    return new DelhiveryProvider();
   }
-  return new ShiprocketProvider();
+
+  if (provider === "shiprocket") {
+    if (!env.SHIPROCKET_EMAIL || !env.SHIPROCKET_PASSWORD) {
+      console.warn("[logistics] SHIPROCKET_EMAIL or SHIPROCKET_PASSWORD not set — using stub");
+      return new StubLogisticsProvider();
+    }
+    return new ShiprocketProvider();
+  }
+
+  console.warn(`[logistics] unknown LOGISTICS_PROVIDER="${provider}" — using stub`);
+  return new StubLogisticsProvider();
 }

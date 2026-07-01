@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, ShoppingBag, X } from "lucide-react";
 
@@ -16,7 +16,9 @@ const TICKER_ITEMS = [
 ];
 
 export function SiteHeader() {
-  const cartCount = useCartCount();
+  const rawCount = useCartCount();
+  const [cartCount, setCartCount] = useState(0);
+  useEffect(() => { setCartCount(rawCount); }, [rawCount]);
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: session } = authClient.useSession();
   const isLoggedIn = !!session?.user;
