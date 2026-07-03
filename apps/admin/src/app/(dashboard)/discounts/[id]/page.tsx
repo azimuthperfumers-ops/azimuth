@@ -196,7 +196,7 @@ type LinkedEntry = {
   id: string;
   productId: string;
   variantId: string;
-  product: { id: string; name: string; themeColor: string | null; concentration: string; status: string };
+  product: { id: string; name: string; themeColor: string | null; status: string };
   variant: { id: string; sizeMl: number | null; isDefault: boolean; mrp?: string | number } | null;
 };
 
@@ -210,7 +210,6 @@ type AllProduct = {
   id: string;
   name: string;
   themeColor: string | null;
-  concentration: string;
   status: string;
   category: { name: string } | null;
   variants: Array<{ id: string; sizeMl: number | null; isDefault: boolean; mrp: string | number }>;

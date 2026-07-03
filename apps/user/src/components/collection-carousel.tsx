@@ -16,6 +16,7 @@ type Variant = {
   effectivePrice: number | string;
   status: string;
   isDefault: boolean;
+  concentration: string;
 };
 
 type Product = {
@@ -23,7 +24,6 @@ type Product = {
   name: string;
   slug: string | null;
   themeColor: string | null;
-  concentration: string;
   gender: string;
   category: { name: string } | null;
   images: { url: string; isPrimary: boolean }[];
@@ -154,7 +154,8 @@ function CarouselCard({ product }: { product: Product }) {
           </h3>
           <div className="mt-1.5 flex items-center justify-between gap-2">
             <p className="text-[10.5px] tracking-[0.1em] text-muted-foreground/60 uppercase">
-              {CONCENTRATION_SHORT[product.concentration] ?? product.concentration}
+              {defaultVariant &&
+                (CONCENTRATION_SHORT[defaultVariant.concentration] ?? defaultVariant.concentration)}
               {product.category && ` · ${product.category.name}`}
             </p>
             {fromPrice !== null && (

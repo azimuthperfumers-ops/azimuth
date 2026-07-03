@@ -34,14 +34,6 @@ const GENDERS = [
   { value: "men", label: "For Him" },
 ] as const;
 
-const CONCENTRATIONS = [
-  { value: "edp", label: "EDP" },
-  { value: "edt", label: "EDT" },
-  { value: "parfum", label: "Parfum" },
-  { value: "cologne", label: "Cologne" },
-  { value: "attar", label: "Attar" },
-] as const;
-
 const STATUSES = ["draft", "active", "archived"] as const;
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft — not visible to customers",
@@ -95,13 +87,15 @@ function PillButton({
 function RatingButtons({
   value,
   onChange,
+  max = 5,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
+  max?: number;
 }) {
   return (
-    <div className="flex gap-2">
-      {[1, 2, 3, 4, 5].map((n) => (
+    <div className="flex flex-wrap gap-2">
+      {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
         <button
           key={n}
           type="button"
@@ -141,7 +135,6 @@ type Product = {
   slug: string;
   description: string | null;
   gender: "men" | "women" | "unisex";
-  concentration: "edp" | "edt" | "parfum" | "cologne" | "attar";
   categoryId: string;
   themeColor: string | null;
   hsnCode: string | null;
@@ -169,7 +162,6 @@ function EditProductForm({ product, onDone }: { product: Product; onDone: () => 
   const [slug, setSlug] = useState(product.slug);
   const [description, setDescription] = useState(product.description ?? "");
   const [gender, setGender] = useState(product.gender);
-  const [concentration, setConcentration] = useState(product.concentration);
   const [categoryId, setCategoryId] = useState(product.categoryId);
   const [themeColor, setThemeColor] = useState(product.themeColor ?? THEME_PRESETS[0]);
   const [customColor, setCustomColor] = useState(
@@ -220,7 +212,6 @@ function EditProductForm({ product, onDone }: { product: Product; onDone: () => 
       slug,
       description: description || undefined,
       gender,
-      concentration,
       categoryId,
       themeColor,
       hsnCode: hsnCode || undefined,
@@ -272,21 +263,6 @@ function EditProductForm({ product, onDone }: { product: Product; onDone: () => 
             {GENDERS.map((g) => (
               <PillButton key={g.value} active={gender === g.value} onClick={() => setGender(g.value)}>
                 {g.label}
-              </PillButton>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <FieldLabel>Concentration</FieldLabel>
-          <div className="flex flex-wrap gap-2">
-            {CONCENTRATIONS.map((c) => (
-              <PillButton
-                key={c.value}
-                active={concentration === c.value}
-                onClick={() => setConcentration(c.value)}
-              >
-                {c.label}
               </PillButton>
             ))}
           </div>
@@ -378,8 +354,8 @@ function EditProductForm({ product, onDone }: { product: Product; onDone: () => 
         <SectionHeading>Performance</SectionHeading>
 
         <div className="space-y-1.5">
-          <FieldLabel>Longevity (1–5)</FieldLabel>
-          <RatingButtons value={longevity} onChange={setLongevity} />
+          <FieldLabel>Longevity (1–10)</FieldLabel>
+          <RatingButtons value={longevity} onChange={setLongevity} max={10} />
         </div>
 
         <div className="space-y-1.5">

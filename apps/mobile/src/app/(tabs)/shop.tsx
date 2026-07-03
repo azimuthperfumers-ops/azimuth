@@ -4,14 +4,10 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 
 import { trpc } from "@/lib/trpc";
-import { Ticker } from "@/components/ticker";
-import { AppHeader } from "@/components/app-header";
 
 const CONCENTRATION_SHORT: Record<string, string> = {
   edp: "EDP", edt: "EDT", parfum: "Parfum", cologne: "Cologne", attar: "Attar",
 };
-
-const CATEGORIES = ["All", "Floral", "Woody", "Oud", "Fresh", "Oriental"];
 
 export default function ShopScreen() {
   const router = useRouter();
@@ -21,6 +17,7 @@ export default function ShopScreen() {
     status: "active",
     limit: 50,
   });
+  const { data: categories = [] } = trpc.catalog.listCategories.useQuery();
 
   const filtered = activeCategory === "All"
     ? products
@@ -28,9 +25,6 @@ export default function ShopScreen() {
 
   return (
     <View className="flex-1 bg-[#faf8f5]">
-      <Ticker />
-      <AppHeader />
-
       {/* ── Page heading ── */}
       <View className="px-6 pt-10 pb-8 border-b border-[#e8e2da] bg-[#faf8f5]">
         <Text className="text-[10px] font-semibold tracking-[0.36em] text-[#111111]/40 uppercase mb-3">
@@ -59,7 +53,7 @@ export default function ShopScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 0 }}
         >
-          {CATEGORIES.map((cat) => {
+          {["All", ...categories.map((c) => c.name)].map((cat) => {
             const active = cat === activeCategory;
             return (
               <Pressable
@@ -112,6 +106,7 @@ export default function ShopScreen() {
           }
           renderItem={({ item: p }) => {
             const activeVariants = p.variants.filter((v) => v.status === "active");
+            const defaultVariant = activeVariants.find((v) => v.isDefault) ?? activeVariants[0];
             const image = p.images.find((i) => i.isPrimary) ?? p.images[0];
             const fromPrice = activeVariants.length > 0
               ? Math.min(...activeVariants.map((v) => v.effectivePrice ?? Number(v.mrp)))
@@ -164,7 +159,8 @@ export default function ShopScreen() {
                     {p.name}
                   </Text>
                   <Text className="mt-0.5 text-[9.5px] tracking-[0.1em] text-[#888888] uppercase" numberOfLines={1}>
-                    {CONCENTRATION_SHORT[p.concentration] ?? p.concentration}
+                    {defaultVariant &&
+                      (CONCENTRATION_SHORT[defaultVariant.concentration] ?? defaultVariant.concentration)}
                     {p.category ? ` · ${p.category.name}` : ""}
                   </Text>
                   {fromPrice !== null && (

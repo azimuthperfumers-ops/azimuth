@@ -6,13 +6,12 @@ export function SiteFooter() {
       <div className="mx-auto grid max-w-[1400px] grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr] gap-8 md:gap-12 px-4 md:px-8 py-12 md:py-16">
         {/* Brand */}
         <div>
-          <div className="font-heading text-[22px] font-semibold leading-none tracking-[0.22em] text-foreground">
-            AZIMUTH
+          <div className="flex items-start gap-2">
+            <img src="/logo-icon.png" alt="" className="h-6 w-6" />
+            <img src="/logo-wordmark.png" alt="Azimuth Perfumers" className="h-7 w-auto" />
+            <sup className="mt-0.5 text-[9px] leading-none text-foreground">&trade;</sup>
           </div>
-          <div className="mt-1.5 mb-6 text-[7.5px] leading-none tracking-[0.55em] text-muted-foreground">
-            PERFUMERS
-          </div>
-          <p className="max-w-64 text-[13px] leading-relaxed text-muted-foreground">
+          <p className="mt-6 max-w-64 text-[13px] leading-relaxed text-muted-foreground">
             A house of slow perfumery. Composed in small batches, delivered pan-India.
           </p>
         </div>

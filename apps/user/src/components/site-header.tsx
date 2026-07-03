@@ -6,14 +6,7 @@ import { Menu, ShoppingBag, X } from "lucide-react";
 
 import { useCartCount } from "@/hooks/use-cart";
 import { authClient } from "@/lib/auth-client";
-
-const TICKER_ITEMS = [
-  "MINIATURES WITH EVERY PURCHASE",
-  "FREE SHIPPING ABOVE ₹999",
-  "PREMIUM NATURALS & RESINS",
-  "PAN-INDIA DELIVERY",
-  "HANDCRAFTED IN SMALL BATCHES",
-];
+import { trpc } from "@/lib/trpc";
 
 export function SiteHeader() {
   const rawCount = useCartCount();
@@ -22,6 +15,16 @@ export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: session } = authClient.useSession();
   const isLoggedIn = !!session?.user;
+  const settingsQuery = trpc.settings.get.useQuery(undefined, { staleTime: 10 * 60 * 1000 });
+  const freeShippingAbove = settingsQuery.data?.freeShippingAboveInr ?? 999;
+
+  const TICKER_ITEMS = [
+    "MINIATURES WITH EVERY PURCHASE",
+    `FREE SHIPPING ABOVE ₹${freeShippingAbove}`,
+    "PREMIUM NATURALS & RESINS",
+    "PAN-INDIA DELIVERY",
+    "HANDCRAFTED IN SMALL BATCHES",
+  ];
 
   return (
     <div className="sticky top-0 z-50 bg-background">
@@ -65,13 +68,10 @@ export function SiteHeader() {
           </div>
 
           {/* Wordmark — centered absolutely */}
-          <Link href="/" className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-[3px]">
-            <span className="font-heading text-[22px] md:text-[26px] font-semibold leading-none tracking-[0.28em] text-foreground">
-              AZIMUTH
-            </span>
-            <span className="text-[7px] md:text-[7.5px] leading-none tracking-[0.6em] text-muted-foreground pl-[0.6em]">
-              PERFUMERS
-            </span>
+          <Link href="/" className="absolute left-1/2 -translate-x-1/2 flex items-start gap-2">
+            <img src="/logo-icon.png" alt="" className="h-6 w-6 md:h-7 md:w-7" />
+            <img src="/logo-wordmark.png" alt="Azimuth Perfumers" className="h-7 md:h-8 w-auto" />
+            <sup className="mt-0.5 text-[9px] md:text-[10px] leading-none text-foreground">&trade;</sup>
           </Link>
 
           {/* Right: account (desktop) + sign-in (mobile, guest) + cart */}

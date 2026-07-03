@@ -701,13 +701,15 @@ function WishlistTab() {
                     name: product.name,
                     slug: product.slug,
                     themeColor: product.themeColor ?? null,
-                    concentration: product.concentration,
                     gender: product.gender,
                     category: product.category ?? null,
                     images: (product.images ?? []).map((i: any) => ({ url: i.url ?? "", isPrimary: !!i.isPrimary })),
                     variants: (product.variants ?? []).map((v: any) => ({
                       mrp: String(v.mrp ?? 0),
+                      effectivePrice: v.effectivePrice ?? v.mrp ?? 0,
                       status: v.status ?? "active",
+                      concentration: v.concentration,
+                      isDefault: !!v.isDefault,
                     })),
                   }}
                 />

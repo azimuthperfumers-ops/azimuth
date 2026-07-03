@@ -54,7 +54,6 @@ export const products = pgTable("products", {
   slug: text("slug").notNull().unique(),
   description: text("description"),
   gender: productGenderEnum("gender").notNull().default("unisex"),
-  concentration: productConcentrationEnum("concentration").notNull(),
   themeColor: text("theme_color"),
   categoryId: uuid("category_id")
     .notNull()
@@ -95,6 +94,7 @@ export const productVariants = pgTable("product_variants", {
     .notNull()
     .references(() => products.id, { onDelete: "cascade" }),
   sku: text("sku").notNull().unique(),
+  concentration: productConcentrationEnum("concentration").notNull(),
   sizeMl: integer("size_ml").notNull(),
   mrp: numeric("mrp", { precision: 10, scale: 2 }).notNull(),
   weightGrams: integer("weight_grams").notNull(),

@@ -36,14 +36,6 @@ const GENDERS = [
   { value: "men", label: "For Him" },
 ] as const;
 
-const CONCENTRATIONS = [
-  { value: "edp", label: "EDP" },
-  { value: "edt", label: "EDT" },
-  { value: "parfum", label: "Parfum" },
-  { value: "cologne", label: "Cologne" },
-  { value: "attar", label: "Attar" },
-] as const;
-
 const THEME_PRESETS = ["#f5e6c8", "#8b5e3c", "#4a6741", "#b07070", "#2f4538", "#7a6240"];
 
 const NOTE_POSITIONS = [
@@ -90,13 +82,15 @@ function PillButton({
 function RatingButtons({
   value,
   onChange,
+  max = 5,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
+  max?: number;
 }) {
   return (
-    <div className="flex gap-2">
-      {[1, 2, 3, 4, 5].map((n) => (
+    <div className="flex flex-wrap gap-2">
+      {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
         <button
           key={n}
           type="button"
@@ -114,14 +108,6 @@ function RatingButtons({
     </div>
   );
 }
-
-const CONCENTRATION_LABEL: Record<string, string> = {
-  edp: "EDP",
-  edt: "EDT",
-  parfum: "Parfum",
-  cologne: "Cologne",
-  attar: "Attar",
-};
 
 const GENDER_LABEL: Record<string, string> = {
   unisex: "Unisex",
@@ -149,7 +135,6 @@ function StorefrontPreview({
   name,
   slug,
   gender,
-  concentration,
   themeColor,
   description,
   imageUrl,
@@ -162,7 +147,6 @@ function StorefrontPreview({
   name: string;
   slug: string;
   gender: string;
-  concentration: string;
   themeColor: string | undefined;
   description: string;
   imageUrl: string | undefined;
@@ -174,7 +158,6 @@ function StorefrontPreview({
 }) {
   const bg = themeColor ?? "#e8e0d5";
   const displayName = name || "Product name";
-  const concLabel = CONCENTRATION_LABEL[concentration] ?? concentration.toUpperCase();
   const genderLabel = GENDER_LABEL[gender] ?? gender;
   const urlSlug = slug || "product-slug";
 
@@ -201,9 +184,10 @@ function StorefrontPreview({
 
       {/* Site header */}
       <div className="flex items-center justify-between border-b border-border bg-background px-4 py-2">
-        <span className="text-[9px] font-semibold tracking-[0.24em] text-foreground uppercase">
-          AZIMUTH
-        </span>
+        <div className="flex items-center gap-1">
+          <img src="/logo-icon.png" alt="" className="h-3 w-3 dark:invert" />
+          <img src="/logo-azimuth-text.png" alt="Azimuth" className="h-[9px] w-auto dark:invert" />
+        </div>
         <div className="flex gap-4">
           {["Shop", "About", "Cart (0)"].map((t) => (
             <span key={t} className="text-[8px] tracking-[0.1em] text-muted-foreground">
@@ -253,10 +237,6 @@ function StorefrontPreview({
             </h2>
             <div className="mt-1.5 flex items-center gap-1.5">
               <span className="text-[8px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                {concLabel}
-              </span>
-              <span className="text-muted-foreground/30 text-[8px]">·</span>
-              <span className="text-[8px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
                 {genderLabel}
               </span>
             </div>
@@ -285,7 +265,7 @@ function StorefrontPreview({
                   <span className="text-[8px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                     Longevity
                   </span>
-                  <DotRating value={longevity} />
+                  <DotRating value={longevity} max={10} />
                 </div>
               )}
               {sillage !== null && (
@@ -354,8 +334,6 @@ export default function NewProductPage() {
   const [slugEdited, setSlugEdited] = useState(false);
   const [description, setDescription] = useState("");
   const [gender, setGender] = useState<"unisex" | "men" | "women">("unisex");
-  const [concentration, setConcentration] =
-    useState<"edp" | "edt" | "parfum" | "cologne" | "attar">("edp");
   const [themeColor, setThemeColor] = useState(THEME_PRESETS[0]);
   const [customColor, setCustomColor] = useState("");
 
@@ -423,7 +401,6 @@ export default function NewProductPage() {
       slug,
       description: description || undefined,
       gender,
-      concentration,
       themeColor: themeColor || undefined,
       categoryId,
       hsnCode: hsnCode || undefined,
@@ -517,21 +494,6 @@ export default function NewProductPage() {
                       onClick={() => setGender(g.value)}
                     >
                       {g.label}
-                    </PillButton>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Concentration</Label>
-                <div className="flex flex-wrap gap-2">
-                  {CONCENTRATIONS.map((c) => (
-                    <PillButton
-                      key={c.value}
-                      active={concentration === c.value}
-                      onClick={() => setConcentration(c.value)}
-                    >
-                      {c.label}
                     </PillButton>
                   ))}
                 </div>
@@ -632,8 +594,8 @@ export default function NewProductPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Longevity (1–5)</Label>
-                <RatingButtons value={longevity} onChange={setLongevity} />
+                <Label>Longevity (1–10)</Label>
+                <RatingButtons value={longevity} onChange={setLongevity} max={10} />
               </div>
 
               <div className="space-y-2">
@@ -757,7 +719,6 @@ export default function NewProductPage() {
             name={name}
             slug={slug}
             gender={gender}
-            concentration={concentration}
             themeColor={themeColor}
             description={description}
             imageUrl={previewImageUrl}

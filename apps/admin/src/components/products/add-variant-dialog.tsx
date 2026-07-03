@@ -14,12 +14,28 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+
+const CONCENTRATIONS = [
+  { value: "edp", label: "EDP" },
+  { value: "edt", label: "EDT" },
+  { value: "parfum", label: "Parfum" },
+  { value: "cologne", label: "Cologne" },
+  { value: "attar", label: "Attar" },
+] as const;
 
 export function AddVariantDialog({ productId }: { productId: string }) {
   const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
   const [sku, setSku] = useState("");
+  const [concentration, setConcentration] = useState<(typeof CONCENTRATIONS)[number]["value"]>("edp");
   const [sizeMl, setSizeMl] = useState("50");
   const [mrp, setMrp] = useState("");
   const [weightGrams, setWeightGrams] = useState("");
@@ -49,6 +65,7 @@ export function AddVariantDialog({ productId }: { productId: string }) {
     createVariant.mutate({
       productId,
       sku,
+      concentration,
       sizeMl: Number(sizeMl),
       mrp: Number(mrp),
       weightGrams: Number(weightGrams),
@@ -85,6 +102,17 @@ export function AddVariantDialog({ productId }: { productId: string }) {
                 required
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Concentration</Label>
+            <Select value={concentration} onValueChange={(v) => setConcentration(v as typeof concentration)}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {CONCENTRATIONS.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="mrp">MRP (₹)</Label>

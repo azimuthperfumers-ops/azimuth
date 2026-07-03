@@ -1,9 +1,47 @@
 import "../global.css";
 
+import { useEffect } from "react";
 import { Stack } from "expo-router";
+import { useFonts } from "expo-font";
+import * as SplashScreen from "expo-splash-screen";
+import {
+  CormorantGaramond_400Regular,
+  CormorantGaramond_500Medium,
+  CormorantGaramond_500Medium_Italic,
+  CormorantGaramond_600SemiBold,
+  CormorantGaramond_700Bold_Italic,
+} from "@expo-google-fonts/cormorant-garamond";
+import {
+  HankenGrotesk_400Regular,
+  HankenGrotesk_500Medium,
+  HankenGrotesk_600SemiBold,
+  HankenGrotesk_700Bold,
+  HankenGrotesk_800ExtraBold,
+} from "@expo-google-fonts/hanken-grotesk";
 import { Providers } from "@/lib/providers";
 
+SplashScreen.preventAutoHideAsync();
+
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    CormorantGaramond_400Regular,
+    CormorantGaramond_500Medium,
+    CormorantGaramond_500Medium_Italic,
+    CormorantGaramond_600SemiBold,
+    CormorantGaramond_700Bold_Italic,
+    HankenGrotesk_400Regular,
+    HankenGrotesk_500Medium,
+    HankenGrotesk_600SemiBold,
+    HankenGrotesk_700Bold,
+    HankenGrotesk_800ExtraBold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync();
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) return null;
+
   return (
     <Providers>
       <Stack screenOptions={{ headerShown: false }}>
@@ -11,10 +49,6 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)/sign-in" options={{ presentation: "modal" }} />
         <Stack.Screen name="product/[slug]" options={{ headerShown: true, title: "" }} />
         <Stack.Screen name="order/[orderId]" options={{ headerShown: true, title: "Order" }} />
-        <Stack.Screen
-          name="cart"
-          options={{ headerShown: true, title: "Cart", presentation: "modal" }}
-        />
         <Stack.Screen name="checkout" options={{ headerShown: true, title: "Checkout" }} />
         <Stack.Screen name="support/index" options={{ headerShown: true, title: "Support" }} />
         <Stack.Screen

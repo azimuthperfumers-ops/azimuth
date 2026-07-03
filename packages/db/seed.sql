@@ -65,14 +65,13 @@ INSERT INTO public.fragrance_notes (id, name, family_id) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Products — 1 "For Her", 1 "For Him", 1 Unisex (Carlton 609 kept as canonical)
-INSERT INTO public.products (id, name, slug, description, gender, concentration, theme_color, category_id, hsn_code, longevity_rating, sillage_rating, status, is_featured, created_at, updated_at) VALUES
+INSERT INTO public.products (id, name, slug, description, gender, theme_color, category_id, hsn_code, longevity_rating, sillage_rating, status, is_featured, created_at, updated_at) VALUES
   (
     '0eaf3bcc-1b33-4727-a685-279cc93c7dfc',
     'Solene',
     'solene',
     'Warm and sensual — a veil of rose, ylang ylang, and sandalwood that lingers like skin. Made for those who let their presence speak first.',
     'women',
-    'edp',
     '#b07070',
     '64a11837-a4ef-43a2-b9e9-b3eb92c10e3b',
     '3303',
@@ -88,7 +87,6 @@ INSERT INTO public.products (id, name, slug, description, gender, concentration,
     'carlton-609',
     'A bold, woody-amber cologne with a dry citrus open and a cedar-oud base. Confident, quiet authority in a bottle.',
     'men',
-    'cologne',
     '#7a6240',
     '670ac55d-1ced-43be-bea2-8fc7c42b3f9e',
     '3303',
@@ -104,7 +102,6 @@ INSERT INTO public.products (id, name, slug, description, gender, concentration,
     'lumiere-noire',
     'A unisex night fragrance. Black pepper and bergamot spark over a heart of iris and oud, fading into white musk and tonka.',
     'unisex',
-    'edp',
     '#2c2c3e',
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '3303',
@@ -117,15 +114,15 @@ INSERT INTO public.products (id, name, slug, description, gender, concentration,
 ON CONFLICT (id) DO NOTHING;
 
 -- Variants
-INSERT INTO public.product_variants (id, product_id, sku, size_ml, mrp, weight_grams, stock_cached, is_default, status, created_at, updated_at) VALUES
+INSERT INTO public.product_variants (id, product_id, sku, concentration, size_ml, mrp, weight_grams, stock_cached, is_default, status, created_at, updated_at) VALUES
   -- Solene
-  ('bdf06f07-06cd-44e4-8132-06e879c51215', '0eaf3bcc-1b33-4727-a685-279cc93c7dfc', 'AZ-SOLN-50',  50,  1100.00, 1200, 150, true,  'active', NOW(), NOW()),
-  ('bdf06f07-06cd-44e4-8132-06e879c51216', '0eaf3bcc-1b33-4727-a685-279cc93c7dfc', 'AZ-SOLN-100', 100, 1900.00, 2000,  80, false, 'active', NOW(), NOW()),
+  ('bdf06f07-06cd-44e4-8132-06e879c51215', '0eaf3bcc-1b33-4727-a685-279cc93c7dfc', 'AZ-SOLN-50',  'edp', 50,  1100.00, 1200, 150, true,  'active', NOW(), NOW()),
+  ('bdf06f07-06cd-44e4-8132-06e879c51216', '0eaf3bcc-1b33-4727-a685-279cc93c7dfc', 'AZ-SOLN-100', 'edp', 100, 1900.00, 2000,  80, false, 'active', NOW(), NOW()),
   -- Carlton 609
-  ('cf1a2b3c-4d5e-6f70-8901-234567890001', 'fe51439d-ab11-43fa-86af-18f5dd9dafce', 'AZ-C609-50',  50,   950.00, 1150,  60, true,  'active', NOW(), NOW()),
-  ('cf1a2b3c-4d5e-6f70-8901-234567890002', 'fe51439d-ab11-43fa-86af-18f5dd9dafce', 'AZ-C609-100', 100, 1750.00, 1950,  40, false, 'active', NOW(), NOW()),
+  ('cf1a2b3c-4d5e-6f70-8901-234567890001', 'fe51439d-ab11-43fa-86af-18f5dd9dafce', 'AZ-C609-50',  'cologne', 50,   950.00, 1150,  60, true,  'active', NOW(), NOW()),
+  ('cf1a2b3c-4d5e-6f70-8901-234567890002', 'fe51439d-ab11-43fa-86af-18f5dd9dafce', 'AZ-C609-100', 'cologne', 100, 1750.00, 1950,  40, false, 'active', NOW(), NOW()),
   -- Lumière Noire
-  ('d1a2b3c4-4d5e-6f70-8901-234567890001', 'a2b3c4d5-e6f7-8901-bcde-f12345678901', 'AZ-LN-50',    50,  1250.00, 1200,  35, true,  'active', NOW(), NOW())
+  ('d1a2b3c4-4d5e-6f70-8901-234567890001', 'a2b3c4d5-e6f7-8901-bcde-f12345678901', 'AZ-LN-50',    'edp', 50,  1250.00, 1200,  35, true,  'active', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- Product notes (top/mid/base — note_position enum, has own id column)

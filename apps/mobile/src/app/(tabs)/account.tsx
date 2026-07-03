@@ -1,5 +1,4 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import { useSession } from "@/hooks/use-session";
@@ -23,7 +22,7 @@ export default function AccountScreen() {
 
   if (!session) {
     return (
-      <SafeAreaView className="flex-1 bg-[#faf8f5]" edges={["top"]}>
+      <View className="flex-1 bg-[#faf8f5]">
         <View className="flex-1 items-center justify-center px-8">
           <Text className="text-[10px] font-semibold tracking-[0.36em] text-[#888888] uppercase mb-4">
             Azimuth Perfumers
@@ -51,7 +50,7 @@ export default function AccountScreen() {
             New here? Create an account at sign-in.
           </Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -63,7 +62,7 @@ export default function AccountScreen() {
     .toUpperCase() ?? "A";
 
   return (
-    <SafeAreaView className="flex-1 bg-[#faf8f5]" edges={["top"]}>
+    <View className="flex-1 bg-[#faf8f5]">
       <ScrollView bounces>
         {/* Header */}
         <View className="px-6 pt-8 pb-6 border-b border-[#e8e2da]">
@@ -123,6 +122,6 @@ export default function AccountScreen() {
           </Pressable>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

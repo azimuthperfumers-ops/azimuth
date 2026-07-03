@@ -16,9 +16,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 
+const CONCENTRATIONS = [
+  { value: "edp", label: "EDP" },
+  { value: "edt", label: "EDT" },
+  { value: "parfum", label: "Parfum" },
+  { value: "cologne", label: "Cologne" },
+  { value: "attar", label: "Attar" },
+] as const;
+
 type Variant = {
   id: string;
   sku: string;
+  concentration: "edp" | "edt" | "parfum" | "cologne" | "attar";
   sizeMl: number;
   mrp: string;
   weightGrams: number;
@@ -41,6 +50,7 @@ function EditVariantForm({
 }) {
   const utils = trpc.useUtils();
   const [sku, setSku] = useState(variant.sku);
+  const [concentration, setConcentration] = useState(variant.concentration);
   const [sizeMl, setSizeMl] = useState(String(variant.sizeMl));
   const [mrp, setMrp] = useState(variant.mrp);
   const [weightGrams, setWeightGrams] = useState(String(variant.weightGrams));
@@ -65,6 +75,7 @@ function EditVariantForm({
     updateVariant.mutate({
       id: variant.id,
       sku,
+      concentration,
       sizeMl: Number(sizeMl),
       mrp: Number(mrp),
       weightGrams: Number(weightGrams),
@@ -95,6 +106,17 @@ function EditVariantForm({
             required
           />
         </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Concentration</Label>
+        <Select value={concentration} onValueChange={(v) => setConcentration(v as typeof concentration)}>
+          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {CONCENTRATIONS.map((c) => (
+              <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="space-y-2">
         <Label htmlFor="edit-mrp">MRP (₹)</Label>
@@ -168,7 +190,7 @@ function EditVariantForm({
         <div className="space-y-2">
           <Label>Status</Label>
           <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

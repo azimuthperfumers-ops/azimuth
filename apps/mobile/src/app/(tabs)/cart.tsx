@@ -1,6 +1,5 @@
 import { FlatList, Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import { trpc } from "@/lib/trpc";
@@ -8,6 +7,8 @@ import { trpc } from "@/lib/trpc";
 export default function CartScreen() {
   const router = useRouter();
   const { data: items = [], isLoading } = trpc.cart.list.useQuery();
+  const settingsQuery = trpc.settings.get.useQuery(undefined, { staleTime: 10 * 60 * 1000 });
+  const freeShippingAbove = settingsQuery.data?.freeShippingAboveInr ?? 999;
   const utils = trpc.useUtils();
 
   const updateQty = trpc.cart.updateQty.useMutation({
@@ -25,17 +26,17 @@ export default function CartScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-[#faf8f5] items-center justify-center" edges={["bottom"]}>
+      <View className="flex-1 bg-[#faf8f5] items-center justify-center">
         <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#888888] uppercase">
           Loading…
         </Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (activeItems.length === 0) {
     return (
-      <SafeAreaView className="flex-1 bg-[#faf8f5] items-center justify-center px-8" edges={["bottom"]}>
+      <View className="flex-1 bg-[#faf8f5] items-center justify-center px-8">
         <Text className="text-[10px] font-semibold tracking-[0.36em] text-[#888888] uppercase mb-4">
           Cart
         </Text>
@@ -56,12 +57,12 @@ export default function CartScreen() {
             Browse Fragrances
           </Text>
         </Pressable>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#faf8f5]" edges={["bottom"]}>
+    <View className="flex-1 bg-[#faf8f5]">
       <FlatList
         data={activeItems}
         keyExtractor={(item) => item.variantId}
@@ -147,15 +148,20 @@ export default function CartScreen() {
         </View>
         <View className="flex-row justify-between mb-1">
           <Text className="text-[13px] text-[#888888]">Shipping</Text>
-          <Text className="text-[13px] text-[#888888]">{subtotal >= 999 ? "Free" : "₹99"}</Text>
+          <Text className="text-[13px] text-[#888888]">{subtotal >= freeShippingAbove ? "Free" : "₹99"}</Text>
         </View>
         <View className="h-px bg-[#e8e2da] my-4" />
         <View className="flex-row justify-between mb-6">
           <Text className="text-[15px] font-semibold text-[#111111]">Total</Text>
           <Text className="text-[18px] font-semibold text-[#111111]">
-            ₹{(subtotal < 999 ? subtotal + 99 : subtotal).toLocaleString("en-IN")}
+            ₹{(subtotal < freeShippingAbove ? subtotal + 99 : subtotal).toLocaleString("en-IN")}
           </Text>
         </View>
+        {subtotal < freeShippingAbove && (
+          <Text className="text-[11px] text-[#888888] text-center mb-4">
+            Add ₹{(freeShippingAbove - subtotal).toLocaleString("en-IN")} more for free shipping
+          </Text>
+        )}
         <Pressable
           className="h-14 items-center justify-center bg-[#111111] active:opacity-70"
           onPress={() => router.push("/checkout")}
@@ -165,6 +171,6 @@ export default function CartScreen() {
           </Text>
         </Pressable>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

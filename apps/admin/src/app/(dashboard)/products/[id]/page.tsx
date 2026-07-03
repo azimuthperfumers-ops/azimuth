@@ -88,7 +88,7 @@ export default function ProductDetailPage() {
           <div>
             <h1 className="font-heading text-[2rem] font-medium leading-tight">{data.name}</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {data.category.name} · {data.concentration.toUpperCase()} · {data.gender}
+              {data.category.name} · {data.gender}
             </p>
           </div>
         </div>
@@ -114,6 +114,7 @@ export default function ProductDetailPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>SKU</TableHead>
+                <TableHead>Concentration</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>MRP</TableHead>
                 <TableHead>Discounted</TableHead>
@@ -126,7 +127,7 @@ export default function ProductDetailPage() {
             <TableBody>
               {data.variants.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
                     No variants yet — add one to start tracking stock.
                   </TableCell>
                 </TableRow>
@@ -140,6 +141,9 @@ export default function ProductDetailPage() {
                         Default
                       </Badge>
                     )}
+                  </TableCell>
+                  <TableCell className="uppercase text-[12px] tracking-wide text-muted-foreground">
+                    {variant.concentration}
                   </TableCell>
                   <TableCell>{variant.sizeMl}ml</TableCell>
                   <TableCell>{formatInr(variant.mrp)}</TableCell>

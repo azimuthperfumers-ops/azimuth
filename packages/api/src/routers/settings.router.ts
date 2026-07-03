@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { schema } from "@azimuth/db";
-import { eq } from "drizzle-orm";
 import { adminProcedure } from "../middleware/auth.middleware";
 import { publicProcedure, router } from "../trpc";
 
@@ -15,12 +14,19 @@ export const settingsRouter = router({
     .input(z.object({ freeShippingAboveInr: z.number().nonnegative() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db
-        .update(schema.siteSettings)
-        .set({
+        .insert(schema.siteSettings)
+        .values({
+          id: "1",
           freeShippingAboveInr: String(input.freeShippingAboveInr),
           updatedAt: new Date(),
         })
-        .where(eq(schema.siteSettings.id, "1"));
+        .onConflictDoUpdate({
+          target: schema.siteSettings.id,
+          set: {
+            freeShippingAboveInr: String(input.freeShippingAboveInr),
+            updatedAt: new Date(),
+          },
+        });
       return { freeShippingAboveInr: input.freeShippingAboveInr };
     }),
 });

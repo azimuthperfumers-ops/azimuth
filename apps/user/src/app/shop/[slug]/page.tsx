@@ -212,7 +212,8 @@ export default function ProductDetailPage() {
             {/* Header */}
             <div>
               <p className="mb-3 text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-                {CONCENTRATION_LABEL[product.concentration] ?? product.concentration}
+                {activeVariant &&
+                  (CONCENTRATION_LABEL[activeVariant.concentration] ?? activeVariant.concentration)}
                 {" · "}
                 {GENDER_LABEL[product.gender] ?? product.gender}
                 {product.category && ` · ${product.category.name}`}
@@ -370,7 +371,7 @@ export default function ProductDetailPage() {
                   Performance
                 </p>
                 {product.longevityRating && (
-                  <DotRating value={product.longevityRating} label="Longevity" />
+                  <DotRating value={product.longevityRating} max={10} label="Longevity" />
                 )}
                 {product.sillageRating && (
                   <DotRating value={product.sillageRating} label="Sillage" />

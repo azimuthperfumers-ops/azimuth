@@ -199,7 +199,8 @@ function ShopPageInner() {
 
   const filtered = useMemo(() => {
     return (products.data ?? []).filter((p) => {
-      if (concentration !== "all" && p.concentration !== concentration) return false;
+      if (concentration !== "all" && !p.variants.some((v) => v.concentration === concentration))
+        return false;
       if (gender !== "all" && p.gender !== gender) return false;
       if (search) {
         const q = search.toLowerCase();

@@ -29,6 +29,13 @@
       "when": 1782800002000,
       "tag": "0003_return_waybill",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782800003000,
+      "tag": "0004_variant_concentration",
+      "breakpoints": true
     }
   ]
 }

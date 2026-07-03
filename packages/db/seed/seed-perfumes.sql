@@ -18,7 +18,7 @@ DELETE FROM public.products WHERE id IN (
 -- ── Products ──────────────────────────────────────────────────────────────────
 
 INSERT INTO public.products (
-  id, name, slug, description, gender, concentration,
+  id, name, slug, description, gender,
   theme_color, category_id, hsn_code,
   longevity_rating, sillage_rating, status, is_featured,
   created_at, updated_at
@@ -30,7 +30,7 @@ INSERT INTO public.products (
     'Monsoon Mitti',
     'monsoon-mitti',
     'The first rain on dry earth. Petrichor, wet clay, and a heart of green vetiver with a soft woody drydown — worn memory of an Indian summer broken.',
-    'unisex', 'edp', '#6b7c5e',
+    'unisex', '#6b7c5e',
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '3303', 4, 3, 'active', true, NOW(), NOW()
   ),
@@ -41,7 +41,7 @@ INSERT INTO public.products (
     'Raat Rani',
     'raat-rani',
     'Night-blooming Cestrum Nocturnum — intoxicating and white-floral, sweetened by tuberose and anchored with warm sandalwood. Made for evenings that linger.',
-    'women', 'edp', '#4a3060',
+    'women', '#4a3060',
     '64a11837-a4ef-43a2-b9e9-b3eb92c10e3b',
     '3303', 5, 5, 'active', true, NOW(), NOW()
   ),
@@ -52,7 +52,7 @@ INSERT INTO public.products (
     'Kesar Oud',
     'kesar-oud',
     'Saffron threads over aged Hindi oud — opulent, deep, and unhurried. A fragrance that commands presence without a word.',
-    'men', 'edp', '#8b4513',
+    'men', '#8b4513',
     '670ac55d-1ced-43be-bea2-8fc7c42b3f9e',
     '3303', 5, 5, 'active', false, NOW(), NOW()
   ),
@@ -63,7 +63,7 @@ INSERT INTO public.products (
     'Shaam-e-Awadh',
     'shaam-e-awadh',
     'Lucknow at dusk — jasmine garlands, a breath of incense from passing diyas, and the warmth of aged wood. Cultured. Unhurried. Eternal.',
-    'men', 'cologne', '#c8960c',
+    'men', '#c8960c',
     '670ac55d-1ced-43be-bea2-8fc7c42b3f9e',
     '3303', 3, 4, 'active', true, NOW(), NOW()
   ),
@@ -74,7 +74,7 @@ INSERT INTO public.products (
     'Vetiver Noir',
     'vetiver-noir',
     'Dark, smoked vetiver rooted in black pepper and birch tar — dry and resinous, yet surprisingly skin-close. For those who find complexity in restraint.',
-    'unisex', 'edp', '#1a1a1a',
+    'unisex', '#1a1a1a',
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '3303', 5, 3, 'active', false, NOW(), NOW()
   ),
@@ -85,7 +85,7 @@ INSERT INTO public.products (
     'Gulabi Hawa',
     'gulabi-hawa',
     'Pink wind through a rose garden at dawn. Bright bergamot and dewy peony give way to a soft rose heart, drying down to clean musk and white cedar.',
-    'women', 'edp', '#e8a0a0',
+    'women', '#e8a0a0',
     '64a11837-a4ef-43a2-b9e9-b3eb92c10e3b',
     '3303', 3, 3, 'active', true, NOW(), NOW()
   ),
@@ -96,7 +96,7 @@ INSERT INTO public.products (
     'Amber Coast',
     'amber-coast',
     'Sea salt and ambergris washed onto warm amber resin. A coastal fragrance with depth — aquatic freshness on top, ancient ocean on the base.',
-    'unisex', 'edp', '#c8a96e',
+    'unisex', '#c8a96e',
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '3303', 4, 4, 'active', false, NOW(), NOW()
   ),
@@ -107,7 +107,7 @@ INSERT INTO public.products (
     'Noir Tabac',
     'noir-tabac',
     'Cured tobacco leaf, tonka bean, and a touch of caramel over dark patchouli. Heady and decadent — the kind of scent that fills a room with intent.',
-    'men', 'parfum', '#2d1b0e',
+    'men', '#2d1b0e',
     '670ac55d-1ced-43be-bea2-8fc7c42b3f9e',
     '3303', 5, 5, 'active', true, NOW(), NOW()
   )
@@ -117,50 +117,50 @@ ON CONFLICT (id) DO NOTHING;
 -- ── Variants ──────────────────────────────────────────────────────────────────
 
 INSERT INTO public.product_variants (
-  id, product_id, sku, size_ml, mrp, selling_price,
+  id, product_id, sku, concentration, size_ml, mrp, selling_price,
   weight_grams, stock_cached, is_default, status,
   created_at, updated_at
 ) VALUES
 
   -- Monsoon Mitti · 50ml only
   ('bb000001-0000-4000-8000-000000000001', 'aa000001-0000-4000-8000-000000000001',
-   'AZ-MMIT-50',  50, 1350.00, 1150.00, 1200, 80, true,  'active', NOW(), NOW()),
+   'AZ-MMIT-50',  'edp', 50, 1350.00, 1150.00, 1200, 80, true,  'active', NOW(), NOW()),
 
   -- Raat Rani · 50ml + 100ml
   ('bb000002-0000-4000-8000-000000000001', 'aa000002-0000-4000-8000-000000000002',
-   'AZ-RAAT-50',  50, 1450.00, 1199.00, 1200, 60, true,  'active', NOW(), NOW()),
+   'AZ-RAAT-50',  'edp', 50, 1450.00, 1199.00, 1200, 60, true,  'active', NOW(), NOW()),
   ('bb000002-0000-4000-8000-000000000002', 'aa000002-0000-4000-8000-000000000002',
-   'AZ-RAAT-100', 100, 2650.00, 2199.00, 2000, 30, false, 'active', NOW(), NOW()),
+   'AZ-RAAT-100', 'edp', 100, 2650.00, 2199.00, 2000, 30, false, 'active', NOW(), NOW()),
 
   -- Kesar Oud · 50ml only
   ('bb000003-0000-4000-8000-000000000001', 'aa000003-0000-4000-8000-000000000003',
-   'AZ-KSOU-50',  50, 2200.00, 1899.00, 1200, 40, true,  'active', NOW(), NOW()),
+   'AZ-KSOU-50',  'edp', 50, 2200.00, 1899.00, 1200, 40, true,  'active', NOW(), NOW()),
 
   -- Shaam-e-Awadh · 50ml + 100ml
   ('bb000004-0000-4000-8000-000000000001', 'aa000004-0000-4000-8000-000000000004',
-   'AZ-SHAW-50',  50,  999.00,  849.00, 1150, 100, true,  'active', NOW(), NOW()),
+   'AZ-SHAW-50',  'cologne', 50,  999.00,  849.00, 1150, 100, true,  'active', NOW(), NOW()),
   ('bb000004-0000-4000-8000-000000000002', 'aa000004-0000-4000-8000-000000000004',
-   'AZ-SHAW-100', 100, 1799.00, 1499.00, 1950, 50, false, 'active', NOW(), NOW()),
+   'AZ-SHAW-100', 'cologne', 100, 1799.00, 1499.00, 1950, 50, false, 'active', NOW(), NOW()),
 
   -- Vetiver Noir · 50ml only
   ('bb000005-0000-4000-8000-000000000001', 'aa000005-0000-4000-8000-000000000005',
-   'AZ-VTNR-50',  50, 1600.00, 1350.00, 1200, 45, true,  'active', NOW(), NOW()),
+   'AZ-VTNR-50',  'edp', 50, 1600.00, 1350.00, 1200, 45, true,  'active', NOW(), NOW()),
 
   -- Gulabi Hawa · 30ml + 50ml
   ('bb000006-0000-4000-8000-000000000001', 'aa000006-0000-4000-8000-000000000006',
-   'AZ-GULH-30',  30,  750.00,  649.00,  800, 90, true,  'active', NOW(), NOW()),
+   'AZ-GULH-30',  'edp', 30,  750.00,  649.00,  800, 90, true,  'active', NOW(), NOW()),
   ('bb000006-0000-4000-8000-000000000002', 'aa000006-0000-4000-8000-000000000006',
-   'AZ-GULH-50',  50, 1150.00,  999.00, 1200, 60, false, 'active', NOW(), NOW()),
+   'AZ-GULH-50',  'edp', 50, 1150.00,  999.00, 1200, 60, false, 'active', NOW(), NOW()),
 
   -- Amber Coast · 50ml + 100ml
   ('bb000007-0000-4000-8000-000000000001', 'aa000007-0000-4000-8000-000000000007',
-   'AZ-AMBC-50',  50, 1500.00, 1249.00, 1200, 55, true,  'active', NOW(), NOW()),
+   'AZ-AMBC-50',  'edp', 50, 1500.00, 1249.00, 1200, 55, true,  'active', NOW(), NOW()),
   ('bb000007-0000-4000-8000-000000000002', 'aa000007-0000-4000-8000-000000000007',
-   'AZ-AMBC-100', 100, 2750.00, 2299.00, 2000, 25, false, 'active', NOW(), NOW()),
+   'AZ-AMBC-100', 'edp', 100, 2750.00, 2299.00, 2000, 25, false, 'active', NOW(), NOW()),
 
   -- Noir Tabac · 50ml only
   ('bb000008-0000-4000-8000-000000000001', 'aa000008-0000-4000-8000-000000000008',
-   'AZ-NTAB-50',  50, 2500.00, 2099.00, 1200, 30, true,  'active', NOW(), NOW())
+   'AZ-NTAB-50',  'parfum', 50, 2500.00, 2099.00, 1200, 30, true,  'active', NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
 

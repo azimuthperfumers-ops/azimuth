@@ -81,7 +81,11 @@ export default function SignupPage() {
       {/* Left — brand panel */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-foreground text-background p-14">
         <div>
-          <p className="font-heading text-3xl font-semibold tracking-[0.22em]">AZIMUTH</p>
+          <div className="flex items-start gap-2.5">
+            <img src="/logo-icon.png" alt="" className="h-8 w-8 invert dark:invert-0" />
+            <img src="/logo-azimuth-text.png" alt="Azimuth" className="h-6 w-auto invert dark:invert-0" />
+            <sup className="mt-0.5 text-[10px] leading-none text-background">&trade;</sup>
+          </div>
           <p className="mt-1 text-[9px] font-semibold tracking-[0.5em] text-background/40 uppercase">
             Perfumers · Admin
           </p>
@@ -101,7 +105,11 @@ export default function SignupPage() {
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 bg-background overflow-y-auto">
         {/* Mobile wordmark */}
         <div className="mb-10 text-center lg:hidden">
-          <p className="font-heading text-3xl font-semibold tracking-[0.22em]">AZIMUTH</p>
+          <div className="flex items-start justify-center gap-2.5">
+            <img src="/logo-icon.png" alt="" className="h-8 w-8 dark:invert" />
+            <img src="/logo-azimuth-text.png" alt="Azimuth" className="h-6 w-auto dark:invert" />
+            <sup className="mt-0.5 text-[10px] leading-none text-foreground">&trade;</sup>
+          </div>
           <p className="mt-1 text-[9px] font-semibold tracking-[0.5em] text-muted-foreground uppercase">
             Perfumers · Admin
           </p>

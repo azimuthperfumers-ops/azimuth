@@ -43,14 +43,13 @@ export const createProductSchema = z.object({
   slug: slugSchema,
   description: z.string().max(5000).optional(),
   gender: z.enum(["men", "women", "unisex"]).default("unisex"),
-  concentration: z.enum(["edp", "edt", "parfum", "cologne", "attar"]),
   themeColor: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, "hex color like #aa1188")
     .optional(),
   categoryId: z.uuid(),
   hsnCode: z.string().max(20).optional(),
-  longevityRating: z.number().int().min(1).max(5).optional(),
+  longevityRating: z.number().int().min(1).max(10).optional(),
   sillageRating: z.number().int().min(1).max(5).optional(),
   isFeatured: z.boolean().default(false),
   status: z.enum(["draft", "active", "archived"]).default("draft").optional(),
@@ -79,6 +78,7 @@ export type GetProductInput = z.infer<typeof getProductSchema>;
 
 const variantFieldsSchema = z.object({
   sku: z.string().min(1).max(64),
+  concentration: z.enum(["edp", "edt", "parfum", "cologne", "attar"]),
   sizeMl: z.number().int().min(1).max(2000),
   mrp: z.number().positive(),
   weightGrams: z.number().int().positive(),

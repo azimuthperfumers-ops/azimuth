@@ -116,6 +116,7 @@ export default function CategoryDetailPage() {
                   : minPrice === maxPrice
                     ? formatInr(minPrice)
                     : `${formatInr(minPrice)} – ${formatInr(maxPrice!)}`;
+              const concentrations = [...new Set(product.variants.map((v) => v.concentration))].join(" / ");
               const primaryImg = (product.images.find((i) => i.isPrimary) ?? product.images[0]) as
                 | (typeof product.images)[number] & { url?: string }
                 | undefined;
@@ -148,7 +149,7 @@ export default function CategoryDetailPage() {
                     </p>
                   </TableCell>
                   <TableCell className="text-muted-foreground uppercase text-[12px] tracking-wide">
-                    {product.concentration}
+                    {concentrations || "—"}
                   </TableCell>
                   <TableCell className="font-medium tabular-nums">{priceRange}</TableCell>
                   <TableCell>

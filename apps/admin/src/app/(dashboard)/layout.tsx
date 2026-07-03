@@ -113,10 +113,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar>
         {/* Brand header */}
         <SidebarHeader>
-          <div className="flex flex-col gap-1 px-5 py-5 border-b border-sidebar-border">
-            <span className="font-heading text-[23px] font-semibold leading-none tracking-[0.2em] text-sidebar-foreground">
-              AZIMUTH
-            </span>
+          <div className="flex flex-col gap-1.5 px-5 py-5 border-b border-sidebar-border">
+            <div className="flex items-start gap-1.5">
+              <img src="/logo-icon.png" alt="" className="size-6 dark:invert" />
+              <img src="/logo-azimuth-text.png" alt="Azimuth" className="h-4 w-auto dark:invert" />
+              <sup className="mt-0.5 text-[7px] leading-none text-sidebar-foreground">&trade;</sup>
+            </div>
             <span className="text-[7.5px] font-semibold leading-none tracking-[0.38em] text-sidebar-foreground/40 uppercase">
               Perfumers · Admin
             </span>

@@ -5,11 +5,30 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { trpc } from "@/lib/trpc";
+import { Fonts } from "@/constants/theme";
 
 const CONCENTRATION_LABEL: Record<string, string> = {
   edp: "Eau de Parfum", edt: "Eau de Toilette", parfum: "Parfum",
   cologne: "Cologne", attar: "Attar",
 };
+
+const NOTE_POSITION_LABEL: Record<string, string> = {
+  top: "Top", mid: "Heart", base: "Base",
+};
+
+function DotRating({ value, max }: { value: number; max: number }) {
+  return (
+    <View className="flex-row gap-1">
+      {Array.from({ length: max }).map((_, i) => (
+        <View
+          key={i}
+          className="w-2 h-2 rounded-full"
+          style={{ backgroundColor: i < value ? "#111111" : "#e8e2da" }}
+        />
+      ))}
+    </View>
+  );
+}
 
 export default function ProductDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -62,8 +81,8 @@ export default function ProductDetailScreen() {
           ) : (
             <View className="flex-1 items-end justify-end p-8">
               <Text
-                className="text-white/40 text-4xl font-medium"
-                style={{ fontStyle: "italic" }}
+                className="text-white/40 text-4xl"
+                style={{ fontFamily: Fonts.serifMedium }}
               >
                 {product.name}
               </Text>
@@ -78,14 +97,15 @@ export default function ProductDetailScreen() {
         <View className="px-6 pt-8 pb-6">
           {/* Category + concentration */}
           <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#888888] uppercase mb-1">
-            {CONCENTRATION_LABEL[product.concentration] ?? product.concentration}
+            {activeVariant &&
+              (CONCENTRATION_LABEL[activeVariant.concentration] ?? activeVariant.concentration)}
             {product.category ? ` · ${product.category.name}` : ""}
           </Text>
 
           {/* Name */}
           <Text
-            className="text-[38px] font-medium leading-none tracking-tight text-[#111111] mb-4"
-            style={{ fontStyle: "italic" }}
+            className="text-[38px] leading-none tracking-tight text-[#111111] mb-4"
+            style={{ fontFamily: Fonts.serifItalic }}
           >
             {product.name}
           </Text>
@@ -151,17 +171,54 @@ export default function ProductDetailScreen() {
             </View>
           )}
 
-          {/* Notes / accords — if data exists */}
-          {(product as { topNotes?: string[] }).topNotes?.length ? (
-            <View className="mb-8">
-              <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#111111] uppercase mb-3">
-                Notes
-              </Text>
-              <Text className="text-[13px] text-[#555555]">
-                {(product as { topNotes?: string[] }).topNotes?.join("  ·  ")}
-              </Text>
+          {/* Ratings */}
+          {(product.longevityRating || product.sillageRating) && (
+            <View className="mb-8 gap-4">
+              {!!product.longevityRating && (
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#111111] uppercase">
+                    Longevity
+                  </Text>
+                  <DotRating value={product.longevityRating} max={10} />
+                </View>
+              )}
+              {!!product.sillageRating && (
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#111111] uppercase">
+                    Sillage
+                  </Text>
+                  <DotRating value={product.sillageRating} max={5} />
+                </View>
+              )}
             </View>
-          ) : null}
+          )}
+
+          {/* Notes */}
+          {product.notes.length > 0 && (
+            <View className="mb-8 gap-4">
+              {(["top", "mid", "base"] as const).map((position) => {
+                const positionNotes = product.notes.filter((n) => n.notePosition === position);
+                if (positionNotes.length === 0) return null;
+                return (
+                  <View key={position}>
+                    <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#111111] uppercase mb-2">
+                      {NOTE_POSITION_LABEL[position]}
+                    </Text>
+                    <View className="flex-row flex-wrap gap-2">
+                      {positionNotes.map((n) => (
+                        <View
+                          key={n.id}
+                          className="px-3 py-1.5 rounded-full border border-[#e8e2da] bg-[#f0ede8]"
+                        >
+                          <Text className="text-[12px] text-[#555555]">{n.note.name}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
       </ScrollView>
 

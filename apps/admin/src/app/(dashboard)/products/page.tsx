@@ -134,6 +134,7 @@ export default function ProductsPage() {
 
             {products.data?.map((product) => {
               const totalStock = product.variants.reduce((sum, v) => sum + v.stockCached, 0);
+              const concentrations = [...new Set(product.variants.map((v) => v.concentration))].join(" / ");
               const prices = product.variants.map((v) => Number(v.mrp)).filter(Boolean);
               const minPrice = prices.length ? Math.min(...prices) : null;
               const maxPrice = prices.length ? Math.max(...prices) : null;
@@ -185,7 +186,7 @@ export default function ProductsPage() {
                     </p>
                   </TableCell>
                   <TableCell className="text-muted-foreground uppercase text-[12px] tracking-wide">
-                    {product.concentration}
+                    {concentrations || "—"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{product.category.name}</TableCell>
                   <TableCell className="font-medium tabular-nums">{priceRange}</TableCell>

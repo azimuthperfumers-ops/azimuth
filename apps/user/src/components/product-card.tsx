@@ -5,11 +5,16 @@ type Product = {
   name: string;
   slug: string;
   themeColor: string | null;
-  concentration: string;
   gender: string;
   category: { name: string } | null;
   images: { url: string; isPrimary: boolean }[];
-  variants: { effectivePrice: number | string; mrp: string; status: string }[];
+  variants: {
+    effectivePrice: number | string;
+    mrp: string;
+    status: string;
+    concentration: string;
+    isDefault: boolean;
+  }[];
 };
 
 const CONCENTRATION_LABEL: Record<string, string> = {
@@ -35,6 +40,7 @@ export function ProductCard({ product }: { product: Product }) {
   const fromMrp = mrps.length > 0 ? Math.min(...mrps) : null;
   const hasDiscount = fromPrice !== null && fromMrp !== null && fromMrp > fromPrice;
   const discountPct = hasDiscount ? Math.round(((fromMrp! - fromPrice!) / fromMrp!) * 100) : 0;
+  const displayVariant = activeVariants.find((v) => v.isDefault) ?? activeVariants[0];
   const bg = product.themeColor ?? "#e8e0d5";
 
   return (
@@ -79,7 +85,9 @@ export function ProductCard({ product }: { product: Product }) {
         </h3>
         <div className="mt-2 flex items-center justify-between gap-2">
           <p className="text-[10.5px] tracking-[0.12em] text-muted-foreground/60 uppercase">
-            {CONCENTRATION_LABEL[product.concentration] ?? product.concentration}
+            {displayVariant
+              ? (CONCENTRATION_LABEL[displayVariant.concentration] ?? displayVariant.concentration)
+              : null}
             {" · "}
             {GENDER_SHORT[product.gender] ?? product.gender}
           </p>
