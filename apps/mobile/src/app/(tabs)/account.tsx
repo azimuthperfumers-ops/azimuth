@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useSession } from "@/hooks/use-session";
 import { authClient } from "@/lib/auth-client";
 import { clearToken } from "@/lib/session";
+import { Fonts } from "@/constants/theme";
 
 const MENU = [
   { label: "Order History", sub: "Track and manage your orders", route: "/orders" as const },
@@ -28,8 +29,8 @@ export default function AccountScreen() {
             Azimuth Perfumers
           </Text>
           <Text
-            className="text-[36px] font-medium text-[#111111] text-center leading-tight mb-3"
-            style={{ fontStyle: "italic" }}
+            className="text-[36px] text-[#111111] text-center leading-tight mb-3"
+            style={{ fontFamily: Fonts.serifItalic }}
           >
             Welcome back
           </Text>

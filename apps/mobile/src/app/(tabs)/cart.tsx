@@ -3,6 +3,7 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 
 import { trpc } from "@/lib/trpc";
+import { Fonts } from "@/constants/theme";
 
 export default function CartScreen() {
   const router = useRouter();
@@ -41,8 +42,8 @@ export default function CartScreen() {
           Cart
         </Text>
         <Text
-          className="text-[32px] font-medium text-[#111111] text-center mb-3"
-          style={{ fontStyle: "italic" }}
+          className="text-[32px] text-[#111111] text-center mb-3"
+          style={{ fontFamily: Fonts.serifItalic }}
         >
           Your bag is empty
         </Text>
@@ -91,8 +92,8 @@ export default function CartScreen() {
               {/* Info */}
               <View className="flex-1">
                 <Text
-                  className="text-[16px] font-medium text-[#111111] leading-snug"
-                  style={{ fontStyle: "italic" }}
+                  className="text-[16px] text-[#111111] leading-snug"
+                  style={{ fontFamily: Fonts.serifItalic }}
                   numberOfLines={1}
                 >
                   {item.productName}

@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import { authClient } from "@/lib/auth-client";
+import { Fonts } from "@/constants/theme";
 
 type Step = "phone" | "otp";
 
@@ -59,8 +60,8 @@ export default function SignInScreen() {
 
         {/* Heading */}
         <Text
-          className="text-[40px] font-medium leading-none tracking-tight text-[#111111] mb-2"
-          style={{ fontStyle: "italic" }}
+          className="text-[40px] leading-none tracking-tight text-[#111111] mb-2"
+          style={{ fontFamily: Fonts.serifItalic }}
         >
           {step === "phone" ? "Sign in" : "Verify"}
         </Text>

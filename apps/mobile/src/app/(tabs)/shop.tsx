@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 
 import { trpc } from "@/lib/trpc";
+import { Fonts } from "@/constants/theme";
 
 const CONCENTRATION_SHORT: Record<string, string> = {
   edp: "EDP", edt: "EDT", parfum: "Parfum", cologne: "Cologne", attar: "Attar",
@@ -35,8 +36,8 @@ export default function ShopScreen() {
             The
           </Text>
           <Text
-            className="text-[44px] font-extrabold tracking-tight text-[#c0392b] uppercase leading-none"
-            style={{ fontStyle: "italic" }}
+            className="text-[44px] tracking-tight text-[#c0392b] uppercase leading-none"
+            style={{ fontFamily: Fonts.serifBoldItalic }}
           >
             Collection
           </Text>
@@ -127,8 +128,8 @@ export default function ShopScreen() {
                   ) : (
                     <View className="flex-1 items-end justify-end p-3">
                       <Text
-                        className="text-white/40 text-lg font-medium"
-                        style={{ fontStyle: "italic" }}
+                        className="text-white/40 text-lg"
+                        style={{ fontFamily: Fonts.serifItalic }}
                         numberOfLines={1}
                       >
                         {p.name}
@@ -152,8 +153,8 @@ export default function ShopScreen() {
                 {/* Card body */}
                 <View className="px-3 pt-3 pb-1">
                   <Text
-                    className="text-[15px] font-medium tracking-tight text-[#111111] leading-snug"
-                    style={{ fontStyle: "italic" }}
+                    className="text-[15px] tracking-tight text-[#111111] leading-snug"
+                    style={{ fontFamily: Fonts.serifItalic }}
                     numberOfLines={1}
                   >
                     {p.name}

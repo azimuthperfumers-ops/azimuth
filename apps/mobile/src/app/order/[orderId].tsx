@@ -3,6 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { trpc } from "@/lib/trpc";
+import { Fonts } from "@/constants/theme";
 
 const STATUS_STEPS = ["confirmed", "picked_up", "out_for_delivery", "delivered"] as const;
 
@@ -152,8 +153,8 @@ export default function OrderDetailScreen() {
               <View className="w-14 h-16 bg-[#e8e2da]" />
               <View className="flex-1">
                 <Text
-                  className="text-[15px] font-medium text-[#111111] leading-snug"
-                  style={{ fontStyle: "italic" }}
+                  className="text-[15px] text-[#111111] leading-snug"
+                  style={{ fontFamily: Fonts.serifItalic }}
                   numberOfLines={2}
                 >
                   {item.productName}

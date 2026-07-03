@@ -3,6 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import { trpc } from "@/lib/trpc";
+import { Fonts } from "@/constants/theme";
 
 const STATUS_LABEL: Record<string, string> = {
   open: "Open",
@@ -39,8 +40,8 @@ export default function SupportScreen() {
           ListEmptyComponent={
             <View className="py-24 items-center px-8">
               <Text
-                className="text-[26px] font-medium text-[#111111] text-center mb-3"
-                style={{ fontStyle: "italic" }}
+                className="text-[26px] text-[#111111] text-center mb-3"
+                style={{ fontFamily: Fonts.serifItalic }}
               >
                 All good here
               </Text>
