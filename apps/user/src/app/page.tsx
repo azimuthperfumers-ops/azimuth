@@ -1,14 +1,13 @@
 "use client";
 
-import { archivo } from "@/components/landing/fonts";
-import { LandingHeader } from "@/components/landing/landing-header";
 import { LandingHero } from "@/components/landing/landing-hero";
 import { MoodSection } from "@/components/landing/mood-section";
 import { CollectionSection } from "@/components/landing/collection-section";
 import { QuoteBand } from "@/components/landing/quote-band";
 import { CraftSection } from "@/components/landing/craft-section";
 import { MiniaturesCta } from "@/components/landing/miniatures-cta";
-import { LandingFooter } from "@/components/landing/landing-footer";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 import { trpc } from "@/lib/trpc";
 
 export default function HomePage() {
@@ -28,11 +27,8 @@ export default function HomePage() {
   };
 
   return (
-    <div
-      className={`${archivo.variable} min-h-screen bg-[#F5F0E7] text-[#1B1611]`}
-      style={{ fontFamily: "var(--font-landing-sans)" }}
-    >
-      <LandingHeader />
+    <>
+      <SiteHeader />
       <main>
         <LandingHero copy={heroCopy} signature={signature} isLoading={products.isLoading} />
         <MoodSection categories={categories.data ?? []} />
@@ -41,7 +37,7 @@ export default function HomePage() {
         <CraftSection />
         <MiniaturesCta />
       </main>
-      <LandingFooter />
-    </div>
+      <SiteFooter />
+    </>
   );
 }

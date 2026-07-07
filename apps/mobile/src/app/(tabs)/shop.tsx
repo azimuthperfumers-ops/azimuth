@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
+import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { Search } from "lucide-react-native";
 
 import { trpc } from "@/lib/trpc";
 import { Fonts } from "@/constants/theme";
@@ -13,6 +14,7 @@ const CONCENTRATION_SHORT: Record<string, string> = {
 export default function ShopScreen() {
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState("All");
+  const [query, setQuery] = useState("");
 
   const { data: products = [], isLoading } = trpc.catalog.listProducts.useQuery({
     status: "active",
@@ -20,9 +22,9 @@ export default function ShopScreen() {
   });
   const { data: categories = [] } = trpc.catalog.listCategories.useQuery();
 
-  const filtered = activeCategory === "All"
-    ? products
-    : products.filter((p) => p.category?.name === activeCategory);
+  const filtered = products
+    .filter((p) => activeCategory === "All" || p.category?.name === activeCategory)
+    .filter((p) => !query.trim() || p.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
     <View className="flex-1 bg-[#faf8f5]">
@@ -45,6 +47,20 @@ export default function ShopScreen() {
         <Text className="mt-2 text-[13px] text-[#111111]/50 leading-relaxed">
           {products.length} fragrances · in stock
         </Text>
+      </View>
+
+      {/* ── Search ── */}
+      <View className="px-6 pt-4 pb-4 bg-[#faf8f5]">
+        <View className="flex-row items-center gap-2.5 border border-[#e8e2da] px-3.5 py-3">
+          <Search size={14} color="#8a8175" strokeWidth={1.6} />
+          <TextInput
+            className="flex-1 text-[13px] text-[#111111] p-0"
+            placeholder="Rose, oud, amber…"
+            placeholderTextColor="#8a8175"
+            value={query}
+            onChangeText={setQuery}
+          />
+        </View>
       </View>
 
       {/* ── Category filter ── */}

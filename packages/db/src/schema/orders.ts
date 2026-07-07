@@ -9,6 +9,7 @@ import { coupons } from "./coupons";
 
 export const orderStatusEnum = pgEnum("order_status", [
   "pending_payment",
+  "payment_failed",
   "paid",
   "processing",
   "picked_up",

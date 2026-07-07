@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 import { Providers } from "./providers";
-import { Cormorant_Garamond, Hanken_Grotesk } from "next/font/google";
+import { Archivo, Cormorant_Garamond } from "next/font/google";
 import { cn } from "@/lib/utils";
 
-const sans = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-sans" });
+const sans = Archivo({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-sans" });
 const serif = Cormorant_Garamond({
   subsets: ["latin"],
   weight: ["400", "500", "600"],

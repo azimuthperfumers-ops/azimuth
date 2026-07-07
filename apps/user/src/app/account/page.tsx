@@ -526,6 +526,7 @@ function AddressesTab() {
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
   pending_payment: "Awaiting payment",
+  payment_failed: "Payment failed",
   paid: "Payment confirmed",
   processing: "Processing",
   picked_up: "Picked up by courier",
@@ -541,6 +542,7 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
 
 const ORDER_STATUS_COLOR: Record<string, string> = {
   pending_payment: "text-yellow-600",
+  payment_failed: "text-red-500",
   paid: "text-blue-600",
   processing: "text-blue-600",
   picked_up: "text-blue-600",

@@ -1,8 +1,12 @@
 import "dotenv/config";
 import http from "node:http";
-import { startOrderWorker } from "@azimuth/queue";
+import { scheduleExpirePendingPayments, startOrderWorker } from "@azimuth/queue";
 
 const worker = startOrderWorker();
+
+scheduleExpirePendingPayments().catch((e: unknown) =>
+  console.error("[worker] Failed to schedule expire_pending_payments:", e),
+);
 
 // Minimal health server — keeps Render free-tier service alive when pinged
 const PORT = process.env.PORT ?? 3002;

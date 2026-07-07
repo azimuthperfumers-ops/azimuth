@@ -25,6 +25,14 @@ function formatInr(n: number) {
   return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
+const CONCENTRATION_LABEL: Record<string, string> = {
+  edp: "Eau de Parfum",
+  edt: "Eau de Toilette",
+  parfum: "Parfum",
+  cologne: "Cologne",
+  attar: "Attar",
+};
+
 // ─── Active cart row ──────────────────────────────────────────────────────────
 
 function CartRow({
@@ -78,7 +86,7 @@ function CartRow({
               {item.productName}
             </Link>
             <p className="mt-1 text-[11px] text-muted-foreground/60 tracking-[0.06em]">
-              {item.sizeMl}ml · {item.variantSku}
+              {CONCENTRATION_LABEL[item.concentration] ?? item.concentration} · {item.sizeMl}ml · {item.variantSku}
             </p>
           </div>
           <button
@@ -175,7 +183,9 @@ function SavedRow({
       <div className="flex flex-1 items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-foreground/60">{item.productName}</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground/40">{item.sizeMl}ml · {formatInr(item.effectivePrice)}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground/40">
+            {CONCENTRATION_LABEL[item.concentration] ?? item.concentration} · {item.sizeMl}ml · {formatInr(item.effectivePrice)}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <button

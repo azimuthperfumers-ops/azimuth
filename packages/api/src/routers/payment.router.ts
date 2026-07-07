@@ -125,6 +125,17 @@ export const paymentRouter = router({
         .set({ gatewayPaymentId: input.razorpayPaymentId, status: "captured" })
         .where(eq(schema.paymentAttempts.gatewayOrderId, input.razorpayOrderId));
 
+      // Cart is only cleared once payment is actually verified — not at order
+      // creation — so a cancelled/failed/interrupted payment leaves the cart intact.
+      await ctx.db
+        .delete(schema.cartItems)
+        .where(
+          and(
+            eq(schema.cartItems.userId, ctx.session.user.id),
+            eq(schema.cartItems.isSaved, false),
+          ),
+        );
+
       return { success: true };
     }),
 

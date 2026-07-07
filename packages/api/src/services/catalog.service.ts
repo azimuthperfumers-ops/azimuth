@@ -53,13 +53,13 @@ async function guardReferenced<T>(fn: () => Promise<T>, message: string): Promis
   }
 }
 
-function imageUrl(key: string) {
+export function imageUrl(key: string) {
   if (key.startsWith("https://") || key.startsWith("http://")) return key;
   const base = env.R2_PUBLIC_URL?.replace(/\/$/, "") ?? "";
   return `${base}/${key}`;
 }
 
-function withUrl<T extends { key: string }>(img: T) {
+export function withUrl<T extends { key: string }>(img: T) {
   return { ...img, url: imageUrl(img.key) };
 }
 

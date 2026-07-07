@@ -5,16 +5,14 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Azimuth brand palette
-        brand: {
-          black: "#111111",
-          gold: "#c9a96e",
-          cream: "#f9f7f4",
-          muted: "#888888",
-        },
-      },
-      fontFamily: {
-        serif: ["Georgia", "serif"],
+        // Mirrors constants/theme.ts — the source of truth for screens, which
+        // mostly hardcode these as hex literals rather than Tailwind tokens.
+        background: "#faf8f5",
+        surface: "#ffffff",
+        ink: "#111111",
+        "ink-muted": "#888888",
+        border: "#e8e2da",
+        accent: "#c0392b",
       },
     },
   },

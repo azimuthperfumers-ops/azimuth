@@ -7,6 +7,7 @@ import { Fonts } from "@/constants/theme";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
+  payment_failed: "Payment failed",
   confirmed: "Confirmed",
   picked_up: "Picked Up",
   out_for_delivery: "Out for Delivery",
@@ -17,6 +18,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "#888888",
+  payment_failed: "#c0392b",
   confirmed: "#111111",
   picked_up: "#111111",
   out_for_delivery: "#c0392b",

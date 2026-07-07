@@ -1,5 +1,5 @@
 import { UnrecoverableError, Worker } from "bullmq";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, lt } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
 import { advanceOrderStatus } from "@azimuth/api";
@@ -8,7 +8,7 @@ import { createLogisticsService, createRazorpayService } from "@azimuth/api";
 
 import { redisOpts } from "./connection.js";
 import { getCustomerContact, orderInfo } from "./comms.js";
-import { orderQueue } from "./order.queue.js";
+import { orderQueue, PENDING_PAYMENT_TIMEOUT_MS } from "./order.queue.js";
 import type {
   OrderJobData,
   PaymentCapturedJob,
@@ -52,6 +52,42 @@ async function dbJobFailed(dbJobId: string, errorMessage: string, isFinal: boole
 
 // ── Job processors ────────────────────────────────────────────────────────────
 
+// Shared by the payment.captured webhook path and the expire-pending-payments sweep's
+// reconciliation path (when Razorpay confirms a captured payment we never got a webhook for).
+async function markOrderPaidAndBookShipment(
+  order: typeof schema.orders.$inferSelect,
+  razorpayPaymentId: string,
+  note: string,
+) {
+  await db
+    .update(schema.orders)
+    .set({ razorpayPaymentId })
+    .where(eq(schema.orders.id, order.id));
+
+  await db
+    .update(schema.paymentAttempts)
+    .set({ gatewayPaymentId: razorpayPaymentId, status: "captured" })
+    .where(eq(schema.paymentAttempts.gatewayOrderId, order.razorpayOrderId!));
+
+  await advanceOrderStatus(db, order.id, "paid", "worker:order", note);
+  await advanceOrderStatus(db, order.id, "processing", "worker:order", "Shipment booking queued");
+
+  console.log(`[order-worker] Order ${order.orderNumber} marked paid → processing`);
+
+  const updatedOrder = await db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) });
+  if (updatedOrder) {
+    const contact = await getCustomerContact(updatedOrder);
+    const info = orderInfo(updatedOrder);
+    await Promise.all([
+      notifyOrderPlaced(contact, info),
+      alertAdminNewOrder(info),
+    ]);
+  }
+
+  await enqueueBookShipment(order.id);
+  console.log(`[order-worker] Enqueued book_shipment for order=${order.id}`);
+}
+
 async function processPaymentCaptured(data: PaymentCapturedJob) {
   const { razorpayOrderId, razorpayPaymentId, amountPaise } = data;
 
@@ -72,46 +108,12 @@ async function processPaymentCaptured(data: PaymentCapturedJob) {
     return {};
   }
 
-  await db
-    .update(schema.orders)
-    .set({ razorpayPaymentId })
-    .where(eq(schema.orders.id, order.id));
-
-  await db
-    .update(schema.paymentAttempts)
-    .set({ gatewayPaymentId: razorpayPaymentId, status: "captured" })
-    .where(eq(schema.paymentAttempts.gatewayOrderId, razorpayOrderId));
-
-  await advanceOrderStatus(
-    db,
-    order.id,
-    "paid",
-    "worker:order",
+  await markOrderPaidAndBookShipment(
+    order,
+    razorpayPaymentId,
     `payment.captured: ${razorpayPaymentId} (₹${amountPaise / 100})`,
   );
 
-  await advanceOrderStatus(
-    db,
-    order.id,
-    "processing",
-    "worker:order",
-    "Shipment booking queued",
-  );
-
-  console.log(`[order-worker] Order ${order.orderNumber} marked paid → processing`);
-
-  const updatedOrder = await db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) });
-  if (updatedOrder) {
-    const contact = await getCustomerContact(updatedOrder);
-    const info = orderInfo(updatedOrder);
-    await Promise.all([
-      notifyOrderPlaced(contact, info),
-      alertAdminNewOrder(info),
-    ]);
-  }
-
-  await enqueueBookShipment(order.id);
-  console.log(`[order-worker] Enqueued book_shipment for order=${order.id}`);
   return {};
 }
 
@@ -149,8 +151,99 @@ async function processPaymentFailed(data: PaymentFailedJob) {
     .set({ gatewayPaymentId: razorpayPaymentId ?? null, status: "failed" })
     .where(eq(schema.paymentAttempts.gatewayOrderId, razorpayOrderId));
 
-  console.log(`[order-worker] Payment failed for rzp_order_id=${razorpayOrderId}`);
+  const order = await db.query.orders.findFirst({
+    where: eq(schema.orders.razorpayOrderId, razorpayOrderId),
+  });
+
+  if (order && order.status === "pending_payment") {
+    await advanceOrderStatus(
+      db,
+      order.id,
+      "payment_failed",
+      "worker:order",
+      `payment.failed webhook: ${razorpayPaymentId ?? "no payment id"}`,
+    );
+    console.log(`[order-worker] Order ${order.orderNumber} marked payment_failed after payment.failed`);
+  } else {
+    console.log(`[order-worker] Payment failed for rzp_order_id=${razorpayOrderId}`);
+  }
+
   return {};
+}
+
+async function failStaleOrder(order: typeof schema.orders.$inferSelect, note: string) {
+  await advanceOrderStatus(db, order.id, "payment_failed", "worker:order", note);
+
+  await db
+    .update(schema.paymentAttempts)
+    .set({ status: "failed" })
+    .where(
+      and(
+        eq(schema.paymentAttempts.orderId, order.id),
+        inArray(schema.paymentAttempts.status, ["created", "authorized"]),
+      ),
+    );
+}
+
+async function processExpirePendingPayments() {
+  const cutoff = new Date(Date.now() - PENDING_PAYMENT_TIMEOUT_MS);
+
+  const stale = await db.query.orders.findMany({
+    where: and(eq(schema.orders.status, "pending_payment"), lt(schema.orders.createdAt, cutoff)),
+  });
+
+  let failedCount = 0;
+  let reconciledCount = 0;
+
+  for (const order of stale) {
+    // Never trust elapsed time alone — a slow/dropped webhook could mean the customer
+    // actually paid. Ask Razorpay directly before failing anything.
+    if (!order.razorpayOrderId) {
+      await failStaleOrder(order, "Payment window expired — Razorpay order was never created");
+      failedCount++;
+      continue;
+    }
+
+    let payments: { id: string; status: string; amount: number }[];
+    try {
+      payments = await createRazorpayService().fetchOrderPayments(order.razorpayOrderId);
+    } catch (err) {
+      console.warn(
+        `[order-worker] expire_pending_payments: could not reconcile order ${order.orderNumber} with Razorpay, leaving pending — ${err instanceof Error ? err.message : String(err)}`,
+      );
+      continue;
+    }
+
+    const captured = payments.find((p) => p.status === "captured");
+    if (captured) {
+      await markOrderPaidAndBookShipment(
+        order,
+        captured.id,
+        `Reconciled from Razorpay (sweep): payment ${captured.id} was captured but no webhook was ever received`,
+      );
+      reconciledCount++;
+      continue;
+    }
+
+    const stillInFlight = payments.some((p) => p.status === "authorized");
+    if (stillInFlight) {
+      // Authorized-but-not-yet-captured (e.g. manual capture flow) — don't fail it, let it resolve.
+      console.log(`[order-worker] expire_pending_payments: order ${order.orderNumber} has an authorized payment in flight, skipping`);
+      continue;
+    }
+
+    await failStaleOrder(
+      order,
+      `Payment window expired (${PENDING_PAYMENT_TIMEOUT_MS / 60000}min) — Razorpay confirms no captured payment`,
+    );
+    failedCount++;
+  }
+
+  if (failedCount > 0 || reconciledCount > 0) {
+    console.log(`[order-worker] expire_pending_payments: marked ${failedCount} payment_failed, reconciled ${reconciledCount} stale order(s)`);
+  }
+
+  return { failedCount, reconciledCount };
 }
 
 async function processBookShipment(data: BookShipmentJob) {
@@ -171,7 +264,7 @@ async function processBookShipment(data: BookShipmentJob) {
     return { waybill: order.delhiveryWaybill };
   }
 
-  const BOOK_SHIPMENT_BLOCKED = ["delivered", "cancelled", "refunded", "rto_initiated", "rto_delivered", "refund_processing"];
+  const BOOK_SHIPMENT_BLOCKED = ["delivered", "cancelled", "payment_failed", "refunded", "rto_initiated", "rto_delivered", "refund_processing"];
   if (BOOK_SHIPMENT_BLOCKED.includes(order.status)) {
     console.log(`[order-worker] book_shipment: order ${order.orderNumber} is ${order.status} — skipping, nothing to do`);
     return {};
@@ -376,7 +469,7 @@ async function processReturnShipment(data: ReturnShipmentJob) {
     throw new UnrecoverableError(`return_shipment: order ${orderId} not found`);
   }
 
-  const RETURN_BLOCKED = ["rto_initiated", "rto_delivered", "refunded", "refund_processing", "cancelled"];
+  const RETURN_BLOCKED = ["rto_initiated", "rto_delivered", "refunded", "refund_processing", "cancelled", "payment_failed"];
   if (RETURN_BLOCKED.includes(order.status)) {
     console.log(`[order-worker] return_shipment: order ${order.orderNumber} is ${order.status} — skipping, nothing to do`);
     return {};
@@ -511,6 +604,8 @@ export function startOrderWorker() {
         return await processCancelShipment(data);
       } else if (data.type === "return_shipment") {
         return await processReturnShipment(data);
+      } else if (data.type === "expire_pending_payments") {
+        return await processExpirePendingPayments();
       }
       return {};
     },

@@ -1,4 +1,5 @@
 import "../global.css";
+import "@/lib/nativewind-interop";
 
 import { useEffect } from "react";
 import { Stack } from "expo-router";
@@ -47,6 +48,9 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)/sign-in" options={{ presentation: "modal" }} />
+        <Stack.Screen name="our-story" />
+        <Stack.Screen name="wishlist" />
+        <Stack.Screen name="addresses" />
         <Stack.Screen name="product/[slug]" options={{ headerShown: true, title: "" }} />
         <Stack.Screen name="order/[orderId]" options={{ headerShown: true, title: "Order" }} />
         <Stack.Screen name="checkout" options={{ headerShown: true, title: "Checkout" }} />

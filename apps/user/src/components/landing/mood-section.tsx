@@ -31,17 +31,17 @@ const MOODS = [
 
 export function MoodSection({ categories }: { categories: Category[] }) {
   return (
-    <section id="quiz" className="border-t border-[#1B1611]/8 px-6 pt-24 pb-20 sm:px-10 md:px-16">
+    <section id="quiz" className="border-t border-foreground/8 px-6 pt-24 pb-20 sm:px-10 md:px-16">
       <div className="flex flex-wrap items-end justify-between gap-8">
         <div>
-          <div className="text-[11px] font-semibold tracking-[0.3em] text-[#9A5B2B] uppercase">
+          <div className="text-[11px] font-semibold tracking-[0.3em] text-primary uppercase">
             Where do we start
           </div>
-          <h2 className="font-heading mt-4 text-[clamp(2.2rem,3.6vw,3.5rem)] leading-[1.1] font-medium text-[#1B1611]">
-            Choose the way you want <em className="text-[#9A5B2B]">to be remembered.</em>
+          <h2 className="font-heading mt-4 text-[clamp(2.2rem,3.6vw,3.5rem)] leading-[1.1] font-medium text-foreground">
+            Choose the way you want <em className="text-primary">to be remembered.</em>
           </h2>
         </div>
-        <p className="max-w-[36ch] text-[14px] leading-[1.7] text-[#57493A]">
+        <p className="max-w-[36ch] text-[14px] leading-[1.7] text-muted-foreground">
           Not sure which bottle is yours? Start from a feeling — each one leads to a composition.
         </p>
       </div>
@@ -54,10 +54,10 @@ export function MoodSection({ categories }: { categories: Category[] }) {
             <Link
               key={mood.numeral}
               href={href}
-              className="block border border-[#1B1611]/12 bg-[#FAF6EE] px-8 pt-9 pb-8 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_18px_40px_rgba(27,22,17,0.1)]"
+              className="block border border-foreground/12 bg-card px-8 pt-9 pb-8 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_18px_40px_rgba(27,22,17,0.1)]"
             >
               <div className="flex items-center justify-between">
-                <div className="font-heading text-[44px] leading-none text-[#9A5B2B] italic">
+                <div className="font-heading text-[44px] leading-none text-primary italic">
                   {mood.numeral}
                 </div>
                 <span
@@ -65,11 +65,11 @@ export function MoodSection({ categories }: { categories: Category[] }) {
                   style={{ backgroundColor: mood.bg }}
                 />
               </div>
-              <div className="font-heading mt-5.5 text-[30px] text-[#1B1611]">{mood.title}</div>
-              <p className="mt-3 min-h-[68px] text-[14px] leading-[1.65] text-[#57493A]">
+              <div className="font-heading mt-5.5 text-[30px] text-foreground">{mood.title}</div>
+              <p className="mt-3 min-h-[68px] text-[14px] leading-[1.65] text-muted-foreground">
                 {mood.desc}
               </p>
-              <div className="mt-5 text-[11px] font-semibold tracking-[0.22em] text-[#1B1611] uppercase">
+              <div className="mt-5 text-[11px] font-semibold tracking-[0.22em] text-foreground uppercase">
                 {mood.leads} →
               </div>
             </Link>

@@ -36,6 +36,7 @@ type Order = RouterOutputs["order"]["adminList"][number];
 
 const ORDER_STATUSES = [
   "pending_payment",
+  "payment_failed",
   "paid",
   "processing",
   "picked_up",
@@ -53,6 +54,7 @@ type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   pending_payment: "Awaiting payment",
+  payment_failed: "Payment failed",
   paid: "Paid",
   processing: "Processing",
   picked_up: "Picked up",
@@ -68,6 +70,7 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 
 const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive" | "outline"> = {
   pending_payment: "outline",
+  payment_failed: "destructive",
   paid: "secondary",
   processing: "secondary",
   picked_up: "secondary",

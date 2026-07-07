@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft, Heart, Share2 } from "lucide-react";
+import { ChevronLeft, Heart, Minus, Plus, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { SiteFooter } from "@/components/site-footer";
@@ -69,7 +69,6 @@ export default function ProductDetailPage() {
 
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [activeImg, setActiveImg] = useState(0);
-  const [addedVariantId, setAddedVariantId] = useState<string | null>(null);
   const cart = useCart();
 
   const isLoading = productQuery.isLoading;
@@ -124,6 +123,29 @@ export default function ProductDetailPage() {
     null;
 
   const activeVariants = (product.variants ?? []).filter((v: any) => v.status === "active");
+
+  const cartItem = activeVariant
+    ? cart.items.find((i) => i.variantId === activeVariant.id)
+    : undefined;
+
+  const concentrations = [...new Set(activeVariants.map((v: any) => v.concentration))];
+  const sizesForConcentration = activeVariant
+    ? activeVariants.filter((v: any) => v.concentration === activeVariant.concentration)
+    : [];
+
+  function pickConcentration(concentration: string) {
+    const inConcentration = activeVariants.filter((v: any) => v.concentration === concentration);
+    const match =
+      inConcentration.find((v: any) => v.sizeMl === activeVariant?.sizeMl) ??
+      inConcentration.find((v: any) => v.isDefault) ??
+      inConcentration[0];
+    if (match) setSelectedVariantId(match.id);
+  }
+
+  function pickSize(sizeMl: number) {
+    const match = sizesForConcentration.find((v: any) => v.sizeMl === sizeMl);
+    if (match) setSelectedVariantId(match.id);
+  }
 
   const topNotes = (product.notes ?? []).filter((n: any) => n.notePosition === "top");
   const midNotes = (product.notes ?? []).filter((n: any) => n.notePosition === "mid");
@@ -237,8 +259,41 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {/* Variant selector */}
-            {activeVariants.length > 0 && (
+            {/* Concentration selector */}
+            {concentrations.length > 1 && (
+              <div>
+                <p className="mb-3 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground">
+                  Concentration
+                  {activeVariant && (
+                    <span className="ml-2 font-normal normal-case tracking-normal text-foreground">
+                      — {CONCENTRATION_LABEL[activeVariant.concentration] ?? activeVariant.concentration}
+                    </span>
+                  )}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {concentrations.map((c: string) => {
+                    const isSelected = activeVariant?.concentration === c;
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => pickConcentration(c)}
+                        className={cn(
+                          "border px-4 py-2 text-sm font-medium transition-colors",
+                          isSelected
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-border text-foreground hover:border-foreground",
+                        )}
+                      >
+                        {CONCENTRATION_LABEL[c] ?? c}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Size selector */}
+            {sizesForConcentration.length > 0 && (
               <div>
                 <p className="mb-3 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground">
                   Size
@@ -249,14 +304,14 @@ export default function ProductDetailPage() {
                   )}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {activeVariants.map((v: any) => {
+                  {sizesForConcentration.map((v: any) => {
                     const isSelected = (selectedVariantId ?? activeVariant?.id) === v.id;
                     const outOfStock = v.stockCached === 0;
                     return (
                       <button
                         key={v.id}
                         disabled={outOfStock}
-                        onClick={() => setSelectedVariantId(v.id)}
+                        onClick={() => pickSize(v.sizeMl)}
                         className={cn(
                           "relative border px-4 py-2 text-sm font-medium transition-colors",
                           isSelected
@@ -288,43 +343,64 @@ export default function ProductDetailPage() {
 
             {/* CTA */}
             <div className="flex gap-3">
-              <button
-                disabled={!activeVariant || activeVariant.stockCached === 0}
-                onClick={() => {
-                  if (!activeVariant || activeVariant.stockCached === 0) return;
-                  const primaryImg = orderedImages[0];
-                  cart.add({
-                    productId: product.id,
-                    variantId: activeVariant.id,
-                    productName: product.name,
-                    variantSku: activeVariant.sku,
-                    sizeMl: activeVariant.sizeMl,
-                    effectivePrice: (activeVariant as any).effectivePrice ?? Number(activeVariant.mrp),
-                    mrp: Number(activeVariant.mrp),
-                    imageUrl: primaryImg?.url ?? undefined,
-                    themeColor: product.themeColor ?? undefined,
-                    slug: product.slug,
-                  });
-                  setAddedVariantId(activeVariant.id);
-                  setTimeout(() => setAddedVariantId(null), 1800);
-                }}
-                className={cn(
-                  "flex-1 border py-3.5 text-[11px] font-semibold tracking-[0.22em] uppercase transition-all",
-                  activeVariant && activeVariant.stockCached > 0
-                    ? addedVariantId === activeVariant.id
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-foreground bg-foreground text-background hover:bg-transparent hover:text-foreground"
-                    : "border-border text-muted-foreground cursor-not-allowed",
-                )}
-              >
-                {!activeVariant
-                  ? "Select a size"
-                  : activeVariant.stockCached === 0
-                    ? "Out of stock"
-                    : addedVariantId === activeVariant.id
-                      ? "Added to cart ✓"
+              {cartItem ? (
+                <div className="flex flex-1 items-center border border-foreground">
+                  <button
+                    onClick={() => cart.updateQty(cartItem.variantId, cartItem.quantity - 1)}
+                    className="flex h-[46px] w-14 items-center justify-center text-foreground transition-colors hover:bg-muted"
+                    aria-label="Decrease quantity"
+                  >
+                    <Minus className="size-3.5" />
+                  </button>
+                  <span className="flex h-[46px] flex-1 items-center justify-center border-x border-foreground text-sm font-semibold tabular-nums">
+                    {cartItem.quantity}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (activeVariant && cartItem.quantity >= activeVariant.stockCached) return;
+                      cart.updateQty(cartItem.variantId, cartItem.quantity + 1);
+                    }}
+                    disabled={!!activeVariant && cartItem.quantity >= activeVariant.stockCached}
+                    className="flex h-[46px] w-14 items-center justify-center text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground/40"
+                    aria-label="Increase quantity"
+                  >
+                    <Plus className="size-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  disabled={!activeVariant || activeVariant.stockCached === 0}
+                  onClick={() => {
+                    if (!activeVariant || activeVariant.stockCached === 0) return;
+                    const primaryImg = orderedImages[0];
+                    cart.add({
+                      productId: product.id,
+                      variantId: activeVariant.id,
+                      productName: product.name,
+                      variantSku: activeVariant.sku,
+                      sizeMl: activeVariant.sizeMl,
+                      concentration: activeVariant.concentration,
+                      effectivePrice: (activeVariant as any).effectivePrice ?? Number(activeVariant.mrp),
+                      mrp: Number(activeVariant.mrp),
+                      imageUrl: primaryImg?.url ?? undefined,
+                      themeColor: product.themeColor ?? undefined,
+                      slug: product.slug,
+                    });
+                  }}
+                  className={cn(
+                    "flex-1 border py-3.5 text-[11px] font-semibold tracking-[0.22em] uppercase transition-all",
+                    activeVariant && activeVariant.stockCached > 0
+                      ? "border-foreground bg-foreground text-background hover:bg-transparent hover:text-foreground"
+                      : "border-border text-muted-foreground cursor-not-allowed",
+                  )}
+                >
+                  {!activeVariant
+                    ? "Select a size"
+                    : activeVariant.stockCached === 0
+                      ? "Out of stock"
                       : "Add to cart"}
-              </button>
+                </button>
+              )}
               <button
                 onClick={() => {
                   if (!isLoggedIn) {

@@ -43,6 +43,13 @@
       "when": 1783410792810,
       "tag": "0005_drop_product_gender",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783416799594,
+      "tag": "0006_order_payment_failed_status",
+      "breakpoints": true
     }
   ]
 }

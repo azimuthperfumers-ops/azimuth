@@ -3,16 +3,16 @@ const GRAIN =
 
 export function QuoteBand() {
   return (
-    <section className="relative overflow-hidden bg-[#1B1611] px-6 py-32 text-center sm:px-10 md:px-16">
+    <section className="relative overflow-hidden bg-foreground px-6 py-32 text-center sm:px-10 md:px-16">
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.06]"
         style={{ backgroundImage: GRAIN, backgroundSize: "200px 200px" }}
       />
       <div className="relative">
-        <div className="text-[11px] font-semibold tracking-[0.34em] text-[#B0793F] uppercase">
+        <div className="text-[11px] font-semibold tracking-[0.34em] text-primary/80 uppercase">
           The Azimuth Way
         </div>
-        <blockquote className="font-heading mx-auto mt-7 max-w-[22ch] text-[clamp(2.2rem,4vw,3.9rem)] leading-[1.25] font-normal text-[#EFE6D6] italic">
+        <blockquote className="font-heading mx-auto mt-7 max-w-[22ch] text-[clamp(2.2rem,4vw,3.9rem)] leading-[1.25] font-normal text-background italic">
           &ldquo;An accord becomes unmistakably yours.&rdquo;
         </blockquote>
       </div>

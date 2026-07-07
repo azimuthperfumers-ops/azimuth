@@ -23,6 +23,10 @@ export interface IRazorpayService {
     receipt: string;
     notes?: Record<string, string>;
   }): Promise<{ id: string; amount: number }>;
+  // Reconciliation: ask Razorpay directly whether a payment ever landed against this
+  // order, rather than trusting elapsed time or a client-side "dismiss" event alone —
+  // webhooks can be delayed or dropped, and this is the authoritative source.
+  fetchOrderPayments(razorpayOrderId: string): Promise<{ id: string; status: string; amount: number }[]>;
 }
 
 class RazorpayService implements IRazorpayService {
@@ -98,6 +102,11 @@ class RazorpayService implements IRazorpayService {
       throw new Error(`Razorpay refund failed: ${msg}`);
     }
     return { id: refund.id, amount: Number(refund.amount) };
+  }
+
+  async fetchOrderPayments(razorpayOrderId: string) {
+    const { items } = await this.rzp.orders.fetchPayments(razorpayOrderId);
+    return items.map((p) => ({ id: p.id, status: p.status, amount: Number(p.amount) }));
   }
 
   verifyWebhookSignature(rawBody: Buffer, signature: string): boolean {

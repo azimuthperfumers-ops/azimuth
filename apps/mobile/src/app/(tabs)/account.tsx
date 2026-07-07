@@ -3,11 +3,12 @@ import { useRouter } from "expo-router";
 
 import { useSession } from "@/hooks/use-session";
 import { authClient } from "@/lib/auth-client";
-import { clearToken } from "@/lib/session";
 import { Fonts } from "@/constants/theme";
 
 const MENU = [
   { label: "Order History", sub: "Track and manage your orders", route: "/orders" as const },
+  { label: "Wishlist", sub: "Fragrances you've saved", route: "/wishlist" as const },
+  { label: "Addresses", sub: "Manage your delivery addresses", route: "/addresses" as const },
   { label: "Support", sub: "Get help with returns, refunds & more", route: "/support/index" as const },
 ] as const;
 
@@ -17,7 +18,6 @@ export default function AccountScreen() {
 
   async function handleSignOut() {
     await authClient.signOut();
-    await clearToken();
     await refresh();
   }
 
@@ -62,36 +62,35 @@ export default function AccountScreen() {
     .join("")
     .toUpperCase() ?? "A";
 
+  const memberSinceYear = new Date(session.user.createdAt).getFullYear();
+
   return (
     <View className="flex-1 bg-[#faf8f5]">
       <ScrollView bounces>
-        {/* Header */}
-        <View className="px-6 pt-8 pb-6 border-b border-[#e8e2da]">
-          <Text className="text-[10px] font-semibold tracking-[0.36em] text-[#888888] uppercase mb-2">
-            Azimuth Perfumers
-          </Text>
-          <Text className="text-[30px] font-semibold tracking-[0.08em] text-[#111111] uppercase">
-            Account
-          </Text>
-        </View>
-
         {/* Profile */}
-        <View className="px-6 py-8 border-b border-[#e8e2da] flex-row items-center gap-5">
-          {/* Avatar */}
-          <View className="w-14 h-14 bg-[#111111] items-center justify-center">
-            <Text className="text-white text-[18px] font-semibold tracking-wider">{initials}</Text>
-          </View>
-          <View>
-            <Text className="text-[17px] font-semibold text-[#111111]">{session.user.name}</Text>
-            {session.user.email ? (
-              <Text className="text-[13px] text-[#888888] mt-0.5">{session.user.email}</Text>
-            ) : null}
-            {(session.user as { phoneNumber?: string }).phoneNumber ? (
-              <Text className="text-[13px] text-[#888888] mt-0.5">
-                {(session.user as { phoneNumber?: string }).phoneNumber}
+        <View className="px-6 pt-8 pb-8 border-b border-[#e8e2da]">
+          <Text className="text-[10px] font-semibold tracking-[0.28em] uppercase mb-5" style={{ color: "#8a8175" }}>
+            Your Account
+          </Text>
+          <View className="flex-row items-center gap-4">
+            <View className="w-14 h-14 bg-[#111111] items-center justify-center">
+              <Text className="text-white text-[18px] font-semibold tracking-wider">{initials}</Text>
+            </View>
+            <View>
+              <Text
+                className="text-[22px] leading-none"
+                style={{ fontFamily: Fonts.serifMedium, color: "#111111" }}
+              >
+                {session.user.name}
               </Text>
-            ) : null}
+              <Text className="text-[10px] tracking-[0.14em] text-[#888888] uppercase mt-1.5">
+                Member since {memberSinceYear}
+              </Text>
+            </View>
           </View>
+          {session.user.email ? (
+            <Text className="text-[13px] text-[#888888] mt-4">{session.user.email}</Text>
+          ) : null}
         </View>
 
         {/* Menu */}

@@ -113,15 +113,9 @@ export async function createOrder(db: Database, input: CreateOrderInput) {
       });
     }
 
-    // Clear server-side cart
-    await tx
-      .delete(schema.cartItems)
-      .where(
-        and(
-          eq(schema.cartItems.userId, input.userId),
-          eq(schema.cartItems.isSaved, false),
-        ),
-      );
+    // Cart is cleared once payment is verified (payment.verifyAndConfirmPayment),
+    // not here — an order can be created and never paid for, and the cart should
+    // survive that.
 
     return order;
   });

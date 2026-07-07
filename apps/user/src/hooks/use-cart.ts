@@ -38,6 +38,7 @@ type ServerRow = {
   productName: string | null;
   sku: string | null;
   sizeMl: number | null;
+  concentration: string | null;
   effectivePrice: number;
   mrp: string | null;
   imageUrl: string | null;
@@ -52,6 +53,7 @@ function toCartItem(row: ServerRow): CartItem {
     productName: row.productName ?? "",
     variantSku: row.sku ?? "",
     sizeMl: row.sizeMl ?? 0,
+    concentration: row.concentration ?? "",
     effectivePrice: row.effectivePrice,
     mrp: Number(row.mrp ?? 0),
     imageUrl: row.imageUrl ?? undefined,

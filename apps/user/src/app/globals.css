@@ -41,36 +41,36 @@
 }
 
 :root {
-    /* Azimuth Perfumers — high-contrast editorial: white base, near-black ink, red accent */
+    /* Azimuth Perfumers — editorial cream, ink, amber (Azimuth Landing design) */
     --radius: 0;
 
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.12 0.005 70);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.12 0.005 70);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.12 0.005 70);
-    /* Red accent */
-    --primary: oklch(0.52 0.22 25);
-    --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.95 0 0);
-    --secondary-foreground: oklch(0.12 0.005 70);
-    --muted: oklch(0.93 0 0);
-    --muted-foreground: oklch(0.48 0.005 70);
-    --accent: oklch(0.95 0 0);
-    --accent-foreground: oklch(0.12 0.005 70);
+    --background: #F5F0E7;
+    --foreground: #1B1611;
+    --card: #FAF6EE;
+    --card-foreground: #1B1611;
+    --popover: #FAF6EE;
+    --popover-foreground: #1B1611;
+    /* Amber accent */
+    --primary: #9A5B2B;
+    --primary-foreground: #FFF8EC;
+    --secondary: #EDE3D0;
+    --secondary-foreground: #1B1611;
+    --muted: #E8DCC7;
+    --muted-foreground: #57493A;
+    --accent: #EDE3D0;
+    --accent-foreground: #1B1611;
     --destructive: oklch(0.52 0.22 25);
-    --border: oklch(0.88 0 0);
-    --input: oklch(0.88 0 0);
-    --ring: oklch(0.52 0.22 25);
-    --sidebar: oklch(0.96 0 0);
-    --sidebar-foreground: oklch(0.12 0.005 70);
-    --sidebar-primary: oklch(0.52 0.22 25);
-    --sidebar-primary-foreground: oklch(1 0 0);
-    --sidebar-accent: oklch(0.93 0 0);
-    --sidebar-accent-foreground: oklch(0.12 0.005 70);
-    --sidebar-border: oklch(0.88 0 0);
-    --sidebar-ring: oklch(0.52 0.22 25);
+    --border: #E3DDD1;
+    --input: #E3DDD1;
+    --ring: #9A5B2B;
+    --sidebar: #FAF6EE;
+    --sidebar-foreground: #1B1611;
+    --sidebar-primary: #9A5B2B;
+    --sidebar-primary-foreground: #FFF8EC;
+    --sidebar-accent: #EDE3D0;
+    --sidebar-accent-foreground: #1B1611;
+    --sidebar-border: #E3DDD1;
+    --sidebar-ring: #9A5B2B;
 }
 
 @layer base {

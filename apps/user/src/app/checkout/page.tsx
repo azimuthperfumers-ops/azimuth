@@ -60,6 +60,14 @@ function formatInr(n: number) {
   return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
+const CONCENTRATION_LABEL: Record<string, string> = {
+  edp: "Eau de Parfum",
+  edt: "Eau de Toilette",
+  parfum: "Parfum",
+  cologne: "Cologne",
+  attar: "Attar",
+};
+
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
     if (window.Razorpay) return resolve(true);
@@ -833,7 +841,7 @@ export default function CheckoutPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.productName}</p>
                       <p className="text-[11px] text-muted-foreground/50">
-                        {item.sizeMl}ml · qty {item.quantity}
+                        {CONCENTRATION_LABEL[item.concentration] ?? item.concentration} · {item.sizeMl}ml · qty {item.quantity}
                       </p>
                     </div>
                     <p className="text-sm font-semibold tabular-nums shrink-0">

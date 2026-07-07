@@ -1,3 +1,4 @@
+import { expo } from "@better-auth/expo";
 import { db, schema } from "@azimuth/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -25,6 +26,7 @@ export const auth = betterAuth({
   },
   plugins: [
     bearer(),
+    expo(),
     phoneNumber({
       // TODO: wire a real SMS provider (e.g. Twilio) before production —
       // logging the code is fine for local dev since there's nowhere else to read it.
@@ -37,7 +39,7 @@ export const auth = betterAuth({
       },
     }),
   ],
-  trustedOrigins: [env.ADMIN_APP_URL, env.USER_APP_URL],
+  trustedOrigins: [env.ADMIN_APP_URL, env.USER_APP_URL, "azimuth://"],
   user: {
     additionalFields: {
       role: {

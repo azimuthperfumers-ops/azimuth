@@ -81,6 +81,7 @@ const checkoutItemSchema = z.object({
 
 const ORDER_STATUS_VALUES = [
   "pending_payment",
+  "payment_failed",
   "paid",
   "processing",
   "picked_up",
@@ -464,7 +465,7 @@ export const orderRouter = router({
         where: eq(schema.orders.id, input.orderId),
       });
       if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
-      if (order.status !== "pending_payment") {
+      if (order.status !== "pending_payment" && order.status !== "payment_failed") {
         throw new TRPCError({ code: "BAD_REQUEST", message: `Order is already ${order.status}` });
       }
 

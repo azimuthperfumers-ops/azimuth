@@ -15,6 +15,7 @@ import { trpc } from "@/lib/trpc";
 
 const STATUS_LABEL: Record<string, string> = {
   pending_payment: "Awaiting payment",
+  payment_failed: "Payment failed",
   paid: "Payment confirmed",
   processing: "Processing",
   picked_up: "Picked up by courier",
@@ -30,6 +31,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_COLOR: Record<string, string> = {
   pending_payment: "text-yellow-600 bg-yellow-50 border-yellow-200",
+  payment_failed: "text-red-600 bg-red-50 border-red-200",
   paid: "text-blue-600 bg-blue-50 border-blue-200",
   processing: "text-blue-600 bg-blue-50 border-blue-200",
   picked_up: "text-blue-600 bg-blue-50 border-blue-200",
@@ -43,7 +45,7 @@ const STATUS_COLOR: Record<string, string> = {
   rto_delivered: "text-muted-foreground bg-muted border-border",
 };
 
-const TERMINAL_STATUSES = ["delivered", "cancelled", "refunded", "rto_delivered"];
+const TERMINAL_STATUSES = ["delivered", "cancelled", "payment_failed", "refunded", "rto_delivered"];
 
 // ─── Order detail page ───────────────────────────────────────────────────────
 

@@ -40,7 +40,7 @@ export default function OrderDetailScreen() {
   }
 
   const currentStep = STATUS_STEPS.indexOf(order.status as (typeof STATUS_STEPS)[number]);
-  const isTerminal = order.status === "cancelled" || order.status === "refunded";
+  const isTerminal = order.status === "cancelled" || order.status === "payment_failed" || order.status === "refunded";
   const waybill = (order as { shiprocketAwb?: string | null }).shiprocketAwb
     ?? (order as { delhiveryWaybill?: string | null }).delhiveryWaybill;
 
@@ -117,7 +117,11 @@ export default function OrderDetailScreen() {
                 className="text-[10.5px] font-semibold tracking-[0.18em] uppercase text-center"
                 style={{ color: order.status === "refunded" ? "#2d6a4f" : "#888888" }}
               >
-                {order.status === "refunded" ? "Refund processed" : "Order cancelled"}
+                {order.status === "refunded"
+                  ? "Refund processed"
+                  : order.status === "payment_failed"
+                    ? "Payment failed"
+                    : "Order cancelled"}
               </Text>
             </View>
           </View>

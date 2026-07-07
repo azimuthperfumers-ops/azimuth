@@ -1,6 +1,13 @@
 import { Queue } from "bullmq";
 import { redisOpts } from "./connection.js";
 
+// Orders stuck in `pending_payment` with no webhook ever arriving (e.g. user abandons
+// the Razorpay checkout) would sit there forever without this sweep. Bump this back up
+// to something like 30 minutes before relying on this for real customers — real UPI/
+// netbanking payments can legitimately take a few minutes to settle. Currently short
+// for local testing.
+export const PENDING_PAYMENT_TIMEOUT_MS = 2 * 60 * 1000;
+
 export type PaymentCapturedJob = {
   type: "payment_captured";
   eventId: string;
@@ -38,6 +45,10 @@ export type CancelShipmentJob = {
   waybill: string;
 };
 
+export type ExpirePendingPaymentsJob = {
+  type: "expire_pending_payments";
+};
+
 export type ReturnShipmentJob = {
   type: "return_shipment";
   dbJobId?: string;
@@ -65,7 +76,8 @@ export type OrderJobData =
   | BookShipmentJob
   | InitiateRefundJob
   | CancelShipmentJob
-  | ReturnShipmentJob;
+  | ReturnShipmentJob
+  | ExpirePendingPaymentsJob;
 
 export const orderQueue = new Queue<OrderJobData>("order-events", {
   connection: redisOpts(),
@@ -76,3 +88,11 @@ export const orderQueue = new Queue<OrderJobData>("order-events", {
     removeOnFail: { count: 500 },
   },
 });
+
+export async function scheduleExpirePendingPayments() {
+  await orderQueue.upsertJobScheduler(
+    "expire-pending-payments",
+    { every: 5 * 60 * 1000 },
+    { name: "expire_pending_payments", data: { type: "expire_pending_payments" } },
+  );
+}

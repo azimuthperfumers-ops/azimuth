@@ -1,7 +1,7 @@
 import type { AppRouter } from "@azimuth/api";
 import { createTRPCReact } from "@trpc/react-query";
 import { httpBatchLink } from "@trpc/client";
-import { getStoredToken } from "./session";
+import { authClient } from "./auth-client";
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -12,9 +12,9 @@ export function createTrpcClient() {
     links: [
       httpBatchLink({
         url: `${API_URL}/trpc`,
-        async headers() {
-          const token = await getStoredToken();
-          return token ? { Authorization: `Bearer ${token}` } : {};
+        headers() {
+          const cookie = authClient.getCookie();
+          return cookie ? { Cookie: cookie } : {};
         },
       }),
     ],

@@ -2,38 +2,63 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import Svg, { Path } from "react-native-svg";
 
 import { authClient } from "@/lib/auth-client";
 import { Fonts } from "@/constants/theme";
 
-type Step = "phone" | "otp";
+type Mode = "sign-in" | "sign-up";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function GoogleIcon() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24">
+      <Path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+      <Path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+      <Path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+      <Path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+    </Svg>
+  );
+}
 
 export default function SignInScreen() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("phone");
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
+  const [mode, setMode] = useState<Mode>("sign-in");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSendOtp() {
+  const emailValid = EMAIL_RE.test(email);
+  const passwordValid = password.length >= 8;
+  const nameValid = mode === "sign-in" || name.trim().length > 0;
+  const canSubmit = emailValid && passwordValid && nameValid && !loading;
+
+  async function handleSubmit() {
     setError(null);
+    if (!emailValid) { setError("Enter a valid email address"); return; }
+    if (!passwordValid) { setError("Password must be at least 8 characters"); return; }
+    if (!nameValid) { setError("Name is required"); return; }
+
     setLoading(true);
-    const { error: err } = await authClient.phoneNumber.sendOtp({ phoneNumber: `+91${phone}` });
+    const { error: err } =
+      mode === "sign-up"
+        ? await authClient.signUp.email({ email, password, name })
+        : await authClient.signIn.email({ email, password });
     setLoading(false);
-    if (err) { setError(err.message ?? "Failed to send OTP"); return; }
-    setStep("otp");
+    if (err) { setError(err.message ?? "Something went wrong"); return; }
+    router.back();
   }
 
-  async function handleVerifyOtp() {
+  async function handleGoogle() {
     setError(null);
-    setLoading(true);
-    const { data, error: err } = await authClient.phoneNumber.verify({
-      phoneNumber: `+91${phone}`,
-      code: otp,
-    });
-    setLoading(false);
-    if (err || !data) { setError(err?.message ?? "Invalid OTP"); return; }
+    setGoogleLoading(true);
+    const { error: err } = await authClient.signIn.social({ provider: "google" });
+    setGoogleLoading(false);
+    if (err) { setError(err.message ?? "Google sign-in failed"); return; }
     router.back();
   }
 
@@ -63,90 +88,112 @@ export default function SignInScreen() {
           className="text-[40px] leading-none tracking-tight text-[#111111] mb-2"
           style={{ fontFamily: Fonts.serifItalic }}
         >
-          {step === "phone" ? "Sign in" : "Verify"}
+          {mode === "sign-in" ? "Sign in" : "Create account"}
         </Text>
-        <Text className="text-[14px] text-[#888888] mb-10 leading-relaxed">
-          {step === "phone"
-            ? "Enter your mobile number — we'll send an OTP."
-            : `OTP sent to +91 ${phone}. Enter it below.`}
+        <Text className="text-[14px] text-[#888888] mb-8 leading-relaxed">
+          {mode === "sign-in" ? "Welcome back to Azimuth Perfumers." : "Join us for slow perfumery, composed in small batches."}
         </Text>
 
-        {step === "phone" ? (
-          <>
-            {/* Phone input */}
-            <View className="border-b-2 border-[#111111] flex-row items-center mb-10 pb-2">
-              <Text className="text-[18px] font-semibold text-[#888888] mr-3">+91</Text>
-              <TextInput
-                className="flex-1 text-[22px] font-semibold text-[#111111] tracking-widest"
-                placeholder="XXXXXXXXXX"
-                placeholderTextColor="#d0ccc6"
-                keyboardType="phone-pad"
-                maxLength={10}
-                value={phone}
-                onChangeText={setPhone}
-                autoFocus
-                selectionColor="#c0392b"
-              />
-            </View>
+        {/* Google */}
+        <Pressable
+          className="h-14 flex-row items-center justify-center gap-3 border border-[#e8e2da] active:opacity-70 mb-4"
+          style={{ opacity: googleLoading ? 0.5 : 1 }}
+          disabled={googleLoading}
+          onPress={handleGoogle}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color="#111111" />
+          ) : (
+            <>
+              <GoogleIcon />
+              <Text className="text-[11px] font-semibold tracking-[0.18em] text-[#111111] uppercase">
+                Continue with Google
+              </Text>
+            </>
+          )}
+        </Pressable>
 
-            <Pressable
-              className="h-14 items-center justify-center bg-[#111111] active:opacity-70"
-              style={{ opacity: phone.length < 10 || loading ? 0.4 : 1 }}
-              disabled={phone.length < 10 || loading}
-              onPress={handleSendOtp}
-            >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-white text-[11px] font-semibold tracking-[0.3em] uppercase">
-                  Send OTP
-                </Text>
-              )}
-            </Pressable>
-          </>
-        ) : (
-          <>
-            {/* OTP input */}
+        {/* Divider */}
+        <View className="flex-row items-center gap-3 mb-6">
+          <View className="flex-1 h-px bg-[#e8e2da]" />
+          <Text className="text-[10px] font-semibold tracking-[0.2em] text-[#888888]/60 uppercase">or</Text>
+          <View className="flex-1 h-px bg-[#e8e2da]" />
+        </View>
+
+        {mode === "sign-up" && (
+          <View className="mb-5">
+            <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#888888] uppercase mb-2">
+              Full name
+            </Text>
             <TextInput
-              className="border-b-2 border-[#111111] text-[36px] font-semibold text-[#111111] text-center tracking-[0.5em] pb-2 mb-10"
-              placeholder="······"
+              className="border-b-2 border-[#111111] text-[16px] text-[#111111] pb-2"
+              placeholder="Your name"
               placeholderTextColor="#d0ccc6"
-              keyboardType="number-pad"
-              maxLength={6}
-              value={otp}
-              onChangeText={setOtp}
-              autoFocus
+              value={name}
+              onChangeText={setName}
               selectionColor="#c0392b"
             />
-
-            <Pressable
-              className="h-14 items-center justify-center bg-[#111111] active:opacity-70 mb-4"
-              style={{ opacity: otp.length < 4 || loading ? 0.4 : 1 }}
-              disabled={otp.length < 4 || loading}
-              onPress={handleVerifyOtp}
-            >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-white text-[11px] font-semibold tracking-[0.3em] uppercase">
-                  Verify OTP
-                </Text>
-              )}
-            </Pressable>
-
-            <Pressable
-              className="h-11 items-center justify-center border border-[#e8e2da]"
-              onPress={() => { setStep("phone"); setOtp(""); setError(null); }}
-            >
-              <Text className="text-[10.5px] font-semibold tracking-[0.18em] text-[#888888] uppercase">
-                Change number
-              </Text>
-            </Pressable>
-          </>
+          </View>
         )}
 
+        <View className="mb-5">
+          <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#888888] uppercase mb-2">
+            Email
+          </Text>
+          <TextInput
+            className="border-b-2 border-[#111111] text-[16px] text-[#111111] pb-2"
+            placeholder="you@example.com"
+            placeholderTextColor="#d0ccc6"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={email}
+            onChangeText={setEmail}
+            selectionColor="#c0392b"
+          />
+        </View>
+
+        <View className="mb-8">
+          <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#888888] uppercase mb-2">
+            Password
+          </Text>
+          <TextInput
+            className="border-b-2 border-[#111111] text-[16px] text-[#111111] pb-2"
+            placeholder="••••••••"
+            placeholderTextColor="#d0ccc6"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            selectionColor="#c0392b"
+          />
+        </View>
+
+        <Pressable
+          className="h-14 items-center justify-center bg-[#111111] active:opacity-70 mb-4"
+          style={{ opacity: canSubmit ? 1 : 0.4 }}
+          disabled={!canSubmit}
+          onPress={handleSubmit}
+        >
+          {loading ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text className="text-white text-[11px] font-semibold tracking-[0.3em] uppercase">
+              {mode === "sign-in" ? "Sign in" : "Create account"}
+            </Text>
+          )}
+        </Pressable>
+
+        <Pressable
+          className="h-11 items-center justify-center"
+          onPress={() => { setMode(mode === "sign-in" ? "sign-up" : "sign-in"); setError(null); }}
+        >
+          <Text className="text-[11px] text-[#888888] tracking-wide">
+            {mode === "sign-in" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+          </Text>
+        </Pressable>
+
         {error && (
-          <View className="mt-5 px-4 py-3 border border-[#c0392b]/30 bg-[#c0392b]/5">
+          <View className="mt-3 px-4 py-3 border border-[#c0392b]/30 bg-[#c0392b]/5">
             <Text className="text-[12.5px] text-[#c0392b] text-center">{error}</Text>
           </View>
         )}

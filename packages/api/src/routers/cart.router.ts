@@ -27,6 +27,7 @@ async function fetchCartRows(db: Database, userId: string) {
       isSaved: schema.cartItems.isSaved,
       addedAt: schema.cartItems.addedAt,
       sizeMl: schema.productVariants.sizeMl,
+      concentration: schema.productVariants.concentration,
       sku: schema.productVariants.sku,
       mrp: schema.productVariants.mrp,
       stockCached: schema.productVariants.stockCached,

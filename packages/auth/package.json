@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@azimuth/db": "workspace:*",
+    "@better-auth/expo": "1.6.20",
     "better-auth": "^1.6.20",
     "zod": "^4.4.3"
   },

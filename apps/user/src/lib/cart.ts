@@ -7,6 +7,7 @@ export type CartItem = {
   productName: string;
   variantSku: string;
   sizeMl: number;
+  concentration: string;
   effectivePrice: number;
   mrp: number;
   imageUrl?: string;

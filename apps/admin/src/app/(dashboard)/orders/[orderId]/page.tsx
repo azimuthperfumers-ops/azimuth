@@ -36,7 +36,7 @@ type StatusHistoryEntry = NonNullable<Order["statusHistory"]>[number];
 // ─── Status config ─────────────────────────────────────────────────────────────
 
 const ORDER_STATUSES = [
-  "pending_payment", "paid", "processing",
+  "pending_payment", "payment_failed", "paid", "processing",
   "picked_up", "out_for_delivery", "delivery_attempted",
   "shipped", "delivered", "cancelled", "refunded",
   "rto_initiated", "rto_delivered",
@@ -47,6 +47,7 @@ type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   pending_payment: "Awaiting payment",
+  payment_failed: "Payment failed",
   paid: "Paid",
   processing: "Processing",
   picked_up: "Picked up",
@@ -65,6 +66,7 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 
 const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive" | "outline"> = {
   pending_payment: "outline",
+  payment_failed: "destructive",
   paid: "secondary",
   processing: "secondary",
   picked_up: "secondary",
@@ -372,7 +374,7 @@ export default function AdminOrderDetailPage({
                 {retryBooking.isPending ? "Queueing…" : "Retry shipment booking"}
               </Button>
             )}
-            {order.status === "pending_payment" && (
+            {(order.status === "pending_payment" || order.status === "payment_failed") && (
               <Button
                 size="sm"
                 variant="outline"
