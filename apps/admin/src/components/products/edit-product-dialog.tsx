@@ -28,12 +28,6 @@ import { trpc } from "@/lib/trpc";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const GENDERS = [
-  { value: "unisex", label: "Unisex" },
-  { value: "women", label: "For Her" },
-  { value: "men", label: "For Him" },
-] as const;
-
 const STATUSES = ["draft", "active", "archived"] as const;
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft — not visible to customers",
@@ -56,31 +50,6 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
     <p className="text-field-label font-semibold uppercase tracking-[0.06em] text-muted-foreground">
       {children}
     </p>
-  );
-}
-
-function PillButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-full border px-4 py-1.5 text-body-sm font-medium transition-colors",
-        active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-background text-foreground hover:bg-muted",
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -134,7 +103,6 @@ type Product = {
   name: string;
   slug: string;
   description: string | null;
-  gender: "men" | "women" | "unisex";
   categoryId: string;
   themeColor: string | null;
   hsnCode: string | null;
@@ -161,7 +129,6 @@ function EditProductForm({ product, onDone }: { product: Product; onDone: () => 
   const [name, setName] = useState(product.name);
   const [slug, setSlug] = useState(product.slug);
   const [description, setDescription] = useState(product.description ?? "");
-  const [gender, setGender] = useState(product.gender);
   const [categoryId, setCategoryId] = useState(product.categoryId);
   const [themeColor, setThemeColor] = useState(product.themeColor ?? THEME_PRESETS[0]);
   const [customColor, setCustomColor] = useState(
@@ -211,7 +178,6 @@ function EditProductForm({ product, onDone }: { product: Product; onDone: () => 
       name,
       slug,
       description: description || undefined,
-      gender,
       categoryId,
       themeColor,
       hsnCode: hsnCode || undefined,
@@ -256,17 +222,6 @@ function EditProductForm({ product, onDone }: { product: Product; onDone: () => 
 
         {/* ── Character ── */}
         <SectionHeading>Character</SectionHeading>
-
-        <div className="space-y-1.5">
-          <FieldLabel>Gender</FieldLabel>
-          <div className="flex flex-wrap gap-2">
-            {GENDERS.map((g) => (
-              <PillButton key={g.value} active={gender === g.value} onClick={() => setGender(g.value)}>
-                {g.label}
-              </PillButton>
-            ))}
-          </div>
-        </div>
 
         <div className="space-y-1.5">
           <FieldLabel>Theme color</FieldLabel>

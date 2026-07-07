@@ -18,96 +18,96 @@ DELETE FROM public.products WHERE id IN (
 -- ── Products ──────────────────────────────────────────────────────────────────
 
 INSERT INTO public.products (
-  id, name, slug, description, gender,
+  id, name, slug, description,
   theme_color, category_id, hsn_code,
   longevity_rating, sillage_rating, status, is_featured,
   created_at, updated_at
 ) VALUES
 
-  -- 1. Monsoon Mitti  (unisex · EDP · 1 variant)
+  -- 1. Monsoon Mitti  (EDP · 1 variant)
   (
     'aa000001-0000-4000-8000-000000000001',
     'Monsoon Mitti',
     'monsoon-mitti',
     'The first rain on dry earth. Petrichor, wet clay, and a heart of green vetiver with a soft woody drydown — worn memory of an Indian summer broken.',
-    'unisex', '#6b7c5e',
+    '#6b7c5e',
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '3303', 4, 3, 'active', true, NOW(), NOW()
   ),
 
-  -- 2. Raat Rani  (women · EDP · 2 variants)
+  -- 2. Raat Rani  (EDP · 2 variants)
   (
     'aa000002-0000-4000-8000-000000000002',
     'Raat Rani',
     'raat-rani',
     'Night-blooming Cestrum Nocturnum — intoxicating and white-floral, sweetened by tuberose and anchored with warm sandalwood. Made for evenings that linger.',
-    'women', '#4a3060',
+    '#4a3060',
     '64a11837-a4ef-43a2-b9e9-b3eb92c10e3b',
     '3303', 5, 5, 'active', true, NOW(), NOW()
   ),
 
-  -- 3. Kesar Oud  (men · EDP · 1 variant)
+  -- 3. Kesar Oud  (EDP · 1 variant)
   (
     'aa000003-0000-4000-8000-000000000003',
     'Kesar Oud',
     'kesar-oud',
     'Saffron threads over aged Hindi oud — opulent, deep, and unhurried. A fragrance that commands presence without a word.',
-    'men', '#8b4513',
+    '#8b4513',
     '670ac55d-1ced-43be-bea2-8fc7c42b3f9e',
     '3303', 5, 5, 'active', false, NOW(), NOW()
   ),
 
-  -- 4. Shaam-e-Awadh  (men · cologne · 2 variants)
+  -- 4. Shaam-e-Awadh  (cologne · 2 variants)
   (
     'aa000004-0000-4000-8000-000000000004',
     'Shaam-e-Awadh',
     'shaam-e-awadh',
     'Lucknow at dusk — jasmine garlands, a breath of incense from passing diyas, and the warmth of aged wood. Cultured. Unhurried. Eternal.',
-    'men', '#c8960c',
+    '#c8960c',
     '670ac55d-1ced-43be-bea2-8fc7c42b3f9e',
     '3303', 3, 4, 'active', true, NOW(), NOW()
   ),
 
-  -- 5. Vetiver Noir  (unisex · EDP · 1 variant)
+  -- 5. Vetiver Noir  (EDP · 1 variant)
   (
     'aa000005-0000-4000-8000-000000000005',
     'Vetiver Noir',
     'vetiver-noir',
     'Dark, smoked vetiver rooted in black pepper and birch tar — dry and resinous, yet surprisingly skin-close. For those who find complexity in restraint.',
-    'unisex', '#1a1a1a',
+    '#1a1a1a',
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '3303', 5, 3, 'active', false, NOW(), NOW()
   ),
 
-  -- 6. Gulabi Hawa  (women · EDP · 2 variants)
+  -- 6. Gulabi Hawa  (EDP · 2 variants)
   (
     'aa000006-0000-4000-8000-000000000006',
     'Gulabi Hawa',
     'gulabi-hawa',
     'Pink wind through a rose garden at dawn. Bright bergamot and dewy peony give way to a soft rose heart, drying down to clean musk and white cedar.',
-    'women', '#e8a0a0',
+    '#e8a0a0',
     '64a11837-a4ef-43a2-b9e9-b3eb92c10e3b',
     '3303', 3, 3, 'active', true, NOW(), NOW()
   ),
 
-  -- 7. Amber Coast  (unisex · EDP · 2 variants)
+  -- 7. Amber Coast  (EDP · 2 variants)
   (
     'aa000007-0000-4000-8000-000000000007',
     'Amber Coast',
     'amber-coast',
     'Sea salt and ambergris washed onto warm amber resin. A coastal fragrance with depth — aquatic freshness on top, ancient ocean on the base.',
-    'unisex', '#c8a96e',
+    '#c8a96e',
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '3303', 4, 4, 'active', false, NOW(), NOW()
   ),
 
-  -- 8. Noir Tabac  (men · parfum · 1 variant)
+  -- 8. Noir Tabac  (parfum · 1 variant)
   (
     'aa000008-0000-4000-8000-000000000008',
     'Noir Tabac',
     'noir-tabac',
     'Cured tobacco leaf, tonka bean, and a touch of caramel over dark patchouli. Heady and decadent — the kind of scent that fills a room with intent.',
-    'men', '#2d1b0e',
+    '#2d1b0e',
     '670ac55d-1ced-43be-bea2-8fc7c42b3f9e',
     '3303', 5, 5, 'active', true, NOW(), NOW()
   )

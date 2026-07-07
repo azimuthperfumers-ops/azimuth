@@ -42,7 +42,6 @@ export const createProductSchema = z.object({
   name: z.string().min(1).max(200),
   slug: slugSchema,
   description: z.string().max(5000).optional(),
-  gender: z.enum(["men", "women", "unisex"]).default("unisex"),
   themeColor: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, "hex color like #aa1188")

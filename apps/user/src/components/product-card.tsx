@@ -5,7 +5,6 @@ type Product = {
   name: string;
   slug: string;
   themeColor: string | null;
-  gender: string;
   category: { name: string } | null;
   images: { url: string; isPrimary: boolean }[];
   variants: {
@@ -23,12 +22,6 @@ const CONCENTRATION_LABEL: Record<string, string> = {
   parfum: "Parfum",
   cologne: "Cologne",
   attar: "Attar",
-};
-
-const GENDER_SHORT: Record<string, string> = {
-  men: "For Him",
-  women: "For Her",
-  unisex: "Unisex",
 };
 
 export function ProductCard({ product }: { product: Product }) {
@@ -88,8 +81,6 @@ export function ProductCard({ product }: { product: Product }) {
             {displayVariant
               ? (CONCENTRATION_LABEL[displayVariant.concentration] ?? displayVariant.concentration)
               : null}
-            {" · "}
-            {GENDER_SHORT[product.gender] ?? product.gender}
           </p>
           {fromPrice !== null && (
             <div className="flex items-baseline gap-1.5 shrink-0">

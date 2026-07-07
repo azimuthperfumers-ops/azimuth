@@ -22,13 +22,6 @@ const CONCENTRATIONS = [
   { value: "attar", label: "Attar" },
 ] as const;
 
-const GENDERS = [
-  { value: "all", label: "All" },
-  { value: "unisex", label: "Unisex" },
-  { value: "women", label: "For Her" },
-  { value: "men", label: "For Him" },
-] as const;
-
 function FilterButton({
   active,
   onClick,
@@ -65,7 +58,6 @@ function useFilter() {
 
   const category = params.get("category") ?? "all";
   const concentration = params.get("concentration") ?? "all";
-  const gender = params.get("gender") ?? "all";
   const search = params.get("q") ?? "";
 
   function set(key: string, value: string) {
@@ -82,15 +74,14 @@ function useFilter() {
     router.replace("/shop", { scroll: false });
   }
 
-  const hasFilters = category !== "all" || concentration !== "all" || gender !== "all" || search !== "";
+  const hasFilters = category !== "all" || concentration !== "all" || search !== "";
 
-  return { category, concentration, gender, search, set, clear, hasFilters };
+  return { category, concentration, search, set, clear, hasFilters };
 }
 
 function FilterContent({
   category,
   concentration,
-  gender,
   search,
   hasFilters,
   categories,
@@ -154,24 +145,6 @@ function FilterContent({
         </div>
       </div>
 
-      {/* Gender */}
-      <div className="border-t border-border/60 pt-7">
-        <p className="mb-3.5 text-[10px] font-bold tracking-[0.24em] text-foreground/40 uppercase">
-          Gender
-        </p>
-        <div className="flex flex-col gap-3">
-          {GENDERS.map((g) => (
-            <FilterButton
-              key={g.value}
-              active={gender === g.value}
-              onClick={() => set("gender", g.value)}
-            >
-              {g.label}
-            </FilterButton>
-          ))}
-        </div>
-      </div>
-
       {hasFilters && (
         <button
           onClick={clear}
@@ -186,7 +159,7 @@ function FilterContent({
 
 function ShopPageInner() {
   const filter = useFilter();
-  const { category, concentration, gender, search, hasFilters } = filter;
+  const { category, concentration, search, hasFilters } = filter;
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const shopBanners = trpc.content.listBanners.useQuery({ page: "shop" });
@@ -201,14 +174,13 @@ function ShopPageInner() {
     return (products.data ?? []).filter((p) => {
       if (concentration !== "all" && !p.variants.some((v) => v.concentration === concentration))
         return false;
-      if (gender !== "all" && p.gender !== gender) return false;
       if (search) {
         const q = search.toLowerCase();
         if (!p.name.toLowerCase().includes(q) && !(p.description ?? "").toLowerCase().includes(q)) return false;
       }
       return true;
     });
-  }, [products.data, concentration, gender, search]);
+  }, [products.data, concentration, search]);
 
   return (
     <>

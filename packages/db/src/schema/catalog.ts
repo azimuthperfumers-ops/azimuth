@@ -12,7 +12,6 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-export const productGenderEnum = pgEnum("product_gender", ["men", "women", "unisex"]);
 export const productConcentrationEnum = pgEnum("product_concentration", [
   "edp",
   "edt",
@@ -53,7 +52,6 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   description: text("description"),
-  gender: productGenderEnum("gender").notNull().default("unisex"),
   themeColor: text("theme_color"),
   categoryId: uuid("category_id")
     .notNull()

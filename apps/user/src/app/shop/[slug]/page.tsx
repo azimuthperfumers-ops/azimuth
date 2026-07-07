@@ -21,12 +21,6 @@ const CONCENTRATION_LABEL: Record<string, string> = {
   attar: "Attar",
 };
 
-const GENDER_LABEL: Record<string, string> = {
-  unisex: "Unisex",
-  men: "For Him",
-  women: "For Her",
-};
-
 function DotRating({ value, max = 5, label }: { value: number; max?: number; label: string }) {
   return (
     <div className="flex items-center justify-between">
@@ -214,8 +208,6 @@ export default function ProductDetailPage() {
               <p className="mb-3 text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
                 {activeVariant &&
                   (CONCENTRATION_LABEL[activeVariant.concentration] ?? activeVariant.concentration)}
-                {" · "}
-                {GENDER_LABEL[product.gender] ?? product.gender}
                 {product.category && ` · ${product.category.name}`}
               </p>
               <h1 className="font-heading text-[2.2rem] md:text-[3rem] font-medium leading-[1.05] tracking-tight text-foreground">

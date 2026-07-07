@@ -30,12 +30,6 @@ import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { ImageDropzone, type UploadedImage } from "@/components/ui/image-dropzone";
 
-const GENDERS = [
-  { value: "unisex", label: "Unisex" },
-  { value: "women", label: "For Her" },
-  { value: "men", label: "For Him" },
-] as const;
-
 const THEME_PRESETS = ["#f5e6c8", "#8b5e3c", "#4a6741", "#b07070", "#2f4538", "#7a6240"];
 
 const NOTE_POSITIONS = [
@@ -52,31 +46,6 @@ function slugify(v: string) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-}
-
-function PillButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
-        active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-background text-foreground hover:bg-muted",
-      )}
-    >
-      {children}
-    </button>
-  );
 }
 
 function RatingButtons({
@@ -109,12 +78,6 @@ function RatingButtons({
   );
 }
 
-const GENDER_LABEL: Record<string, string> = {
-  unisex: "Unisex",
-  men: "For Him",
-  women: "For Her",
-};
-
 function DotRating({ value, max = 5 }: { value: number | null; max?: number }) {
   return (
     <div className="flex gap-[3px]">
@@ -134,7 +97,6 @@ function DotRating({ value, max = 5 }: { value: number | null; max?: number }) {
 function StorefrontPreview({
   name,
   slug,
-  gender,
   themeColor,
   description,
   imageUrl,
@@ -146,7 +108,6 @@ function StorefrontPreview({
 }: {
   name: string;
   slug: string;
-  gender: string;
   themeColor: string | undefined;
   description: string;
   imageUrl: string | undefined;
@@ -158,7 +119,6 @@ function StorefrontPreview({
 }) {
   const bg = themeColor ?? "#e8e0d5";
   const displayName = name || "Product name";
-  const genderLabel = GENDER_LABEL[gender] ?? gender;
   const urlSlug = slug || "product-slug";
 
   const topNotes = notes.filter((n) => n.notePosition === "top");
@@ -235,11 +195,6 @@ function StorefrontPreview({
             <h2 className="font-heading text-[1.5rem] font-medium leading-[1.1] text-foreground">
               {name ? name : <span className="text-muted-foreground/30">Product name</span>}
             </h2>
-            <div className="mt-1.5 flex items-center gap-1.5">
-              <span className="text-[8px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                {genderLabel}
-              </span>
-            </div>
           </div>
 
           {/* Price placeholder */}
@@ -333,7 +288,6 @@ export default function NewProductPage() {
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
   const [description, setDescription] = useState("");
-  const [gender, setGender] = useState<"unisex" | "men" | "women">("unisex");
   const [themeColor, setThemeColor] = useState(THEME_PRESETS[0]);
   const [customColor, setCustomColor] = useState("");
 
@@ -400,7 +354,6 @@ export default function NewProductPage() {
       name,
       slug,
       description: description || undefined,
-      gender,
       themeColor: themeColor || undefined,
       categoryId,
       hsnCode: hsnCode || undefined,
@@ -482,21 +435,6 @@ export default function NewProductPage() {
                   onChange={(e) => setDescription(e.target.value)}
                   rows={4}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Gender</Label>
-                <div className="flex flex-wrap gap-2">
-                  {GENDERS.map((g) => (
-                    <PillButton
-                      key={g.value}
-                      active={gender === g.value}
-                      onClick={() => setGender(g.value)}
-                    >
-                      {g.label}
-                    </PillButton>
-                  ))}
-                </div>
               </div>
 
               <div className="space-y-2">
@@ -718,7 +656,6 @@ export default function NewProductPage() {
           <StorefrontPreview
             name={name}
             slug={slug}
-            gender={gender}
             themeColor={themeColor}
             description={description}
             imageUrl={previewImageUrl}

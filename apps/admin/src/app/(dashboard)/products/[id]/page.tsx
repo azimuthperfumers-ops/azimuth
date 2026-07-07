@@ -88,7 +88,7 @@ export default function ProductDetailPage() {
           <div>
             <h1 className="font-heading text-[2rem] font-medium leading-tight">{data.name}</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {data.category.name} · {data.gender}
+              {data.category.name}
             </p>
           </div>
         </div>

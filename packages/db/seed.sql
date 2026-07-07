@@ -64,14 +64,13 @@ INSERT INTO public.fragrance_notes (id, name, family_id) VALUES
   ('f1000001-0000-0000-0000-000000000072', 'Clean Musk', 'ff000001-0000-0000-0000-000000000010')
 ON CONFLICT (id) DO NOTHING;
 
--- Products — 1 "For Her", 1 "For Him", 1 Unisex (Carlton 609 kept as canonical)
-INSERT INTO public.products (id, name, slug, description, gender, theme_color, category_id, hsn_code, longevity_rating, sillage_rating, status, is_featured, created_at, updated_at) VALUES
+-- Products (Carlton 609 kept as canonical)
+INSERT INTO public.products (id, name, slug, description, theme_color, category_id, hsn_code, longevity_rating, sillage_rating, status, is_featured, created_at, updated_at) VALUES
   (
     '0eaf3bcc-1b33-4727-a685-279cc93c7dfc',
     'Solene',
     'solene',
     'Warm and sensual — a veil of rose, ylang ylang, and sandalwood that lingers like skin. Made for those who let their presence speak first.',
-    'women',
     '#b07070',
     '64a11837-a4ef-43a2-b9e9-b3eb92c10e3b',
     '3303',
@@ -86,7 +85,6 @@ INSERT INTO public.products (id, name, slug, description, gender, theme_color, c
     'Carlton 609',
     'carlton-609',
     'A bold, woody-amber cologne with a dry citrus open and a cedar-oud base. Confident, quiet authority in a bottle.',
-    'men',
     '#7a6240',
     '670ac55d-1ced-43be-bea2-8fc7c42b3f9e',
     '3303',
@@ -101,7 +99,6 @@ INSERT INTO public.products (id, name, slug, description, gender, theme_color, c
     'Lumière Noire',
     'lumiere-noire',
     'A unisex night fragrance. Black pepper and bergamot spark over a heart of iris and oud, fading into white musk and tonka.',
-    'unisex',
     '#2c2c3e',
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '3303',
