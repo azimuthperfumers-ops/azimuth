@@ -100,9 +100,3 @@
 .ticker-track:hover {
   animation-play-state: paused;
 }
-
-/* Scroll-down chevron animation */
-@keyframes chevron-float {
-  0%, 100% { transform: translateY(0) translateX(-50%); opacity: 0.6; }
-  50%       { transform: translateY(8px) translateX(-50%); opacity: 1; }
-}
