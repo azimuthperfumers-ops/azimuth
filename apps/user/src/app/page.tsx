@@ -15,8 +15,17 @@ export default function HomePage() {
   const categories = trpc.catalog.listCategories.useQuery();
   const heroContent = trpc.content.getSection.useQuery({ section: "home_hero" });
 
-  const productRows = products.data ?? [];
+  // Featured products float to the front of the landing collection + signature.
+  const productRows = (products.data ?? [])
+    .slice()
+    .sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
   const signature = productRows.find((p) => p.isFeatured) ?? productRows[0];
+
+  // Hero carousel: admin-chosen product ids (ordered); fall back to the signature.
+  const heroIds = (heroContent.data?.productIds as string[] | undefined) ?? [];
+  const byId = new Map(productRows.map((p) => [p.id, p]));
+  const heroProducts = heroIds.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => !!p);
+  const heroList = heroProducts.length > 0 ? heroProducts : signature ? [signature] : [];
 
   const heroCopy = {
     line1: (heroContent.data?.line1 as string | undefined) ?? "Worn close.",
@@ -30,7 +39,7 @@ export default function HomePage() {
     <>
       <SiteHeader />
       <main>
-        <LandingHero copy={heroCopy} signature={signature} isLoading={products.isLoading} />
+        <LandingHero copy={heroCopy} products={heroList} isLoading={products.isLoading} />
         <MoodSection categories={categories.data ?? []} />
         <CollectionSection products={productRows} isLoading={products.isLoading} />
         <QuoteBand />

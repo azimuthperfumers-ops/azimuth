@@ -35,7 +35,7 @@ function FilterButton({
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 text-left text-[13px] transition-colors group",
+        "flex items-center gap-2 text-left text-[15px] transition-colors group",
         active
           ? "text-foreground font-medium"
           : "text-muted-foreground/60 hover:text-foreground font-normal",
@@ -98,7 +98,7 @@ function FilterContent({
           value={search}
           onChange={(e) => set("q", e.target.value)}
           placeholder="Rose, oud, amber…"
-          className="w-full border border-border bg-background py-2.5 pl-9 pr-8 text-[13px] placeholder:text-muted-foreground/35 focus:border-foreground/40 focus:outline-none transition-colors"
+          className="w-full border border-border bg-background py-2.5 pl-9 pr-8 text-[15px] placeholder:text-muted-foreground/35 focus:border-foreground/40 focus:outline-none transition-colors"
         />
         {search && (
           <button
@@ -112,7 +112,7 @@ function FilterContent({
 
       {/* Category */}
       <div>
-        <p className="mb-3.5 text-[10px] font-bold tracking-[0.24em] text-foreground/40 uppercase">
+        <p className="mb-3.5 text-[12px] font-bold tracking-[0.22em] text-foreground/40 uppercase">
           Category
         </p>
         <div className="flex flex-col gap-3">
@@ -129,7 +129,7 @@ function FilterContent({
 
       {/* Type */}
       <div className="border-t border-border/60 pt-7">
-        <p className="mb-3.5 text-[10px] font-bold tracking-[0.24em] text-foreground/40 uppercase">
+        <p className="mb-3.5 text-[12px] font-bold tracking-[0.22em] text-foreground/40 uppercase">
           Type
         </p>
         <div className="flex flex-col gap-3">
@@ -148,7 +148,7 @@ function FilterContent({
       {hasFilters && (
         <button
           onClick={clear}
-          className="text-[10px] font-semibold tracking-[0.16em] text-primary uppercase underline underline-offset-3 hover:opacity-70 transition-opacity"
+          className="text-[12px] font-semibold tracking-[0.16em] text-primary uppercase underline underline-offset-3 hover:opacity-70 transition-opacity"
         >
           Clear all
         </button>
@@ -163,6 +163,11 @@ function ShopPageInner() {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const shopBanners = trpc.content.listBanners.useQuery({ page: "shop" });
+  const shopCover = trpc.content.getSection.useQuery({ section: "shop_cover" });
+  const coverHeading = (shopCover.data?.heading as string | undefined) || "The Collection";
+  const coverSubheading =
+    (shopCover.data?.subheading as string | undefined) ||
+    "Every Azimuth fragrance, currently live in the catalog.";
   const categories = trpc.catalog.listCategories.useQuery();
   const products = trpc.catalog.listProducts.useQuery({
     status: "active",
@@ -203,23 +208,23 @@ function ShopPageInner() {
         )}
       </div>
 
-      <main className="mx-auto max-w-[1400px] px-4 md:px-10 py-10 md:py-16 pb-32">
+      <main className="mx-auto max-w-[1400px] px-4 md:px-10 py-10 md:py-16 pb-48 md:pb-56">
         {/* Page header */}
         <div className="mb-10 md:mb-14 border-b border-border pb-8 md:pb-10">
-          <p className="mb-3 text-[10px] font-semibold tracking-[0.22em] text-muted-foreground/50 uppercase">
+          <p className="mb-3 text-[12px] font-semibold tracking-[0.2em] text-muted-foreground/50 uppercase">
             Home / Shop
           </p>
           <div className="flex items-end justify-between">
             <div>
               <h1 className="font-heading text-[2.5rem] md:text-[3.5rem] font-medium leading-none tracking-tight">
-                The Collection
+                {coverHeading}
               </h1>
-              <p className="mt-3 text-sm text-muted-foreground/70 max-w-sm">
-                Every Azimuth fragrance, currently live in the catalog.
+              <p className="mt-3 text-base text-muted-foreground/70 max-w-sm">
+                {coverSubheading}
               </p>
             </div>
             {!products.isLoading && (
-              <p className="text-[12px] font-medium tracking-[0.06em] text-muted-foreground pb-1">
+              <p className="text-[14px] font-medium tracking-[0.06em] text-muted-foreground pb-1">
                 {filtered.length} fragrance{filtered.length !== 1 ? "s" : ""}
               </p>
             )}

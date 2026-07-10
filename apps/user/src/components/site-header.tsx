@@ -31,12 +31,12 @@ export function SiteHeader() {
   return (
     <div className="sticky top-0 z-50">
       {/* Announcement ticker */}
-      <div className="h-[34px] overflow-hidden bg-foreground text-background">
-        <div className="ticker-track">
+      <div className="h-[40px] overflow-hidden bg-foreground text-background">
+        <div className="ticker-track h-full items-center">
           {[0, 1].map((row) => (
             <div
               key={row}
-              className="flex gap-14 pr-14 text-[11px] tracking-[0.22em] uppercase whitespace-nowrap"
+              className="flex items-center gap-14 pr-14 text-[13px] tracking-[0.22em] uppercase whitespace-nowrap"
             >
               {tickerItems.map((item, i) => (
                 <span key={i} className="flex items-center gap-14">
@@ -67,15 +67,28 @@ export function SiteHeader() {
           </Link>
         </nav>
 
-        <Link href="/" className="flex justify-center" aria-label="Azimuth Perfumers — home">
+        <Link href="/" className="flex items-center justify-center gap-2.5" aria-label="Azimuth Perfumers — home">
           <Image
-            src="/logo-lockup.png"
-            alt="Azimuth Perfumers"
-            width={1642}
-            height={1453}
+            src="/logo-icon.png"
+            alt=""
+            width={1010}
+            height={1019}
             priority
-            className="h-16 w-auto"
+            className="h-14 w-auto"
           />
+          <div className="relative">
+            <Image
+              src="/logo-wordmark.png"
+              alt="Azimuth Perfumers"
+              width={1642}
+              height={362}
+              priority
+              className="h-9 w-auto"
+            />
+            <span className="absolute -right-2.5 -top-1 text-[8px] leading-none text-foreground">
+              &trade;
+            </span>
+          </div>
         </Link>
 
         <div className="flex items-center justify-end gap-6 text-[12px] font-medium tracking-[0.18em] uppercase">

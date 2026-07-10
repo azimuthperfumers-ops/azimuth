@@ -28,12 +28,14 @@ export type DeleteCategoryInput = z.infer<typeof deleteCategorySchema>;
 
 export const createFragranceNoteSchema = z.object({
   name: z.string().min(1).max(80),
-  familyId: z.uuid().optional(),
+  familyId: z.guid().optional(),
 });
 export type CreateFragranceNoteInput = z.infer<typeof createFragranceNoteSchema>;
 
 const productNoteInputSchema = z.object({
-  noteId: z.uuid(),
+  // z.guid (not strict z.uuid): some seed note ids have 0000 version/variant
+  // groups — valid Postgres uuids but not RFC-4122, which strict z.uuid rejects.
+  noteId: z.guid(),
   notePosition: z.enum(["top", "mid", "base"]),
   sortOrder: z.number().int().min(0).default(0),
 });
@@ -119,7 +121,7 @@ export type SetSecondaryImageInput = z.infer<typeof setSecondaryImageSchema>;
 
 export const addProductNoteSchema = z.object({
   productId: z.uuid(),
-  noteId: z.uuid(),
+  noteId: z.guid(),
   notePosition: z.enum(["top", "mid", "base"]),
   sortOrder: z.number().int().min(0).default(0),
 });

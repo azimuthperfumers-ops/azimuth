@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { primaryImage, type LandingProduct } from "./types";
@@ -20,15 +23,24 @@ function truncate(text: string, max: number) {
 
 export function LandingHero({
   copy,
-  signature,
+  products,
   isLoading,
 }: {
   copy: HeroCopy;
-  signature: LandingProduct | undefined;
+  products: LandingProduct[];
   isLoading: boolean;
 }) {
-  const image = signature ? primaryImage(signature) : undefined;
-  const slug = signature ? (signature.slug ?? signature.id) : undefined;
+  const [index, setIndex] = useState(0);
+
+  // Auto-advance the hero carousel when more than one product is chosen.
+  useEffect(() => {
+    if (products.length < 2) return;
+    const id = setInterval(() => setIndex((i) => (i + 1) % products.length), 4500);
+    return () => clearInterval(id);
+  }, [products.length]);
+
+  const active = products[Math.min(index, products.length - 1)];
+  const slug = active ? (active.slug ?? active.id) : undefined;
 
   return (
     <section className="grid min-h-[calc(100vh-116px)] grid-cols-1 lg:grid-cols-2">
@@ -75,32 +87,67 @@ export function LandingHero({
         </div>
       </div>
 
-      {/* Photo */}
-      <div className="relative m-4 min-h-[420px] overflow-hidden sm:m-8 md:m-10 lg:mr-12 lg:ml-0">
+      {/* Photo carousel */}
+      <div
+        className="relative m-4 min-h-[420px] overflow-hidden sm:m-8 md:m-10 lg:mr-12 lg:ml-0"
+        style={{ backgroundColor: active?.themeColor ?? "#e8e0d5" }}
+      >
         {isLoading ? (
           <div className="h-full min-h-[420px] w-full animate-pulse bg-muted" />
-        ) : image?.url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image.url} alt={signature?.name ?? ""} className="h-full w-full object-cover" />
-        ) : (
+        ) : products.length === 0 ? (
           <div className="h-full min-h-[420px] w-full bg-muted" />
+        ) : (
+          products.map((p, i) => {
+            const url = primaryImage(p)?.url;
+            const show = i === Math.min(index, products.length - 1);
+            return (
+              <div
+                key={p.id}
+                aria-hidden={!show}
+                className="absolute inset-0 transition-opacity duration-1000 ease-out"
+                style={{ opacity: show ? 1 : 0 }}
+              >
+                {/* Blurred fill so any aspect covers the panel without dead bars */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl opacity-70" />
+                {/* Sharp, whole product — never cropped */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={p.name} className="absolute inset-0 h-full w-full object-contain" />
+              </div>
+            );
+          })
         )}
 
-        {signature && !isLoading && (
+        {active && !isLoading && (
           <Link
             href={slug ? `/shop/${slug}` : "/shop"}
             className="absolute bottom-6 left-6 max-w-[260px] bg-background/94 px-6 py-5 backdrop-blur-sm transition-opacity hover:opacity-90"
           >
             <div className="text-[10px] font-semibold tracking-[0.28em] text-primary uppercase">
-              {signature.isFeatured ? "Signature" : (signature.category?.name ?? "Fragrance")}
+              {active.isFeatured ? "Signature" : (active.category?.name ?? "Fragrance")}
             </div>
-            <div className="font-heading mt-1.5 text-[30px] text-foreground">{signature.name}</div>
-            {signature.description && (
+            <div className="font-heading mt-1.5 text-[30px] text-foreground">{active.name}</div>
+            {active.description && (
               <div className="mt-1 text-[12px] text-muted-foreground">
-                {truncate(signature.description, 48)}
+                {truncate(active.description, 48)}
               </div>
             )}
           </Link>
+        )}
+
+        {/* Carousel dots */}
+        {products.length > 1 && !isLoading && (
+          <div className="absolute bottom-6 right-6 flex gap-2">
+            {products.map((p, i) => (
+              <button
+                key={p.id}
+                aria-label={`Show ${p.name}`}
+                onClick={() => setIndex(i)}
+                className="h-1.5 rounded-full bg-background/70 transition-all"
+                style={{ width: i === index ? 22 : 8, opacity: i === index ? 1 : 0.6 }}
+              />
+            ))}
+          </div>
         )}
       </div>
     </section>

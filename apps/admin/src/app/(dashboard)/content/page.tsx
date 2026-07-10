@@ -2,66 +2,109 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Image as ImageIcon, Loader2, Plus, Trash2, Eye, EyeOff, GripVertical } from "lucide-react";
+import {
+  BookOpen,
+  Eye,
+  EyeOff,
+  GripVertical,
+  Home,
+  Image as ImageIcon,
+  Layers,
+  Loader2,
+  Palette,
+  Plus,
+  ShoppingBag,
+  Star,
+  Trash2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
+import { FeaturedPicker } from "@/components/content/featured-picker";
+import { LivePreview, type ProductLite } from "@/components/content/live-preview";
+import { SANS_FONTS, SERIF_FONTS } from "@/components/content/fonts";
+import {
+  HOME_HERO_DEFAULTS,
+  OUR_STORY_DEFAULTS,
+  SHOP_COVER_DEFAULTS,
+  THEME_COLOR_FIELDS,
+  THEME_DEFAULTS,
+  type HomeHero,
+  type OurStory,
+  type ShopCover,
+  type Surface,
+  type ThemeTokens,
+} from "@/components/content/types";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Small control primitives ───────────────────────────────────────────────
 
-type HomeHeroData = {
-  line1: string;
-  line2: string;
-  italic: string;
-  subtitle: string;
-};
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
+      {hint && <p className="text-[11px] text-muted-foreground/60">{hint}</p>}
+      {children}
+    </div>
+  );
+}
 
-type OurStoryData = {
-  headerSubtitle: string;
-  originBlockquote: string;
-  originBody: string;
-  pullquote: string;
-  founderBody: string;
-};
+function ColorField({ label, hint, value, onChange }: { label: string; hint: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <Field label={label} hint={hint}>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="size-9 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0.5"
+        />
+        <Input value={value} onChange={(e) => onChange(e.target.value)} className="h-9 font-mono text-sm" />
+      </div>
+    </Field>
+  );
+}
 
-type Banner = {
-  id: string;
-  page: string;
-  imageUrl: string;
-  alt: string;
-  sortOrder: number;
-  active: boolean;
-};
+function FontSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { key: string; label: string }[] }) {
+  return (
+    <Field label={label}>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-9">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.key} value={o.key}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+}
 
-const HOME_HERO_DEFAULTS: HomeHeroData = {
-  line1: "Scent,",
-  line2: "composed",
-  italic: "like memory.",
-  subtitle: "Eaux de parfum blended in small batches — naturals, resins and time, until an accord becomes unmistakably yours.",
-};
+function SaveBar({ onSave, saving, dirty }: { onSave: () => void; saving: boolean; dirty: boolean }) {
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <Button size="sm" onClick={onSave} disabled={saving || !dirty}>
+        {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
+      </Button>
+      {dirty && <span className="text-[11px] text-muted-foreground">Unsaved changes</span>}
+    </div>
+  );
+}
 
-const OUR_STORY_DEFAULTS: OurStoryData = {
-  headerSubtitle: "We make perfume the slow way. No shortcuts, no synthetic proxies pretending to be naturals. Only raw materials with stories, blended until something true emerges.",
-  originBlockquote: "An azimuth is a bearing — a precise angle from true north. We chose that name because every fragrance we build is a direction, not a decoration.",
-  originBody: [
-    "Azimuth Perfumers began in a single room in 2019 — a rented space, secondhand glassware, and a notebook filled with the kind of obsessive notes that either become something great or remain quietly embarrassing.",
-    "The founding premise was simple and inconvenient: India has some of the world's finest raw perfumery materials — ouds from Assam, rose attar from Kannauj, sandalwood from Mysore, vetiver from Rajasthan — and most of them were being exported, processed abroad, and sold back to us as \"luxury imports.\" We wanted to close that loop.",
-    "We make our accords entirely in India, from materials sourced directly from Indian farmers and distillers. Each batch is under two hundred units. Nothing is rushed. We have a saying in the lab: if the accord is not ready, the batch does not ship.",
-    "The result is a house of slow perfumery — uncompromising, small, and stubbornly itself.",
-  ].join("\n\n"),
-  pullquote: "Most fragrance is built to please everyone and so pleases no one deeply. We build to please the one person who has been looking for exactly this.",
-  founderBody: [
-    "I have been asked many times why we don't scale. Why we cap batches. Why we refuse to move to a larger facility and simply make more.",
-    "The honest answer is that I don't know how to make perfume at scale without it becoming something else. The small batch is not a marketing decision — it is the only format in which I can personally smell every bottle before it leaves the lab. And that matters to me more than growth.",
-    "When you wear an Azimuth fragrance, I want you to know that a human being paid close attention to it. Not a machine, not a process, not an algorithm. A person who cares enormously about the difference between good and correct.",
-  ].join("\n\n"),
-};
-
-// ─── Banner uploader ─────────────────────────────────────────────────────────
+// ─── Banner uploader + list (reused from the previous content page) ──────────
 
 function BannerUploader({ page, onUploaded }: { page: "home" | "shop"; onUploaded: (url: string) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -69,10 +112,7 @@ function BannerUploader({ page, onUploaded }: { page: "home" | "shop"; onUploade
   const getUrl = trpc.storage.getBannerUploadUrl.useMutation();
 
   async function handleFile(file: File) {
-    if (!file.type.startsWith("image/")) {
-      toast.error("Only image files allowed");
-      return;
-    }
+    if (!file.type.startsWith("image/")) return toast.error("Only image files allowed");
     setUploading(true);
     try {
       const { uploadUrl, publicUrl } = await getUrl.mutateAsync({ filename: file.name, contentType: file.type });
@@ -96,14 +136,7 @@ function BannerUploader({ page, onUploaded }: { page: "home" | "shop"; onUploade
         className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = ""; }}
       />
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={uploading}
-        onClick={() => inputRef.current?.click()}
-        className="gap-2"
-      >
+      <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()} className="gap-2">
         {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
         Add banner
       </Button>
@@ -111,106 +144,49 @@ function BannerUploader({ page, onUploaded }: { page: "home" | "shop"; onUploade
   );
 }
 
-// ─── Banner list ─────────────────────────────────────────────────────────────
+type Banner = { id: string; page: string; imageUrl: string; alt: string; sortOrder: number; active: boolean };
 
 function BannerList({ page }: { page: "home" | "shop" }) {
   const utils = trpc.useUtils();
   const banners = trpc.content.listBanners.useQuery({ page });
+  const create = trpc.content.createBanner.useMutation({ onSuccess: () => utils.content.listBanners.invalidate({ page }), onError: (e) => toast.error(e.message) });
+  const update = trpc.content.updateBanner.useMutation({ onSuccess: () => utils.content.listBanners.invalidate({ page }), onError: (e) => toast.error(e.message) });
+  const remove = trpc.content.deleteBanner.useMutation({ onSuccess: () => utils.content.listBanners.invalidate({ page }), onError: (e) => toast.error(e.message) });
 
-  const create = trpc.content.createBanner.useMutation({
-    onSuccess: () => utils.content.listBanners.invalidate({ page }),
-    onError: (e) => toast.error(e.message),
-  });
-  const update = trpc.content.updateBanner.useMutation({
-    onSuccess: () => utils.content.listBanners.invalidate({ page }),
-    onError: (e) => toast.error(e.message),
-  });
-  const remove = trpc.content.deleteBanner.useMutation({
-    onSuccess: () => utils.content.listBanners.invalidate({ page }),
-    onError: (e) => toast.error(e.message),
-  });
+  const list = (banners.data ?? []) as Banner[];
 
-  function onUploaded(imageUrl: string) {
-    create.mutate({ page, imageUrl, alt: "" });
+  function move(b: Banner, idx: number, dir: -1 | 1) {
+    const other = list[idx + dir];
+    if (!other) return;
+    update.mutate({ id: b.id, sortOrder: other.sortOrder });
+    update.mutate({ id: other.id, sortOrder: b.sortOrder });
   }
-
-  function toggleActive(b: Banner) {
-    update.mutate({ id: b.id, active: !b.active });
-  }
-
-  function moveUp(b: Banner, idx: number) {
-    if (idx === 0) return;
-    const prev = banners.data![idx - 1]!;
-    update.mutate({ id: b.id, sortOrder: prev.sortOrder });
-    update.mutate({ id: prev.id, sortOrder: b.sortOrder });
-  }
-
-  function moveDown(b: Banner, idx: number) {
-    const list = banners.data!;
-    if (idx === list.length - 1) return;
-    const next = list[idx + 1]!;
-    update.mutate({ id: b.id, sortOrder: next.sortOrder });
-    update.mutate({ id: next.id, sortOrder: b.sortOrder });
-  }
-
-  const list = banners.data ?? [];
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {page === "home" ? "Home page" : "Shop page"} banners
-        </p>
-        <BannerUploader page={page} onUploaded={onUploaded} />
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{page} banners</p>
+        <BannerUploader page={page} onUploaded={(imageUrl) => create.mutate({ page, imageUrl, alt: "" })} />
       </div>
-
-      {banners.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-
       {!banners.isLoading && list.length === 0 && (
-        <p className="text-sm text-muted-foreground/60 py-4 border border-dashed border-border text-center">
-          No banners yet — upload one above
-        </p>
+        <p className="border border-dashed border-border py-4 text-center text-sm text-muted-foreground/60">No banners yet — upload one above</p>
       )}
-
       <div className="space-y-2">
         {list.map((b, idx) => (
           <div key={b.id} className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 p-2">
-            <GripVertical className="size-4 text-muted-foreground/40 shrink-0" />
+            <GripVertical className="size-4 shrink-0 text-muted-foreground/40" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={b.imageUrl} alt={b.alt || "banner"} className="size-16 rounded object-cover shrink-0 bg-muted" />
-            <div className="flex-1 min-w-0 space-y-1">
-              <Input
-                value={b.alt}
-                onChange={(e) => update.mutate({ id: b.id, alt: e.target.value })}
-                placeholder="Alt text…"
-                className="h-7 text-xs"
-              />
-              <p className="text-[10px] text-muted-foreground/50 truncate">{b.imageUrl}</p>
+            <img src={b.imageUrl} alt={b.alt || "banner"} className="size-16 shrink-0 rounded bg-muted object-cover" />
+            <div className="min-w-0 flex-1">
+              <Input value={b.alt} onChange={(e) => update.mutate({ id: b.id, alt: e.target.value })} placeholder="Alt text…" className="h-7 text-xs" />
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <Button type="button" variant="ghost" size="icon" className="size-7" onClick={() => moveUp(b as Banner, idx)} disabled={idx === 0}>
-                <span className="text-xs">↑</span>
-              </Button>
-              <Button type="button" variant="ghost" size="icon" className="size-7" onClick={() => moveDown(b as Banner, idx)} disabled={idx === list.length - 1}>
-                <span className="text-xs">↓</span>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => toggleActive(b as Banner)}
-                title={b.active ? "Deactivate" : "Activate"}
-              >
+            <div className="flex shrink-0 items-center gap-1">
+              <Button type="button" variant="ghost" size="icon" className="size-7" onClick={() => move(b, idx, -1)} disabled={idx === 0}>↑</Button>
+              <Button type="button" variant="ghost" size="icon" className="size-7" onClick={() => move(b, idx, 1)} disabled={idx === list.length - 1}>↓</Button>
+              <Button type="button" variant="ghost" size="icon" className="size-7" onClick={() => update.mutate({ id: b.id, active: !b.active })} title={b.active ? "Deactivate" : "Activate"}>
                 {b.active ? <Eye className="size-3.5 text-green-600" /> : <EyeOff className="size-3.5 text-muted-foreground" />}
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-7 text-destructive hover:text-destructive"
-                onClick={() => remove.mutate({ id: b.id })}
-              >
+              <Button type="button" variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => remove.mutate({ id: b.id })}>
                 <Trash2 className="size-3.5" />
               </Button>
             </div>
@@ -221,185 +197,220 @@ function BannerList({ page }: { page: "home" | "shop" }) {
   );
 }
 
-// ─── Home Hero editor ─────────────────────────────────────────────────────────
+// ─── Draft hook: load a content section into local state ─────────────────────
 
-function HomeHeroEditor() {
-  const { data, isLoading } = trpc.content.getSection.useQuery({ section: "home_hero" });
+function useSectionDraft<T extends Record<string, unknown>>(section: string, defaults: T) {
+  const { data, isLoading } = trpc.content.getSection.useQuery({ section });
   const utils = trpc.useUtils();
-  const [form, setForm] = useState<HomeHeroData>(HOME_HERO_DEFAULTS);
+  const [draft, setDraft] = useState<T>(defaults);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (data && Object.keys(data).length > 0) {
-      setForm({ ...HOME_HERO_DEFAULTS, ...(data as Partial<HomeHeroData>) });
+    if (data && !loaded) {
+      setDraft({ ...defaults, ...(data as Partial<T>) });
+      setLoaded(true);
     }
-  }, [data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, loaded]);
 
   const save = trpc.content.updateSection.useMutation({
     onSuccess: () => {
-      utils.content.getSection.invalidate({ section: "home_hero" });
-      toast.success("Home hero saved");
+      utils.content.getSection.invalidate({ section });
+      toast.success("Saved");
     },
     onError: (e) => toast.error(e.message),
   });
 
-  function field(key: keyof HomeHeroData, label: string, hint?: string) {
-    return (
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
-        {hint && <p className="text-[11px] text-muted-foreground/60">{hint}</p>}
-        <Input
-          value={form[key]}
-          onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-          disabled={isLoading}
-          className="h-9 text-sm"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {field("line1", "Headline line 1", "e.g. \"Scent,\"")}
-      {field("line2", "Headline line 2", "e.g. \"composed\"")}
-      {field("italic", "Italic line", "Shown larger, in italic accent colour")}
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subtitle</label>
-        <Textarea
-          value={form.subtitle}
-          onChange={(e) => setForm((f) => ({ ...f, subtitle: e.target.value }))}
-          disabled={isLoading}
-          rows={3}
-          className="text-sm resize-none"
-        />
-      </div>
-      <Button
-        size="sm"
-        onClick={() => save.mutate({ section: "home_hero", data: form })}
-        disabled={save.isPending || isLoading}
-      >
-        {save.isPending ? "Saving…" : "Save home hero"}
-      </Button>
-    </div>
-  );
+  return {
+    draft,
+    setDraft,
+    isLoading,
+    saving: save.isPending,
+    persist: () => save.mutate({ section, data: draft }),
+  };
 }
 
-// ─── Our Story editor ─────────────────────────────────────────────────────────
+// ─── Page ────────────────────────────────────────────────────────────────────
 
-function OurStoryEditor() {
-  const { data, isLoading } = trpc.content.getSection.useQuery({ section: "our_story" });
-  const utils = trpc.useUtils();
-  const [form, setForm] = useState<OurStoryData>(OUR_STORY_DEFAULTS);
-
-  useEffect(() => {
-    if (data && Object.keys(data).length > 0) {
-      setForm({ ...OUR_STORY_DEFAULTS, ...(data as Partial<OurStoryData>) });
-    }
-  }, [data]);
-
-  const save = trpc.content.updateSection.useMutation({
-    onSuccess: () => {
-      utils.content.getSection.invalidate({ section: "our_story" });
-      toast.success("Our Story saved");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  function textField(key: keyof OurStoryData, label: string, hint?: string, rows = 3) {
-    return (
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
-        {hint && <p className="text-[11px] text-muted-foreground/60">{hint}</p>}
-        <Textarea
-          value={form[key]}
-          onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-          disabled={isLoading}
-          rows={rows}
-          className="text-sm resize-y"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      {textField("headerSubtitle", "Page subtitle", "Shown below the 'Our Story' heading", 2)}
-      {textField("originBlockquote", "Origin blockquote", "The large pull-quote in the two-column section", 3)}
-      {textField("originBody", "Origin body", "Separate paragraphs with a blank line (double newline)", 8)}
-      {textField("pullquote", "Dark section pullquote", "The quote shown on the dark background section", 3)}
-      {textField("founderBody", "Founder's note", "Separate paragraphs with a blank line (double newline)", 8)}
-      <Button
-        size="sm"
-        onClick={() => save.mutate({ section: "our_story", data: form })}
-        disabled={save.isPending || isLoading}
-      >
-        {save.isPending ? "Saving…" : "Save our story"}
-      </Button>
-    </div>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
+const SURFACES: { key: Surface; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "theme", label: "Theme", icon: Palette },
+  { key: "home", label: "Home", icon: Home },
+  { key: "shop", label: "Shop", icon: ShoppingBag },
+  { key: "story", label: "Our Story", icon: BookOpen },
+  { key: "featured", label: "Featured", icon: Star },
+  { key: "banners", label: "Banners", icon: Layers },
+];
 
 export default function ContentPage() {
+  const [surface, setSurface] = useState<Surface>("theme");
+
+  const theme = useSectionDraft<ThemeTokens>("theme", THEME_DEFAULTS);
+  const home = useSectionDraft<HomeHero>("home_hero", HOME_HERO_DEFAULTS);
+  const shop = useSectionDraft<ShopCover>("shop_cover", SHOP_COVER_DEFAULTS);
+  const story = useSectionDraft<OurStory>("our_story", OUR_STORY_DEFAULTS);
+
+  const products = trpc.catalog.listProducts.useQuery({ status: "active", limit: 100 });
+  const allProducts = (products.data ?? []) as unknown as ProductLite[];
+  const featuredProducts = allProducts.filter((p) => (p as { isFeatured?: boolean }).isFeatured);
+  const previewProducts = featuredProducts.length > 0 ? featuredProducts : allProducts;
+
+  const heroIds = home.draft.productIds ?? [];
+  const heroSelected = heroIds
+    .map((id) => allProducts.find((p) => p.id === id))
+    .filter((p): p is ProductLite => !!p);
+
+  function toggleHero(id: string) {
+    home.setDraft((d) => {
+      const ids = d.productIds ?? [];
+      return { ...d, productIds: ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id] };
+    });
+  }
+
+  const imgUrl = (p: ProductLite) => (p.images?.find((i) => i.isPrimary) ?? p.images?.[0])?.url;
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-title font-semibold">Content</h1>
-        <p className="text-sm text-muted-foreground">Edit store-front copy and banner images.</p>
+        <h1 className="text-title font-semibold">Content playground</h1>
+        <p className="text-sm text-muted-foreground">
+          Restyle the storefront live — colours, fonts, copy, images, featured products. Changes preview instantly; hit save to publish.
+        </p>
       </div>
 
-      <Tabs defaultValue="banners">
-        <TabsList className="mb-6">
-          <TabsTrigger value="banners">Banners</TabsTrigger>
-          <TabsTrigger value="home">Home</TabsTrigger>
-          <TabsTrigger value="story">Our Story</TabsTrigger>
-        </TabsList>
+      {/* Surface switcher */}
+      <div className="flex flex-wrap gap-2">
+        {SURFACES.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setSurface(key)}
+            className={cn(
+              "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
+              surface === key ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary/40",
+            )}
+          >
+            <Icon className="size-4" />
+            {label}
+          </button>
+        ))}
+      </div>
 
-        <TabsContent value="banners">
-          <div className="space-y-8">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ImageIcon className="size-4 text-muted-foreground" />
-                  Banner images
-                </CardTitle>
-                <p className="text-[12px] text-muted-foreground">
-                  Active banners rotate with a crossfade transition on the storefront. Inactive banners are hidden.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                <BannerList page="home" />
-                <div className="h-px bg-border" />
-                <BannerList page="shop" />
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+        {/* ── Controls ── */}
+        <div className="space-y-5">
+          {surface === "theme" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {THEME_COLOR_FIELDS.map((f) => (
+                  <ColorField
+                    key={f.key}
+                    label={f.label}
+                    hint={f.hint}
+                    value={theme.draft[f.key] as string}
+                    onChange={(v) => theme.setDraft((d) => ({ ...d, [f.key]: v }))}
+                  />
+                ))}
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FontSelect label="Heading font" value={theme.draft.fontHeading} options={SERIF_FONTS} onChange={(v) => theme.setDraft((d) => ({ ...d, fontHeading: v }))} />
+                <FontSelect label="Body font" value={theme.draft.fontBody} options={SANS_FONTS} onChange={(v) => theme.setDraft((d) => ({ ...d, fontBody: v }))} />
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => theme.setDraft(THEME_DEFAULTS)} className="text-xs">
+                Reset to defaults
+              </Button>
+              <SaveBar onSave={theme.persist} saving={theme.saving} dirty />
+            </div>
+          )}
 
-        <TabsContent value="home">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Home hero text</CardTitle>
-              <p className="text-[12px] text-muted-foreground">Shown over the hero section on the homepage.</p>
-            </CardHeader>
-            <CardContent>
-              <HomeHeroEditor />
-            </CardContent>
-          </Card>
-        </TabsContent>
+          {surface === "home" && (
+            <div className="space-y-4">
+              <Field label="Headline line 1"><Input value={home.draft.line1} onChange={(e) => home.setDraft((d) => ({ ...d, line1: e.target.value }))} className="h-9" /></Field>
+              <Field label="Italic accent line" hint="Shown in the accent colour"><Input value={home.draft.italic} onChange={(e) => home.setDraft((d) => ({ ...d, italic: e.target.value }))} className="h-9" /></Field>
+              <Field label="Subtitle"><Textarea rows={3} value={home.draft.subtitle} onChange={(e) => home.setDraft((d) => ({ ...d, subtitle: e.target.value }))} className="resize-none text-sm" /></Field>
+              <Field label="Hero products" hint="Tap to add — chosen products auto-switch as a carousel in the hero. Number = order.">
+                <div className="grid grid-cols-3 gap-2">
+                  {allProducts.map((p) => {
+                    const idx = heroIds.indexOf(p.id);
+                    const sel = idx >= 0;
+                    const url = imgUrl(p);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => toggleHero(p.id)}
+                        className={cn(
+                          "group relative overflow-hidden rounded-lg border text-left transition-all",
+                          sel ? "border-primary ring-2 ring-primary/40" : "border-border hover:border-primary/40",
+                        )}
+                      >
+                        <div className="aspect-[3/4] bg-muted">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          {url && <img src={url} alt={p.name} className="size-full object-cover" />}
+                        </div>
+                        {sel && (
+                          <span className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+                            {idx + 1}
+                          </span>
+                        )}
+                        <div className="truncate p-1.5 text-[11px] font-medium">{p.name}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+              <SaveBar onSave={home.persist} saving={home.saving} dirty />
+              <div className="border-t border-border pt-5"><BannerList page="home" /></div>
+            </div>
+          )}
 
-        <TabsContent value="story">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Our Story page</CardTitle>
-              <p className="text-[12px] text-muted-foreground">Edit key text sections. Timeline, ingredients, and craft steps remain fixed.</p>
-            </CardHeader>
-            <CardContent>
-              <OurStoryEditor />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          {surface === "shop" && (
+            <div className="space-y-4">
+              <Field label="Cover heading"><Input value={shop.draft.heading} onChange={(e) => shop.setDraft((d) => ({ ...d, heading: e.target.value }))} className="h-9" /></Field>
+              <Field label="Cover subheading"><Textarea rows={2} value={shop.draft.subheading} onChange={(e) => shop.setDraft((d) => ({ ...d, subheading: e.target.value }))} className="resize-none text-sm" /></Field>
+              <SaveBar onSave={shop.persist} saving={shop.saving} dirty />
+              <div className="border-t border-border pt-5"><BannerList page="shop" /></div>
+            </div>
+          )}
+
+          {surface === "story" && (
+            <div className="space-y-4">
+              <Field label="Page subtitle"><Textarea rows={2} value={story.draft.headerSubtitle} onChange={(e) => story.setDraft((d) => ({ ...d, headerSubtitle: e.target.value }))} className="resize-y text-sm" /></Field>
+              <Field label="Origin blockquote"><Textarea rows={3} value={story.draft.originBlockquote} onChange={(e) => story.setDraft((d) => ({ ...d, originBlockquote: e.target.value }))} className="resize-y text-sm" /></Field>
+              <Field label="Origin body" hint="Blank line between paragraphs"><Textarea rows={6} value={story.draft.originBody} onChange={(e) => story.setDraft((d) => ({ ...d, originBody: e.target.value }))} className="resize-y text-sm" /></Field>
+              <Field label="Dark-section pullquote"><Textarea rows={3} value={story.draft.pullquote} onChange={(e) => story.setDraft((d) => ({ ...d, pullquote: e.target.value }))} className="resize-y text-sm" /></Field>
+              <Field label="Founder's note" hint="Blank line between paragraphs"><Textarea rows={6} value={story.draft.founderBody} onChange={(e) => story.setDraft((d) => ({ ...d, founderBody: e.target.value }))} className="resize-y text-sm" /></Field>
+              <SaveBar onSave={story.persist} saving={story.saving} dirty />
+            </div>
+          )}
+
+          {surface === "featured" && <FeaturedPicker />}
+
+          {surface === "banners" && (
+            <div className="space-y-6">
+              <BannerList page="home" />
+              <div className="border-t border-border pt-5"><BannerList page="shop" /></div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Live preview ── */}
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <Eye className="size-3.5" /> Live preview
+          </p>
+          <LivePreview
+            surface={surface}
+            theme={theme.draft}
+            home={home.draft}
+            shopCover={shop.draft}
+            story={story.draft}
+            featured={previewProducts}
+            heroProducts={heroSelected}
+          />
+          <p className="mt-2 text-[11px] text-muted-foreground/60">
+            A faithful mock — the real storefront updates after you save.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
