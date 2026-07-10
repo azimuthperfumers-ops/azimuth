@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { ChevronDown } from "lucide-react-native";
 
 import { HeroBannerCarousel, type HeroCopy } from "@/components/hero-banner-carousel";
+import { HeroProductShowcase } from "@/components/hero-product-showcase";
 import { trpc } from "@/lib/trpc";
 import { Colors, Fonts } from "@/constants/theme";
 
@@ -73,17 +74,28 @@ export default function HomeScreen() {
   const { data: heroContent } = trpc.content.getSection.useQuery({ section: "home_hero" });
 
   const copy: HeroCopy = {
-    line1: (heroContent?.line1 as string | undefined) ?? "Scent,",
-    line2: (heroContent?.line2 as string | undefined) ?? "composed",
-    italic: (heroContent?.italic as string | undefined) ?? "like memory.",
+    line1: (heroContent?.line1 as string | undefined) ?? "Worn close.",
+    line2: (heroContent?.line2 as string | undefined) ?? "",
+    italic: (heroContent?.italic as string | undefined) ?? "Remembered longer.",
     subtitle:
       (heroContent?.subtitle as string | undefined) ??
-      "Eaux de parfum blended in small batches — naturals, resins and time.",
+      "Fragrances composed by hand from naturals, resins and time — blended in batches so small, every bottle still smells like the room it was made in.",
   };
 
   const activeBanners = banners.filter((b) => b.active);
-  const featured = products.find((p) => p.isFeatured) ?? products[0];
-  const collection = products.slice(0, 8);
+
+  // Featured products float to the front (parity with web landing).
+  const ranked = products
+    .slice()
+    .sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
+  const featured = ranked[0];
+  const collection = ranked.slice(0, 8);
+
+  // Hero carousel: admin-chosen product ids (ordered), else the featured-first list.
+  const heroIds = (heroContent?.productIds as string[] | undefined) ?? [];
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const chosen = heroIds.map((id) => byId.get(id)).filter((p): p is (typeof products)[number] => !!p);
+  const heroProducts = chosen.length > 0 ? chosen : ranked.slice(0, 5);
 
   function priceOf(p: (typeof products)[number]) {
     const activeVariants = p.variants.filter((v) => v.status === "active");
@@ -95,9 +107,11 @@ export default function HomeScreen() {
 
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: Colors.background }} bounces>
-      {/* ── Hero: banner carousel when configured, typographic otherwise ── */}
+      {/* ── Hero: banners → product showcase → typographic fallback ── */}
       {activeBanners.length > 0 ? (
         <HeroBannerCarousel banners={banners} copy={copy} />
+      ) : heroProducts.length > 0 ? (
+        <HeroProductShowcase products={heroProducts} copy={copy} />
       ) : (
         <View className="px-6 pt-7 pb-2">
           <SectionEyebrow>Azimuth Perfumers · Est. 2019</SectionEyebrow>
@@ -105,8 +119,12 @@ export default function HomeScreen() {
             className="mt-3 text-[54px] leading-[0.98] tracking-tight"
             style={{ fontFamily: Fonts.serifMedium, color: Colors.ink }}
           >
-            {copy.line1}{"\n"}{copy.line2}{"\n"}
+            {copy.line1}{"\n"}
             <Text style={{ fontFamily: Fonts.serifItalic, color: Colors.accent }}>{copy.italic}</Text>
+          </Text>
+
+          <Text className="mt-5 text-[13px] leading-[1.6]" style={{ color: Colors.inkMuted }}>
+            {copy.subtitle}
           </Text>
 
           <Pressable

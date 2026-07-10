@@ -192,7 +192,7 @@ function ShopPageInner() {
       <SiteHeader />
 
       {/* Cover photo — full bleed */}
-      <div className="relative h-[33vh] md:h-[40vh] w-full overflow-hidden bg-muted">
+      <div className="relative h-[52vh] md:h-[64vh] w-full overflow-hidden bg-muted">
         {(shopBanners.data ?? []).filter((b) => b.active).length > 0 ? (
           <BannerCarousel banners={shopBanners.data ?? []} />
         ) : (
