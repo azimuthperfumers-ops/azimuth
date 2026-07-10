@@ -372,7 +372,7 @@ export default function HomeScreen() {
           className="text-[13px] text-center"
           style={{ fontFamily: Fonts.serifItalic, color: Colors.inkMuted }}
         >
-          Handcrafted in Jodhpur · shipped pan-India
+          Handcrafted in Ajmer · shipped pan-India
         </Text>
         <View className="flex-row gap-6 mt-3">
           <Pressable onPress={() => router.push("/our-story")}>

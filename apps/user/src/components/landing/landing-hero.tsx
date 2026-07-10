@@ -43,7 +43,7 @@ export function LandingHero({
   const slug = active ? (active.slug ?? active.id) : undefined;
 
   return (
-    <section className="grid min-h-[calc(100vh-116px)] grid-cols-1 lg:grid-cols-2">
+    <section className="grid min-h-[calc(100vh-140px)] grid-cols-1 lg:grid-cols-2">
       {/* Copy */}
       <div className="flex flex-col justify-center px-6 py-12 sm:px-10 md:px-16 md:py-20">
         <div className="flex items-center gap-3.5 text-[11px] font-semibold tracking-[0.3em] text-primary uppercase">
@@ -87,33 +87,27 @@ export function LandingHero({
         </div>
       </div>
 
-      {/* Photo carousel */}
-      <div
-        className="relative m-4 min-h-[420px] overflow-hidden sm:m-8 md:m-10 lg:mr-12 lg:ml-0"
-        style={{ backgroundColor: active?.themeColor ?? "#e8e0d5" }}
-      >
+      {/* Photo carousel — portrait card so the whole bottle shows */}
+      <div className="flex items-center justify-center px-6 py-8 sm:px-10 md:px-12 lg:pr-12 lg:pl-0">
+        <div className="relative aspect-[4/5] w-full max-w-[540px] overflow-hidden bg-muted">
         {isLoading ? (
-          <div className="h-full min-h-[420px] w-full animate-pulse bg-muted" />
+          <div className="absolute inset-0 animate-pulse bg-muted" />
         ) : products.length === 0 ? (
-          <div className="h-full min-h-[420px] w-full bg-muted" />
+          <div className="absolute inset-0 bg-muted" />
         ) : (
           products.map((p, i) => {
             const url = primaryImage(p)?.url;
             const show = i === Math.min(index, products.length - 1);
             return (
-              <div
+              <img
                 key={p.id}
+                // eslint-disable-next-line @next/next/no-img-element
+                src={url}
+                alt={p.name}
                 aria-hidden={!show}
-                className="absolute inset-0 transition-opacity duration-1000 ease-out"
+                className="absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-1000 ease-out"
                 style={{ opacity: show ? 1 : 0 }}
-              >
-                {/* Blurred fill so any aspect covers the panel without dead bars */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl opacity-70" />
-                {/* Sharp, whole product — never cropped */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={p.name} className="absolute inset-0 h-full w-full object-contain" />
-              </div>
+              />
             );
           })
         )}
@@ -149,6 +143,7 @@ export function LandingHero({
             ))}
           </div>
         )}
+        </div>
       </div>
     </section>
   );

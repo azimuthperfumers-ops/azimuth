@@ -66,7 +66,11 @@ export function CollectionSection({
                       <img
                         src={image.url}
                         alt={product.name}
-                        className={`h-full w-full object-cover ${secondary ? "group-hover:invisible" : ""}`}
+                        className={`h-full w-full object-cover ${
+                          secondary
+                            ? "group-hover:invisible"
+                            : "transition-transform duration-500 ease-out group-hover:scale-[1.05]"
+                        }`}
                       />
                     )}
                     {secondary && (
