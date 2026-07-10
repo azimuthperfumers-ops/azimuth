@@ -6,6 +6,7 @@ import Svg, { Path } from "react-native-svg";
 
 import { authClient } from "@/lib/auth-client";
 import { Fonts } from "@/constants/theme";
+import { Logo } from "@/components/logo";
 
 type Mode = "sign-in" | "sign-up";
 
@@ -63,50 +64,48 @@ export default function SignInScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#faf8f5]" edges={["top", "bottom"]}>
+    <SafeAreaView className="flex-1 bg-[#F5F0E7]" edges={["top", "bottom"]}>
       {/* Handle bar */}
-      <View className="w-10 h-1 rounded-full bg-[#e8e2da] self-center mt-3 mb-2" />
+      <View className="w-10 h-1 rounded-full bg-[#E3DDD1] self-center mt-3 mb-2" />
 
       {/* Close */}
       <View className="flex-row justify-end px-5 mb-2">
         <Pressable onPress={() => router.back()} className="p-2">
-          <Text className="text-[22px] text-[#888888]">×</Text>
+          <Text className="text-[22px] text-[#57493A]">×</Text>
         </Pressable>
       </View>
 
       <View className="px-8 pt-2">
         {/* Brand */}
-        <Text className="text-[10px] font-semibold tracking-[0.38em] text-[#888888] uppercase mb-1">
-          Azimuth Perfumers
-        </Text>
+        <Logo size={20} showTrademark={false} />
 
-        {/* Red accent line */}
-        <View className="w-8 h-px bg-[#c0392b] mb-5" />
+        {/* Accent line */}
+        <View className="w-8 h-px bg-[#9A5B2B] mt-4 mb-5" />
 
         {/* Heading */}
         <Text
-          className="text-[40px] leading-none tracking-tight text-[#111111] mb-2"
+          className="text-[40px] leading-none tracking-tight text-[#1B1611] mb-2"
           style={{ fontFamily: Fonts.serifItalic }}
         >
           {mode === "sign-in" ? "Sign in" : "Create account"}
         </Text>
-        <Text className="text-[14px] text-[#888888] mb-8 leading-relaxed">
+        <Text className="text-[14px] text-[#57493A] mb-8 leading-relaxed">
           {mode === "sign-in" ? "Welcome back to Azimuth Perfumers." : "Join us for slow perfumery, composed in small batches."}
         </Text>
 
         {/* Google */}
         <Pressable
-          className="h-14 flex-row items-center justify-center gap-3 border border-[#e8e2da] active:opacity-70 mb-4"
+          className="h-14 flex-row items-center justify-center gap-3 border border-[#E3DDD1] active:opacity-70 mb-4"
           style={{ opacity: googleLoading ? 0.5 : 1 }}
           disabled={googleLoading}
           onPress={handleGoogle}
         >
           {googleLoading ? (
-            <ActivityIndicator color="#111111" />
+            <ActivityIndicator color="#1B1611" />
           ) : (
             <>
               <GoogleIcon />
-              <Text className="text-[11px] font-semibold tracking-[0.18em] text-[#111111] uppercase">
+              <Text className="text-[11px] font-semibold tracking-[0.18em] text-[#1B1611] uppercase">
                 Continue with Google
               </Text>
             </>
@@ -115,61 +114,61 @@ export default function SignInScreen() {
 
         {/* Divider */}
         <View className="flex-row items-center gap-3 mb-6">
-          <View className="flex-1 h-px bg-[#e8e2da]" />
-          <Text className="text-[10px] font-semibold tracking-[0.2em] text-[#888888]/60 uppercase">or</Text>
-          <View className="flex-1 h-px bg-[#e8e2da]" />
+          <View className="flex-1 h-px bg-[#E3DDD1]" />
+          <Text className="text-[10px] font-semibold tracking-[0.2em] text-[#57493A]/60 uppercase">or</Text>
+          <View className="flex-1 h-px bg-[#E3DDD1]" />
         </View>
 
         {mode === "sign-up" && (
           <View className="mb-5">
-            <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#888888] uppercase mb-2">
+            <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#57493A] uppercase mb-2">
               Full name
             </Text>
             <TextInput
-              className="border-b-2 border-[#111111] text-[16px] text-[#111111] pb-2"
+              className="border-b-2 border-[#1B1611] text-[16px] text-[#1B1611] pb-2"
               placeholder="Your name"
-              placeholderTextColor="#d0ccc6"
+              placeholderTextColor="#8A7A63"
               value={name}
               onChangeText={setName}
-              selectionColor="#c0392b"
+              selectionColor="#9A5B2B"
             />
           </View>
         )}
 
         <View className="mb-5">
-          <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#888888] uppercase mb-2">
+          <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#57493A] uppercase mb-2">
             Email
           </Text>
           <TextInput
-            className="border-b-2 border-[#111111] text-[16px] text-[#111111] pb-2"
+            className="border-b-2 border-[#1B1611] text-[16px] text-[#1B1611] pb-2"
             placeholder="you@example.com"
-            placeholderTextColor="#d0ccc6"
+            placeholderTextColor="#8A7A63"
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
             value={email}
             onChangeText={setEmail}
-            selectionColor="#c0392b"
+            selectionColor="#9A5B2B"
           />
         </View>
 
         <View className="mb-8">
-          <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#888888] uppercase mb-2">
+          <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#57493A] uppercase mb-2">
             Password
           </Text>
           <TextInput
-            className="border-b-2 border-[#111111] text-[16px] text-[#111111] pb-2"
+            className="border-b-2 border-[#1B1611] text-[16px] text-[#1B1611] pb-2"
             placeholder="••••••••"
-            placeholderTextColor="#d0ccc6"
+            placeholderTextColor="#8A7A63"
             secureTextEntry
             value={password}
             onChangeText={setPassword}
-            selectionColor="#c0392b"
+            selectionColor="#9A5B2B"
           />
         </View>
 
         <Pressable
-          className="h-14 items-center justify-center bg-[#111111] active:opacity-70 mb-4"
+          className="h-14 items-center justify-center bg-[#1B1611] active:opacity-70 mb-4"
           style={{ opacity: canSubmit ? 1 : 0.4 }}
           disabled={!canSubmit}
           onPress={handleSubmit}
@@ -187,14 +186,14 @@ export default function SignInScreen() {
           className="h-11 items-center justify-center"
           onPress={() => { setMode(mode === "sign-in" ? "sign-up" : "sign-in"); setError(null); }}
         >
-          <Text className="text-[11px] text-[#888888] tracking-wide">
+          <Text className="text-[11px] text-[#57493A] tracking-wide">
             {mode === "sign-in" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
           </Text>
         </Pressable>
 
         {error && (
-          <View className="mt-3 px-4 py-3 border border-[#c0392b]/30 bg-[#c0392b]/5">
-            <Text className="text-[12.5px] text-[#c0392b] text-center">{error}</Text>
+          <View className="mt-3 px-4 py-3 border border-[#9A5B2B]/30 bg-[#9A5B2B]/5">
+            <Text className="text-[12.5px] text-[#9A5B2B] text-center">{error}</Text>
           </View>
         )}
       </View>

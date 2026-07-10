@@ -20,8 +20,8 @@ export default function TicketDetailScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#faf8f5]">
-        <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#888888] uppercase">
+      <View className="flex-1 items-center justify-center bg-[#F5F0E7]">
+        <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#57493A] uppercase">
           Loading…
         </Text>
       </View>
@@ -30,8 +30,8 @@ export default function TicketDetailScreen() {
 
   if (!ticket) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#faf8f5]">
-        <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#888888] uppercase">
+      <View className="flex-1 items-center justify-center bg-[#F5F0E7]">
+        <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#57493A] uppercase">
           Ticket not found
         </Text>
       </View>
@@ -39,13 +39,13 @@ export default function TicketDetailScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#faf8f5]" edges={["bottom"]}>
+    <SafeAreaView className="flex-1 bg-[#F5F0E7]" edges={["bottom"]}>
       {/* Ticket info strip */}
-      <View className="px-5 py-3 border-b border-[#e8e2da]">
-        <Text className="text-[11px] font-semibold tracking-[0.1em] text-[#888888] uppercase">
+      <View className="px-5 py-3 border-b border-[#E3DDD1]">
+        <Text className="text-[11px] font-semibold tracking-[0.1em] text-[#57493A] uppercase">
           #{ticket.ticketNumber}
         </Text>
-        <Text className="text-[14px] font-medium text-[#111111] mt-0.5" numberOfLines={1}>
+        <Text className="text-[14px] font-medium text-[#1B1611] mt-0.5" numberOfLines={1}>
           {ticket.subject}
         </Text>
       </View>
@@ -57,7 +57,7 @@ export default function TicketDetailScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
         ListEmptyComponent={
           <View className="py-12 items-center">
-            <Text className="text-[13px] text-[#888888] text-center">
+            <Text className="text-[13px] text-[#57493A] text-center">
               No messages yet. Send a message below.
             </Text>
           </View>
@@ -69,19 +69,19 @@ export default function TicketDetailScreen() {
               <View
                 className="px-4 py-3"
                 style={{
-                  backgroundColor: isAdmin ? "#f0ede8" : "#111111",
+                  backgroundColor: isAdmin ? "#EDE3D0" : "#1B1611",
                   borderWidth: isAdmin ? 1 : 0,
-                  borderColor: "#e8e2da",
+                  borderColor: "#E3DDD1",
                 }}
               >
                 <Text
                   className="text-[13.5px] leading-[1.6]"
-                  style={{ color: isAdmin ? "#111111" : "#ffffff" }}
+                  style={{ color: isAdmin ? "#1B1611" : "#ffffff" }}
                 >
                   {item.content}
                 </Text>
               </View>
-              <Text className="text-[10px] text-[#bbbbbb] mt-1 px-1">
+              <Text className="text-[10px] text-[#8A7A63] mt-1 px-1">
                 {isAdmin ? "Azimuth · " : ""}
                 {new Date(item.createdAt).toLocaleTimeString("en-IN", {
                   hour: "2-digit",
@@ -95,18 +95,18 @@ export default function TicketDetailScreen() {
 
       {/* Input */}
       {ticket.status !== "resolved" && ticket.status !== "closed" ? (
-        <View className="flex-row items-end px-4 py-3 border-t border-[#e8e2da] gap-3 bg-[#faf8f5]">
+        <View className="flex-row items-end px-4 py-3 border-t border-[#E3DDD1] gap-3 bg-[#F5F0E7]">
           <TextInput
-            className="flex-1 border border-[#e8e2da] px-4 py-3 text-[14px] text-[#111111] max-h-24 bg-white"
+            className="flex-1 border border-[#E3DDD1] px-4 py-3 text-[14px] text-[#1B1611] max-h-24 bg-white"
             placeholder="Type a message…"
-            placeholderTextColor="#bbbbbb"
+            placeholderTextColor="#8A7A63"
             multiline
             value={message}
             onChangeText={setMessage}
-            selectionColor="#c0392b"
+            selectionColor="#9A5B2B"
           />
           <Pressable
-            className="h-11 px-5 items-center justify-center bg-[#111111] active:opacity-70"
+            className="h-11 px-5 items-center justify-center bg-[#1B1611] active:opacity-70"
             style={{ opacity: !message.trim() || reply.isPending ? 0.4 : 1 }}
             disabled={!message.trim() || reply.isPending}
             onPress={() => reply.mutate({ ticketId, content: message.trim() })}
@@ -117,8 +117,8 @@ export default function TicketDetailScreen() {
           </Pressable>
         </View>
       ) : (
-        <View className="px-5 py-4 border-t border-[#e8e2da]">
-          <Text className="text-[12px] text-[#888888] text-center tracking-[0.06em]">
+        <View className="px-5 py-4 border-t border-[#E3DDD1]">
+          <Text className="text-[12px] text-[#57493A] text-center tracking-[0.06em]">
             This ticket has been {ticket.status}. Contact us to open a new one.
           </Text>
         </View>

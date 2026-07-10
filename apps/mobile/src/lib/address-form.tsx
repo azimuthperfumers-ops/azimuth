@@ -57,7 +57,7 @@ function Field({
           {label}
         </Text>
         {hint && !error && (
-          <Text className="text-[9.5px]" style={{ color: "#8a8175" }}>{hint}</Text>
+          <Text className="text-[9.5px]" style={{ color: "#8A7A63" }}>{hint}</Text>
         )}
       </View>
       <TextInput
@@ -67,7 +67,7 @@ function Field({
         maxLength={maxLength}
         className="border-b-2 text-[15px] pb-2"
         style={{ borderColor: error ? Colors.accent : Colors.ink, color: Colors.ink }}
-        placeholderTextColor="#d0ccc6"
+        placeholderTextColor="#8A7A63"
         selectionColor={Colors.accent}
       />
       {error && <Text className="mt-1 text-[11px]" style={{ color: Colors.accent }}>{error}</Text>}
@@ -155,7 +155,7 @@ export function AddressFormFields({
 
       <GpsButton onLocated={(lat, lng) => onLocated(lat, lng)} />
       {form.lat != null && form.lng != null && (
-        <Text className="mb-4 text-[10px]" style={{ color: "#8a8175" }}>
+        <Text className="mb-4 text-[10px]" style={{ color: "#8A7A63" }}>
           Pinned: {form.lat.toFixed(6)}, {form.lng.toFixed(6)}
         </Text>
       )}

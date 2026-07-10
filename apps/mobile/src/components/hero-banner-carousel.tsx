@@ -63,7 +63,7 @@ export function HeroBannerCarousel({ banners, copy }: { banners: Banner[]; copy:
   if (slides.length === 0) return null;
 
   return (
-    <View style={{ width: SCREEN_W, height: HERO_H }} className="bg-[#111111]">
+    <View style={{ width: SCREEN_W, height: HERO_H }} className="bg-[#1B1611]">
       <FlatList
         ref={listRef}
         data={slides}

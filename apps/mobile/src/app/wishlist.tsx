@@ -50,7 +50,7 @@ export default function WishlistScreen() {
             Tap the heart on any fragrance to save it here.
           </Text>
           <Pressable
-            className="mt-8 h-12 px-8 items-center justify-center bg-[#111111] active:opacity-70"
+            className="mt-8 h-12 px-8 items-center justify-center bg-[#1B1611] active:opacity-70"
             onPress={() => router.push("/shop")}
           >
             <Text className="text-white text-[10.5px] font-semibold tracking-[0.2em] uppercase">
@@ -85,7 +85,7 @@ export default function WishlistScreen() {
                     onPress={() => remove.mutate({ id: item.id })}
                     className="absolute top-2 right-2 w-7 h-7 items-center justify-center bg-white/85"
                   >
-                    <Heart size={13} color="#c0392b" fill="#c0392b" strokeWidth={1.4} />
+                    <Heart size={13} color="#9A5B2B" fill="#9A5B2B" strokeWidth={1.4} />
                   </Pressable>
                 </View>
                 <Text

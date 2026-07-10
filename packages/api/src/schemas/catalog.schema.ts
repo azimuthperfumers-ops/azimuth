@@ -104,6 +104,7 @@ export const addProductImageSchema = z.object({
   altText: z.string().max(200).optional(),
   sortOrder: z.number().int().min(0).default(0),
   isPrimary: z.boolean().default(false),
+  isSecondary: z.boolean().default(false),
 });
 export type AddProductImageInput = z.infer<typeof addProductImageSchema>;
 
@@ -112,6 +113,9 @@ export type DeleteImageInput = z.infer<typeof deleteImageSchema>;
 
 export const setPrimaryImageSchema = z.object({ id: z.uuid(), productId: z.uuid() });
 export type SetPrimaryImageInput = z.infer<typeof setPrimaryImageSchema>;
+
+export const setSecondaryImageSchema = z.object({ id: z.uuid(), productId: z.uuid() });
+export type SetSecondaryImageInput = z.infer<typeof setSecondaryImageSchema>;
 
 export const addProductNoteSchema = z.object({
   productId: z.uuid(),

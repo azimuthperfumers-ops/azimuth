@@ -123,6 +123,9 @@ export const productImages = pgTable(
     altText: text("alt_text"),
     sortOrder: integer("sort_order").default(0).notNull(),
     isPrimary: boolean("is_primary").default(false).notNull(),
+    // Secondary = the hover-swap image on web. Optional, at most one per product,
+    // mutually exclusive with primary (enforced in the repository).
+    isSecondary: boolean("is_secondary").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -130,6 +133,10 @@ export const productImages = pgTable(
     uniqueIndex("product_images_primary_idx")
       .on(table.productId)
       .where(sql`${table.isPrimary} = true`),
+    // one secondary (hover) image per product
+    uniqueIndex("product_images_secondary_idx")
+      .on(table.productId)
+      .where(sql`${table.isSecondary} = true`),
   ],
 );
 

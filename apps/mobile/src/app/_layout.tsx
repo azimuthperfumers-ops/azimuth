@@ -13,12 +13,12 @@ import {
   CormorantGaramond_700Bold_Italic,
 } from "@expo-google-fonts/cormorant-garamond";
 import {
-  HankenGrotesk_400Regular,
-  HankenGrotesk_500Medium,
-  HankenGrotesk_600SemiBold,
-  HankenGrotesk_700Bold,
-  HankenGrotesk_800ExtraBold,
-} from "@expo-google-fonts/hanken-grotesk";
+  Archivo_400Regular,
+  Archivo_500Medium,
+  Archivo_600SemiBold,
+  Archivo_700Bold,
+  Archivo_800ExtraBold,
+} from "@expo-google-fonts/archivo";
 import { Providers } from "@/lib/providers";
 
 SplashScreen.preventAutoHideAsync();
@@ -30,11 +30,11 @@ export default function RootLayout() {
     CormorantGaramond_500Medium_Italic,
     CormorantGaramond_600SemiBold,
     CormorantGaramond_700Bold_Italic,
-    HankenGrotesk_400Regular,
-    HankenGrotesk_500Medium,
-    HankenGrotesk_600SemiBold,
-    HankenGrotesk_700Bold,
-    HankenGrotesk_800ExtraBold,
+    Archivo_400Regular,
+    Archivo_500Medium,
+    Archivo_600SemiBold,
+    Archivo_700Bold,
+    Archivo_800ExtraBold,
   });
 
   useEffect(() => {

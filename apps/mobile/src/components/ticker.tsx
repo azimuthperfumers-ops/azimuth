@@ -36,9 +36,15 @@ export function Ticker() {
   }, [x, SINGLE_WIDTH]);
 
   return (
-    <View className="overflow-hidden bg-[#111111] py-2">
+    <View className="overflow-hidden bg-[#1B1611] py-2">
       <Animated.Text
-        style={{ transform: [{ translateX: x }] }}
+        style={{
+          transform: [{ translateX: x }],
+          // Android reserves descender space inside the text box (includeFontPadding),
+          // which pushes the glyphs to the top of the ribbon. Drop it and center vertically.
+          includeFontPadding: false,
+          textAlignVertical: "center",
+        }}
         className="text-white text-[9.5px] tracking-[0.18em] font-semibold whitespace-nowrap"
         numberOfLines={1}
       >

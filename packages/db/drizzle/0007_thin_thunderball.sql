@@ -1,0 +1,2 @@
+ALTER TABLE "product_images" ADD COLUMN "is_secondary" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "product_images_secondary_idx" ON "product_images" USING btree ("product_id") WHERE "product_images"."is_secondary" = true;

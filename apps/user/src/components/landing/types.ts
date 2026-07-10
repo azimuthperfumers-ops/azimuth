@@ -6,7 +6,7 @@ export type LandingProduct = {
   themeColor: string | null;
   isFeatured: boolean;
   category: { id: string; name: string } | null;
-  images: { url: string; isPrimary: boolean }[];
+  images: { url: string; isPrimary: boolean; isSecondary: boolean }[];
   variants: {
     id: string;
     sku: string;
@@ -21,6 +21,11 @@ export type LandingProduct = {
 
 export function primaryImage(product: LandingProduct) {
   return product.images.find((i) => i.isPrimary) ?? product.images[0];
+}
+
+export function secondaryImage(product: LandingProduct) {
+  const primary = primaryImage(product);
+  return product.images.find((i) => i.isSecondary && i.url !== primary?.url);
 }
 
 export function defaultVariant(product: LandingProduct) {

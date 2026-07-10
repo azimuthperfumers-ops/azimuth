@@ -5,6 +5,7 @@ import { ChevronLeft } from "lucide-react-native";
 
 import { trpc } from "@/lib/trpc";
 import { Colors, Fonts } from "@/constants/theme";
+import { Logo } from "@/components/logo";
 
 const DEFAULT_ORIGIN_BLOCKQUOTE =
   "An azimuth is a bearing — a precise angle from true north. We chose that name because every fragrance we build is a direction, not a decoration.";
@@ -32,12 +33,7 @@ export default function OurStoryScreen() {
         <Pressable onPress={() => router.back()} className="absolute left-5 p-1">
           <ChevronLeft size={20} color={Colors.ink} strokeWidth={1.8} />
         </Pressable>
-        <Text
-          className="text-[15px] tracking-[0.24em] font-semibold"
-          style={{ color: Colors.ink }}
-        >
-          AZIMUTH
-        </Text>
+        <Logo size={18} showTrademark={false} />
       </View>
 
       <ScrollView bounces contentContainerStyle={{ paddingBottom: 40 }}>
@@ -61,7 +57,7 @@ export default function OurStoryScreen() {
         {/* ── Portrait block ── */}
         <View
           className="mx-6 mt-5 h-[190px] items-start justify-end p-3.5"
-          style={{ backgroundColor: "#b8a682" }}
+          style={{ backgroundColor: "#EDE3D0" }}
         >
           <Text className="text-[9px] tracking-[0.14em]" style={{ color: Colors.background }}>
             // FOUNDER PORTRAIT · JODHPUR STUDIO
@@ -72,7 +68,7 @@ export default function OurStoryScreen() {
         <View className="px-6 pt-6">
           <Text
             className="text-[17px] leading-[1.5]"
-            style={{ fontFamily: Fonts.serif, color: "#2a2418" }}
+            style={{ fontFamily: Fonts.serif, color: "#1B1611" }}
           >
             {originBlockquote}
           </Text>

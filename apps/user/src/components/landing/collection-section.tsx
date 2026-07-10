@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { CONCENTRATION_LABEL, defaultVariant, primaryImage, type LandingProduct } from "./types";
+import { CONCENTRATION_LABEL, defaultVariant, primaryImage, secondaryImage, type LandingProduct } from "./types";
 
 function CardSkeleton() {
   return (
@@ -51,13 +51,14 @@ export function CollectionSection({
           <div className="mt-16 grid grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((product) => {
               const image = primaryImage(product);
+              const secondary = secondaryImage(product);
               const variant = defaultVariant(product);
               const slug = product.slug ?? product.id;
               return (
                 <div key={product.id} className="flex flex-col">
                   <Link
                     href={`/shop/${slug}`}
-                    className="relative block aspect-[3/4] overflow-hidden"
+                    className="group relative block aspect-[3/4] overflow-hidden"
                     style={{ backgroundColor: product.themeColor ?? "#e8e0d5" }}
                   >
                     {image?.url && (
@@ -65,7 +66,16 @@ export function CollectionSection({
                       <img
                         src={image.url}
                         alt={product.name}
-                        className="h-full w-full object-cover"
+                        className={`h-full w-full object-cover ${secondary ? "group-hover:invisible" : ""}`}
+                      />
+                    )}
+                    {secondary && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={secondary.url}
+                        alt={product.name}
+                        aria-hidden
+                        className="invisible absolute inset-0 h-full w-full object-cover group-hover:visible"
                       />
                     )}
                     {product.category && (

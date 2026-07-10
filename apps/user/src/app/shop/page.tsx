@@ -264,7 +264,7 @@ function ShopPageInner() {
           {/* Product grid */}
           <div>
             {products.isLoading && (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-3">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="animate-pulse">
                     <div className="aspect-[3/4] bg-muted" />
@@ -292,7 +292,7 @@ function ShopPageInner() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-3">
               {filtered.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}

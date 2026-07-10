@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ImageIcon, Star, X } from "lucide-react";
+import { ImageIcon, Layers, Star, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ type ProductImage = {
   url: string;
   altText: string | null;
   isPrimary: boolean;
+  isSecondary: boolean;
 };
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "image/avif"];
@@ -50,6 +51,11 @@ export function ProductImagesCard({
   });
 
   const setPrimary = trpc.catalog.setPrimaryImage.useMutation({
+    onSuccess: () => utils.catalog.getProduct.invalidate({ id: productId }),
+    onError: (err) => toast.error(err.message),
+  });
+
+  const setSecondary = trpc.catalog.setSecondaryImage.useMutation({
     onSuccess: () => utils.catalog.getProduct.invalidate({ id: productId }),
     onError: (err) => toast.error(err.message),
   });
@@ -125,6 +131,12 @@ export function ProductImagesCard({
                     Primary
                   </div>
                 )}
+                {img.isSecondary && (
+                  <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-foreground px-1.5 py-0.5 text-[10px] font-semibold text-background">
+                    <Layers className="size-2.5" />
+                    Hover
+                  </div>
+                )}
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-foreground/0 opacity-0 transition-all group-hover:bg-foreground/40 group-hover:opacity-100">
                   {!img.isPrimary && (
                     <Button
@@ -135,6 +147,18 @@ export function ProductImagesCard({
                       onClick={() => setPrimary.mutate({ id: img.id, productId })}
                     >
                       Set primary
+                    </Button>
+                  )}
+                  {!img.isPrimary && !img.isSecondary && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="h-6 px-2 text-[11px]"
+                      disabled={setSecondary.isPending}
+                      onClick={() => setSecondary.mutate({ id: img.id, productId })}
+                    >
+                      Set hover
                     </Button>
                   )}
                   <Button

@@ -164,7 +164,7 @@ function CouponModal({
               value={input}
               onChangeText={(v) => setInput(v.toUpperCase())}
               placeholder="ENTER CODE"
-              placeholderTextColor="#d0ccc6"
+              placeholderTextColor="#8A7A63"
               className="flex-1 border px-4 text-[12px] font-semibold tracking-[0.16em] uppercase"
               style={{ borderColor: Colors.border, color: Colors.ink, height: 48 }}
             />
@@ -172,7 +172,7 @@ function CouponModal({
               onPress={() => apply()}
               disabled={applying || !input.trim()}
               className="items-center justify-center px-5"
-              style={{ backgroundColor: input.trim() && !applying ? Colors.ink : "#e8e2da", height: 48 }}
+              style={{ backgroundColor: input.trim() && !applying ? Colors.ink : "#E3DDD1", height: 48 }}
             >
               {applying ? <ActivityIndicator size="small" color="#fff" /> : (
                 <Text className="text-[10px] font-semibold tracking-[0.2em] uppercase" style={{ color: input.trim() ? "#fff" : Colors.inkMuted }}>
@@ -459,7 +459,7 @@ export default function CheckoutScreen() {
           Sign in to continue checkout.
         </Text>
         <Pressable
-          className="h-14 px-10 items-center justify-center bg-[#111111] active:opacity-70"
+          className="h-14 px-10 items-center justify-center bg-[#1B1611] active:opacity-70"
           onPress={() => router.push("/(auth)/sign-in")}
         >
           <Text className="text-white text-[11px] font-semibold tracking-[0.3em] uppercase">Sign In</Text>
@@ -486,7 +486,7 @@ export default function CheckoutScreen() {
         </Text>
 
         {loadingAddresses ? (
-          <View className="h-24 mb-3" style={{ backgroundColor: "#f0ede8" }} />
+          <View className="h-24 mb-3" style={{ backgroundColor: "#EDE3D0" }} />
         ) : (
           <>
             {savedAddresses.map((addr) => (
@@ -611,7 +611,7 @@ export default function CheckoutScreen() {
           onPress={handlePay}
           disabled={blocked}
           className="h-14 items-center justify-center mt-6"
-          style={{ backgroundColor: blocked ? "#e8e2da" : Colors.ink }}
+          style={{ backgroundColor: blocked ? "#E3DDD1" : Colors.ink }}
         >
           {paying ? (
             <ActivityIndicator color="#fff" />

@@ -14,6 +14,7 @@ import {
   listProductsSchema,
   removeProductNoteSchema,
   setPrimaryImageSchema,
+  setSecondaryImageSchema,
   updateCategorySchema,
   updateProductSchema,
   updateVariantSchema,
@@ -85,6 +86,10 @@ export const catalogRouter = router({
   setPrimaryImage: adminProcedure
     .input(setPrimaryImageSchema)
     .mutation(({ ctx, input }) => createCatalogService(ctx.db).setPrimaryImage(input)),
+
+  setSecondaryImage: adminProcedure
+    .input(setSecondaryImageSchema)
+    .mutation(({ ctx, input }) => createCatalogService(ctx.db).setSecondaryImage(input)),
 
   addProductNote: adminProcedure
     .input(addProductNoteSchema)

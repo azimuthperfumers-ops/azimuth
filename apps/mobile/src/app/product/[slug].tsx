@@ -32,7 +32,7 @@ function DotRating({ value, max }: { value: number; max: number }) {
         <View
           key={i}
           className="w-2 h-2 rounded-full"
-          style={{ backgroundColor: i < value ? "#111111" : "#e8e2da" }}
+          style={{ backgroundColor: i < value ? "#1B1611" : "#E3DDD1" }}
         />
       ))}
     </View>
@@ -152,16 +152,16 @@ export default function ProductDetailScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#faf8f5]">
-        <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#888888] uppercase">Loading…</Text>
+      <View className="flex-1 items-center justify-center bg-[#F5F0E7]">
+        <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#57493A] uppercase">Loading…</Text>
       </View>
     );
   }
 
   if (!product) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#faf8f5]">
-        <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#888888] uppercase">Not found</Text>
+      <View className="flex-1 items-center justify-center bg-[#F5F0E7]">
+        <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#57493A] uppercase">Not found</Text>
       </View>
     );
   }
@@ -179,13 +179,16 @@ export default function ProductDetailScreen() {
   const mrp = activeVariant ? Number(activeVariant.mrp ?? 0) : null;
   const hasDiscount = price !== null && mrp !== null && price < mrp;
   const bg = product.themeColor ?? "#e8e0d5";
+  // Order: primary first, then the secondary image, then the rest.
+  const imgRank = (i: { isPrimary: boolean; isSecondary: boolean }) =>
+    i.isPrimary ? 0 : i.isSecondary ? 1 : 2;
   const galleryImages = product.images
     .slice()
-    .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
+    .sort((a, b) => imgRank(a) - imgRank(b))
     .filter((i): i is typeof i & { url: string } => !!i.url);
 
   return (
-    <SafeAreaView className="flex-1 bg-[#faf8f5]" edges={["bottom"]}>
+    <SafeAreaView className="flex-1 bg-[#F5F0E7]" edges={["bottom"]}>
       <ScrollView bounces>
         {/* ── Hero image carousel ── */}
         <ImageCarousel images={galleryImages} bg={bg} productName={product.name} />
@@ -196,7 +199,7 @@ export default function ProductDetailScreen() {
         {/* ── Product info ── */}
         <View className="px-6 pt-8 pb-6">
           {/* Category + concentration */}
-          <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#888888] uppercase mb-1">
+          <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#57493A] uppercase mb-1">
             {activeVariant &&
               (CONCENTRATION_LABEL[activeVariant.concentration] ?? activeVariant.concentration)}
             {product.category ? ` · ${product.category.name}` : ""}
@@ -204,7 +207,7 @@ export default function ProductDetailScreen() {
 
           {/* Name */}
           <Text
-            className="text-[38px] leading-none tracking-tight text-[#111111] mb-4"
+            className="text-[38px] leading-none tracking-tight text-[#1B1611] mb-4"
             style={{ fontFamily: Fonts.serifItalic }}
           >
             {product.name}
@@ -212,11 +215,11 @@ export default function ProductDetailScreen() {
 
           {/* Price */}
           <View className="flex-row items-baseline gap-3 mb-8">
-            <Text className="text-[26px] font-semibold text-[#111111]">
+            <Text className="text-[26px] font-semibold text-[#1B1611]">
               ₹{price?.toLocaleString("en-IN") ?? "—"}
             </Text>
             {hasDiscount && (
-              <Text className="text-[15px] text-[#888888] line-through">
+              <Text className="text-[15px] text-[#57493A] line-through">
                 ₹{mrp?.toLocaleString("en-IN")}
               </Text>
             )}
@@ -224,18 +227,18 @@ export default function ProductDetailScreen() {
 
           {/* Description */}
           {product.description && (
-            <Text className="text-[14px] leading-[1.9] text-[#555555] mb-8">
+            <Text className="text-[14px] leading-[1.9] text-[#57493A] mb-8">
               {product.description}
             </Text>
           )}
 
           {/* Divider */}
-          <View className="h-px bg-[#e8e2da] mb-8" />
+          <View className="h-px bg-[#E3DDD1] mb-8" />
 
           {/* Variant selector */}
           {activeVariants.length > 1 && (
             <View className="mb-8">
-              <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#111111] uppercase mb-4">
+              <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#1B1611] uppercase mb-4">
                 Variant
               </Text>
               <View className="flex-row flex-wrap gap-2">
@@ -249,19 +252,19 @@ export default function ProductDetailScreen() {
                       onPress={() => setSelectedVariantId(v.id)}
                       className="border px-5 py-3"
                       style={{
-                        borderColor: selected ? Colors.accent : "#e8e2da",
+                        borderColor: selected ? Colors.accent : "#E3DDD1",
                         backgroundColor: selected ? Colors.accent : "transparent",
                       }}
                     >
                       <Text
                         className="text-[12px] font-semibold tracking-[0.1em]"
-                        style={{ color: selected ? "#ffffff" : "#111111" }}
+                        style={{ color: selected ? "#ffffff" : "#1B1611" }}
                       >
                         {concentration} · {v.sizeMl}ml
                       </Text>
                       <Text
                         className="text-[11px] mt-0.5"
-                        style={{ color: selected ? "#ffffff" : "#888888" }}
+                        style={{ color: selected ? "#ffffff" : "#57493A" }}
                       >
                         ₹{vPrice.toLocaleString("en-IN")}
                       </Text>
@@ -277,7 +280,7 @@ export default function ProductDetailScreen() {
             <View className="mb-8 gap-4">
               {!!product.longevityRating && (
                 <View className="flex-row items-center justify-between">
-                  <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#111111] uppercase">
+                  <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#1B1611] uppercase">
                     Longevity
                   </Text>
                   <DotRating value={product.longevityRating} max={10} />
@@ -285,7 +288,7 @@ export default function ProductDetailScreen() {
               )}
               {!!product.sillageRating && (
                 <View className="flex-row items-center justify-between">
-                  <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#111111] uppercase">
+                  <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#1B1611] uppercase">
                     Sillage
                   </Text>
                   <DotRating value={product.sillageRating} max={5} />
@@ -302,16 +305,16 @@ export default function ProductDetailScreen() {
                 if (positionNotes.length === 0) return null;
                 return (
                   <View key={position}>
-                    <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#111111] uppercase mb-2">
+                    <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#1B1611] uppercase mb-2">
                       {NOTE_POSITION_LABEL[position]}
                     </Text>
                     <View className="flex-row flex-wrap gap-2">
                       {positionNotes.map((n) => (
                         <View
                           key={n.id}
-                          className="px-3 py-1.5 rounded-full border border-[#e8e2da] bg-[#f0ede8]"
+                          className="px-3 py-1.5 rounded-full border border-[#E3DDD1] bg-[#EDE3D0]"
                         >
-                          <Text className="text-[12px] text-[#555555]">{n.note.name}</Text>
+                          <Text className="text-[12px] text-[#57493A]">{n.note.name}</Text>
                         </View>
                       ))}
                     </View>
@@ -324,20 +327,20 @@ export default function ProductDetailScreen() {
       </ScrollView>
 
       {/* ── Sticky CTA ── */}
-      <View className="flex-row items-center gap-3 px-6 pb-8 pt-4 border-t border-[#e8e2da] bg-[#faf8f5]">
+      <View className="flex-row items-center gap-3 px-6 pb-8 pt-4 border-t border-[#E3DDD1] bg-[#F5F0E7]">
         <View>
           <Text
             className="text-[20px] leading-none"
-            style={{ fontFamily: Fonts.serifMedium, color: "#111111" }}
+            style={{ fontFamily: Fonts.serifMedium, color: "#1B1611" }}
           >
             ₹{price?.toLocaleString("en-IN") ?? "—"}
           </Text>
-          <Text className="mt-1 text-[8px] tracking-[0.14em] text-[#8a8175] uppercase">
+          <Text className="mt-1 text-[8px] tracking-[0.14em] text-[#8A7A63] uppercase">
             Incl. of all taxes
           </Text>
         </View>
         <Pressable
-          className="flex-1 h-14 items-center justify-center bg-[#111111] active:opacity-70"
+          className="flex-1 h-14 items-center justify-center bg-[#1B1611] active:opacity-70"
           style={{ opacity: !activeVariant || addToCart.isPending ? 0.4 : 1 }}
           disabled={!activeVariant || addToCart.isPending}
           onPress={() =>
@@ -350,11 +353,11 @@ export default function ProductDetailScreen() {
         </Pressable>
         <Pressable
           onPress={toggleWishlist}
-          className="w-14 h-14 items-center justify-center border border-[#e8e2da] active:opacity-70"
+          className="w-14 h-14 items-center justify-center border border-[#E3DDD1] active:opacity-70"
         >
           <Heart
             size={18}
-            color={wishlistItem ? Colors.accent : "#111111"}
+            color={wishlistItem ? Colors.accent : "#1B1611"}
             fill={wishlistItem ? Colors.accent : "transparent"}
             strokeWidth={1.6}
           />

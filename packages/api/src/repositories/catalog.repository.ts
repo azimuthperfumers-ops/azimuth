@@ -11,6 +11,7 @@ import type {
   CreateVariantInput,
   ListProductsInput,
   SetPrimaryImageInput,
+  SetSecondaryImageInput,
   UpdateCategoryInput,
   UpdateProductInput,
   UpdateVariantInput,
@@ -248,9 +249,24 @@ export function createCatalogRepository(db: Database) {
           .update(schema.productImages)
           .set({ isPrimary: false })
           .where(eq(schema.productImages.productId, productId));
+        // primary and secondary are mutually exclusive — clear secondary on the target
         await tx
           .update(schema.productImages)
-          .set({ isPrimary: true })
+          .set({ isPrimary: true, isSecondary: false })
+          .where(eq(schema.productImages.id, id));
+      });
+    },
+
+    async setSecondaryImage({ id, productId }: SetSecondaryImageInput) {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(schema.productImages)
+          .set({ isSecondary: false })
+          .where(eq(schema.productImages.productId, productId));
+        // mutually exclusive with primary — clear primary on the target
+        await tx
+          .update(schema.productImages)
+          .set({ isSecondary: true, isPrimary: false })
           .where(eq(schema.productImages.id, id));
       });
     },

@@ -17,6 +17,7 @@ import type {
   ListProductsInput,
   RemoveProductNoteInput,
   SetPrimaryImageInput,
+  SetSecondaryImageInput,
   UpdateCategoryInput,
   UpdateProductInput,
   UpdateVariantInput,
@@ -194,9 +195,10 @@ export function createCatalogService(db: Database) {
         const img = await catalogRepository.addImage(input);
         return img ? withUrl(img) : img;
       } catch (err) {
-        if (hasPgErrorCode(err, "23505") && input.isPrimary) {
-          // Primary slot already taken — insert as non-primary, avoid surfacing error to user
-          const img = await catalogRepository.addImage({ ...input, isPrimary: false });
+        if (hasPgErrorCode(err, "23505") && (input.isPrimary || input.isSecondary)) {
+          // Primary/secondary slot already taken — insert as plain gallery image
+          // rather than surfacing a conflict to the user.
+          const img = await catalogRepository.addImage({ ...input, isPrimary: false, isSecondary: false });
           return img ? withUrl(img) : img;
         }
         if (hasPgErrorCode(err, "23505")) {
@@ -212,6 +214,10 @@ export function createCatalogService(db: Database) {
 
     setPrimaryImage(input: SetPrimaryImageInput) {
       return catalogRepository.setPrimaryImage(input);
+    },
+
+    setSecondaryImage(input: SetSecondaryImageInput) {
+      return catalogRepository.setSecondaryImage(input);
     },
 
     addProductNote(input: AddProductNoteInput) {

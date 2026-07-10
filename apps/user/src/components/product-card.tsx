@@ -6,7 +6,7 @@ type Product = {
   slug: string;
   themeColor: string | null;
   category: { name: string } | null;
-  images: { url: string; isPrimary: boolean }[];
+  images: { url: string; isPrimary: boolean; isSecondary: boolean }[];
   variants: {
     effectivePrice: number | string;
     mrp: string;
@@ -26,6 +26,7 @@ const CONCENTRATION_LABEL: Record<string, string> = {
 
 export function ProductCard({ product }: { product: Product }) {
   const image = product.images.find((i) => i.isPrimary) ?? product.images[0];
+  const secondary = product.images.find((i) => i.isSecondary && i.url !== image?.url);
   const activeVariants = product.variants.filter((v) => v.status === "active");
   const prices = activeVariants.map((v) => Number(v.effectivePrice));
   const mrps = activeVariants.map((v) => Number(v.mrp));
@@ -44,12 +45,23 @@ export function ProductCard({ product }: { product: Product }) {
         style={{ backgroundColor: bg }}
       >
         {image?.url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={image.url}
-            alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-          />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image.url}
+              alt={product.name}
+              className={`h-full w-full object-cover ${secondary ? "group-hover:invisible" : ""}`}
+            />
+            {secondary && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={secondary.url}
+                alt={product.name}
+                aria-hidden
+                className="invisible absolute inset-0 h-full w-full object-cover group-hover:visible"
+              />
+            )}
+          </>
         ) : (
           <div className="flex h-full w-full items-end justify-start p-6">
             <span

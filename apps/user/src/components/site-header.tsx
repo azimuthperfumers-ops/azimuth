@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Menu, ShoppingBag, X } from "lucide-react";
 
@@ -66,13 +67,15 @@ export function SiteHeader() {
           </Link>
         </nav>
 
-        <Link href="/" className="text-center">
-          <div className="font-heading text-[26px] font-semibold tracking-[0.32em] text-foreground">
-            AZIMUTH
-          </div>
-          <div className="mt-0.5 text-[9px] tracking-[0.5em] text-muted-foreground uppercase">
-            Perfumers
-          </div>
+        <Link href="/" className="flex justify-center" aria-label="Azimuth Perfumers — home">
+          <Image
+            src="/logo-lockup.png"
+            alt="Azimuth Perfumers"
+            width={1642}
+            height={1453}
+            priority
+            className="h-16 w-auto"
+          />
         </Link>
 
         <div className="flex items-center justify-end gap-6 text-[12px] font-medium tracking-[0.18em] uppercase">

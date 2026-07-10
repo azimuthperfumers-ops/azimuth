@@ -21,7 +21,7 @@ function TabIcon({
   return (
     <View className="items-center pt-1">
       <View className="relative">
-        <Icon size={20} color={active ? Colors.ink : "#bbbbbb"} strokeWidth={1.75} />
+        <Icon size={20} color={active ? Colors.ink : "#8A7A63"} strokeWidth={1.75} />
         {!!badge && (
           <View
             className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-1 rounded-full items-center justify-center"

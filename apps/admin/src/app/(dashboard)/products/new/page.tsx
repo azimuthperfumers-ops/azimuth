@@ -329,6 +329,7 @@ export default function NewProductPage() {
           key: img.key,
           altText: img.altText || undefined,
           isPrimary: img.isPrimary,
+          isSecondary: img.isSecondary,
           sortOrder: i,
         });
       }

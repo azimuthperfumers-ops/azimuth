@@ -7,12 +7,12 @@ module.exports = {
       colors: {
         // Mirrors constants/theme.ts — the source of truth for screens, which
         // mostly hardcode these as hex literals rather than Tailwind tokens.
-        background: "#faf8f5",
-        surface: "#ffffff",
-        ink: "#111111",
-        "ink-muted": "#888888",
-        border: "#e8e2da",
-        accent: "#c0392b",
+        background: "#F5F0E7",
+        surface: "#FAF6EE",
+        ink: "#1B1611",
+        "ink-muted": "#57493A",
+        border: "#E3DDD1",
+        accent: "#9A5B2B",
       },
     },
   },

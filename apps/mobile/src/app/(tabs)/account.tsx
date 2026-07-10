@@ -23,23 +23,23 @@ export default function AccountScreen() {
 
   if (!session) {
     return (
-      <View className="flex-1 bg-[#faf8f5]">
+      <View className="flex-1 bg-[#F5F0E7]">
         <View className="flex-1 items-center justify-center px-8">
-          <Text className="text-[10px] font-semibold tracking-[0.36em] text-[#888888] uppercase mb-4">
+          <Text className="text-[10px] font-semibold tracking-[0.36em] text-[#57493A] uppercase mb-4">
             Azimuth Perfumers
           </Text>
           <Text
-            className="text-[36px] text-[#111111] text-center leading-tight mb-3"
+            className="text-[36px] text-[#1B1611] text-center leading-tight mb-3"
             style={{ fontFamily: Fonts.serifItalic }}
           >
             Welcome back
           </Text>
-          <Text className="text-[14px] text-[#888888] text-center mb-10 leading-relaxed">
+          <Text className="text-[14px] text-[#57493A] text-center mb-10 leading-relaxed">
             Sign in to view your orders, track deliveries, and manage your account.
           </Text>
 
           <Pressable
-            className="h-14 w-full items-center justify-center bg-[#111111] active:opacity-70 mb-4"
+            className="h-14 w-full items-center justify-center bg-[#1B1611] active:opacity-70 mb-4"
             onPress={() => router.push("/(auth)/sign-in")}
           >
             <Text className="text-white text-[11px] font-semibold tracking-[0.3em] uppercase">
@@ -47,7 +47,7 @@ export default function AccountScreen() {
             </Text>
           </Pressable>
 
-          <Text className="text-[12px] text-[#888888] text-center">
+          <Text className="text-[12px] text-[#57493A] text-center">
             New here? Create an account at sign-in.
           </Text>
         </View>
@@ -65,31 +65,31 @@ export default function AccountScreen() {
   const memberSinceYear = new Date(session.user.createdAt).getFullYear();
 
   return (
-    <View className="flex-1 bg-[#faf8f5]">
+    <View className="flex-1 bg-[#F5F0E7]">
       <ScrollView bounces>
         {/* Profile */}
-        <View className="px-6 pt-8 pb-8 border-b border-[#e8e2da]">
-          <Text className="text-[10px] font-semibold tracking-[0.28em] uppercase mb-5" style={{ color: "#8a8175" }}>
+        <View className="px-6 pt-8 pb-8 border-b border-[#E3DDD1]">
+          <Text className="text-[10px] font-semibold tracking-[0.28em] uppercase mb-5" style={{ color: "#8A7A63" }}>
             Your Account
           </Text>
           <View className="flex-row items-center gap-4">
-            <View className="w-14 h-14 bg-[#111111] items-center justify-center">
+            <View className="w-14 h-14 bg-[#1B1611] items-center justify-center">
               <Text className="text-white text-[18px] font-semibold tracking-wider">{initials}</Text>
             </View>
             <View>
               <Text
                 className="text-[22px] leading-none"
-                style={{ fontFamily: Fonts.serifMedium, color: "#111111" }}
+                style={{ fontFamily: Fonts.serifMedium, color: "#1B1611" }}
               >
                 {session.user.name}
               </Text>
-              <Text className="text-[10px] tracking-[0.14em] text-[#888888] uppercase mt-1.5">
+              <Text className="text-[10px] tracking-[0.14em] text-[#57493A] uppercase mt-1.5">
                 Member since {memberSinceYear}
               </Text>
             </View>
           </View>
           {session.user.email ? (
-            <Text className="text-[13px] text-[#888888] mt-4">{session.user.email}</Text>
+            <Text className="text-[13px] text-[#57493A] mt-4">{session.user.email}</Text>
           ) : null}
         </View>
 
@@ -98,14 +98,14 @@ export default function AccountScreen() {
           {MENU.map(({ label, sub, route }) => (
             <Pressable
               key={label}
-              className="flex-row items-center justify-between px-6 py-5 border-b border-[#e8e2da] active:bg-[#f0ede8]"
+              className="flex-row items-center justify-between px-6 py-5 border-b border-[#E3DDD1] active:bg-[#EDE3D0]"
               onPress={() => router.push(route)}
             >
               <View>
-                <Text className="text-[15px] font-semibold text-[#111111]">{label}</Text>
-                <Text className="text-[12px] text-[#888888] mt-0.5">{sub}</Text>
+                <Text className="text-[15px] font-semibold text-[#1B1611]">{label}</Text>
+                <Text className="text-[12px] text-[#57493A] mt-0.5">{sub}</Text>
               </View>
-              <Text className="text-[#888888] text-xl">›</Text>
+              <Text className="text-[#57493A] text-xl">›</Text>
             </Pressable>
           ))}
         </View>
@@ -113,10 +113,10 @@ export default function AccountScreen() {
         {/* Sign out */}
         <View className="px-6 mt-10 mb-12">
           <Pressable
-            className="h-11 border border-[#e8e2da] items-center justify-center active:bg-[#f0ede8]"
+            className="h-11 border border-[#E3DDD1] items-center justify-center active:bg-[#EDE3D0]"
             onPress={handleSignOut}
           >
-            <Text className="text-[10.5px] font-semibold tracking-[0.22em] text-[#888888] uppercase">
+            <Text className="text-[10.5px] font-semibold tracking-[0.22em] text-[#57493A] uppercase">
               Sign Out
             </Text>
           </Pressable>

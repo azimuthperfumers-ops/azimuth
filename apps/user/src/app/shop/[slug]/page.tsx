@@ -110,11 +110,10 @@ export default function ProductDetailPage() {
     );
   }
 
-  const images = (product.images ?? []) as { url?: string; isPrimary: boolean }[];
-  const primaryIdx = images.findIndex((i) => i.isPrimary);
-  const orderedImages = primaryIdx > 0
-    ? [images[primaryIdx]!, ...images.filter((_, i) => i !== primaryIdx)]
-    : images;
+  const images = (product.images ?? []) as { url?: string; isPrimary: boolean; isSecondary: boolean }[];
+  // Order: primary first, then the secondary (hover) image, then the rest.
+  const rank = (i: { isPrimary: boolean; isSecondary: boolean }) => (i.isPrimary ? 0 : i.isSecondary ? 1 : 2);
+  const orderedImages = images.map((img, i) => ({ img, i })).sort((a, b) => rank(a.img) - rank(b.img) || a.i - b.i).map((x) => x.img);
 
   const activeVariant =
     (product.variants ?? []).find((v: any) => v.id === selectedVariantId) ??

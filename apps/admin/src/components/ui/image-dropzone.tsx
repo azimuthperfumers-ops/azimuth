@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ImageIcon, X, Star } from "lucide-react";
+import { ImageIcon, Layers, X, Star } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ export type UploadedImage = {
   displayUrl: string; // presigned/public URL — only used for browser preview in this form
   altText: string;
   isPrimary: boolean;
+  isSecondary: boolean; // the hover-swap image on web (optional, at most one)
 };
 
 type UploadingEntry = {
@@ -80,7 +81,7 @@ export function ImageDropzone({ images, onChange, maxImages = 10 }: ImageDropzon
           // success — store key for DB; displayUrl for preview only
           onChange([
             ...images,
-            { key, displayUrl: publicUrl, altText: file.name.replace(/\.[^.]+$/, ""), isPrimary: images.length === 0 },
+            { key, displayUrl: publicUrl, altText: file.name.replace(/\.[^.]+$/, ""), isPrimary: images.length === 0, isSecondary: false },
           ]);
           setUploading((prev) => prev.map((u) => (u.id === entry.id ? { ...u, progress: "done" } : u)));
           // clean up object URL after a moment
@@ -97,7 +98,20 @@ export function ImageDropzone({ images, onChange, maxImages = 10 }: ImageDropzon
   }
 
   function setPrimary(key: string) {
-    onChange(images.map((img) => ({ ...img, isPrimary: img.key === key })));
+    // primary and secondary are mutually exclusive
+    onChange(images.map((img) => ({
+      ...img,
+      isPrimary: img.key === key,
+      isSecondary: img.key === key ? false : img.isSecondary,
+    })));
+  }
+
+  function setSecondary(key: string) {
+    onChange(images.map((img) => ({
+      ...img,
+      isSecondary: img.key === key,
+      isPrimary: img.key === key ? false : img.isPrimary,
+    })));
   }
 
   function remove(key: string) {
@@ -128,6 +142,12 @@ export function ImageDropzone({ images, onChange, maxImages = 10 }: ImageDropzon
                   Primary
                 </div>
               )}
+              {img.isSecondary && (
+                <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-foreground px-1.5 py-0.5 text-[10px] font-semibold text-background">
+                  <Layers className="size-2.5" />
+                  Hover
+                </div>
+              )}
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-foreground/0 opacity-0 transition-all group-hover:bg-foreground/40 group-hover:opacity-100">
                 {!img.isPrimary && (
                   <Button
@@ -137,6 +157,17 @@ export function ImageDropzone({ images, onChange, maxImages = 10 }: ImageDropzon
                     onClick={() => setPrimary(img.key)}
                   >
                     Set primary
+                  </Button>
+                )}
+                {!img.isPrimary && !img.isSecondary && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => setSecondary(img.key)}
+                  >
+                    Set hover
                   </Button>
                 )}
                 <Button

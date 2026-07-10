@@ -11,7 +11,7 @@ const CONCENTRATION_SHORT: Record<string, string> = {
   edp: "EDP", edt: "EDT", parfum: "Parfum", cologne: "Cologne", attar: "Attar",
 };
 
-const NEUTRAL_FALLBACK = "#f0ede8";
+const NEUTRAL_FALLBACK = "#EDE3D0";
 
 const CRAFT_STEPS = [
   {
@@ -46,7 +46,7 @@ function ProductThumb({ url, name }: { url: string | undefined; name: string }) 
     <View className="flex-1 items-end justify-end p-3" style={{ backgroundColor: NEUTRAL_FALLBACK }}>
       <Text
         numberOfLines={1}
-        className="text-[#8a8175] text-[9px] tracking-[1px] uppercase"
+        className="text-[#8A7A63] text-[9px] tracking-[1px] uppercase"
         style={{ fontFamily: "monospace" }}
       >
         {name}
@@ -110,7 +110,7 @@ export default function HomeScreen() {
           </Text>
 
           <Pressable
-            className="mt-7 h-14 items-center justify-center bg-[#111111] active:opacity-70"
+            className="mt-7 h-14 items-center justify-center bg-[#1B1611] active:opacity-70"
             onPress={() => router.push("/shop")}
           >
             <Text className="text-white text-[11px] font-semibold tracking-[0.25em] uppercase">
@@ -215,7 +215,7 @@ export default function HomeScreen() {
             >
               <View className="w-[45%] aspect-[3/4]" style={{ position: "relative" }}>
                 {discount && (
-                  <View className="absolute top-2.5 left-2.5 z-10 bg-[#f5f1e8] px-2 py-1">
+                  <View className="absolute top-2.5 left-2.5 z-10 bg-[#F5F0E7] px-2 py-1">
                     <Text className="text-[8px] font-semibold tracking-[0.1em]" style={{ color: Colors.ink }}>
                       {Math.round((1 - price! / mrp!) * 100)}% OFF
                     </Text>
@@ -240,7 +240,7 @@ export default function HomeScreen() {
                     <Text
                       numberOfLines={3}
                       className="mt-2.5 text-[12px] leading-[1.35]"
-                      style={{ fontFamily: Fonts.serifItalic, color: "#4a4438" }}
+                      style={{ fontFamily: Fonts.serifItalic, color: "#57493A" }}
                     >
                       {featured.description}
                     </Text>
@@ -250,7 +250,7 @@ export default function HomeScreen() {
                   <Text className="text-[15px]" style={{ fontFamily: Fonts.serifMedium, color: Colors.ink }}>
                     ₹{price !== null ? Number(price).toLocaleString("en-IN") : "—"}
                   </Text>
-                  <View className="bg-[#111111] px-3.5 py-2">
+                  <View className="bg-[#1B1611] px-3.5 py-2">
                     <Text className="text-white text-[9px] font-semibold tracking-[0.14em] uppercase">
                       Discover →
                     </Text>
@@ -263,7 +263,7 @@ export default function HomeScreen() {
       })()}
 
       {/* ── Brand statement ── */}
-      <View className="mt-12 bg-[#111111] px-8 py-14 items-center">
+      <View className="mt-12 bg-[#1B1611] px-8 py-14 items-center">
         <Text className="text-[9.5px] font-semibold tracking-[0.3em] text-white/45 uppercase">
           The Azimuth way
         </Text>
@@ -306,7 +306,7 @@ export default function HomeScreen() {
                 >
                   {title}
                 </Text>
-                <Text className="mt-1.5 text-[12.5px] leading-[1.6]" style={{ color: "#4a4438" }}>
+                <Text className="mt-1.5 text-[12.5px] leading-[1.6]" style={{ color: "#57493A" }}>
                   {body}
                 </Text>
               </View>

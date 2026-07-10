@@ -76,7 +76,7 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
         <Pressable
           onPress={submit}
           disabled={add.isPending}
-          className="flex-1 h-12 items-center justify-center bg-[#111111] active:opacity-70"
+          className="flex-1 h-12 items-center justify-center bg-[#1B1611] active:opacity-70"
           style={{ opacity: add.isPending ? 0.6 : 1 }}
         >
           <Text className="text-white text-[10.5px] font-semibold tracking-[0.2em] uppercase">
@@ -171,7 +171,7 @@ function EditAddressForm({ address, onDone }: { address: Address; onDone: () => 
         <Pressable
           onPress={submit}
           disabled={update.isPending}
-          className="flex-1 h-12 items-center justify-center bg-[#111111] active:opacity-70"
+          className="flex-1 h-12 items-center justify-center bg-[#1B1611] active:opacity-70"
           style={{ opacity: update.isPending ? 0.6 : 1 }}
         >
           <Text className="text-white text-[10.5px] font-semibold tracking-[0.2em] uppercase">
