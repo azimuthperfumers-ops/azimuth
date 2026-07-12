@@ -9,3 +9,4 @@ export * from "./support";
 export * from "./settings";
 export * from "./site-content";
 export * from "./jobs";
+export * from "./ratings";

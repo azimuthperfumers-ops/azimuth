@@ -11,6 +11,7 @@ import { EditProductDialog } from "@/components/products/edit-product-dialog";
 import { EditVariantDialog } from "@/components/products/edit-variant-dialog";
 import { ProductImagesCard } from "@/components/products/product-images-card";
 import { ProductNotesCard } from "@/components/products/product-notes-card";
+import { ProductRatingCard } from "@/components/products/product-rating-card";
 import { RemoveStockDialog } from "@/components/products/remove-stock-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -208,6 +209,8 @@ export default function ProductDetailPage() {
       <ProductImagesCard productId={data.id} images={data.images} />
 
       <ProductNotesCard productId={data.id} notes={data.notes} />
+
+      <ProductRatingCard productId={data.id} />
 
       {stockVariant && (
         <AddStockDialog

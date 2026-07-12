@@ -2,8 +2,8 @@ import { eq } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
 import { advanceOrderStatus, applyOrderStockMovement } from "@azimuth/api";
-import { alertAdminDeliveryFailed } from "@azimuth/comms";
-import { orderInfo } from "@azimuth/queue";
+import { alertAdminDeliveryFailed, notifyOrderDelivered } from "@azimuth/comms";
+import { getCustomerContact, orderInfo } from "@azimuth/queue";
 
 type OurOrderStatus = typeof schema.orders.$inferSelect["status"];
 
@@ -120,5 +120,13 @@ export async function processForwardShipment(body: ShiprocketBody) {
   if (targetStatus === "delivery_attempted") {
     const info = orderInfo(order);
     await alertAdminDeliveryFailed(info);
+  }
+
+  // Delivered: our own WhatsApp with the "rate your purchase" nudge
+  if (targetStatus === "delivered") {
+    const contact = await getCustomerContact(order);
+    await notifyOrderDelivered(contact, orderInfo(order)).catch((e) =>
+      console.error("[webhook:shiprocket] delivered notify:", e),
+    );
   }
 }

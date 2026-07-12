@@ -12,6 +12,7 @@ const schema = z.object({
   ADMIN_WHATSAPP: z.string().optional(),
   // WhatsApp — primary customer + admin channel
   MSG91_WA_TEMPLATE_ORDER_PLACED: z.string().optional(),
+  MSG91_WA_TEMPLATE_ORDER_DELIVERED: z.string().optional(), // delivery confirmation + "rate your purchase" nudge
   MSG91_WA_TEMPLATE_REFUND: z.string().optional(),
   MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER: z.string().optional(),
   MSG91_WA_TEMPLATE_ADMIN_DELIVERY_FAILED: z.string().optional(),

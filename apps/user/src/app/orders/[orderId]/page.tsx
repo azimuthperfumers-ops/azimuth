@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink, MapPin, Package } from "lucide-react";
 
+import { toast } from "sonner";
+
+import { RatingPicker } from "@/components/rating-stars";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { authClient } from "@/lib/auth-client";
@@ -58,6 +61,19 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
     { orderId },
     { enabled: !!session },
   );
+
+  const utils = trpc.useUtils();
+  const { data: ratings } = trpc.rating.orderRatings.useQuery(
+    { orderId },
+    { enabled: !!session && order?.status === "delivered" },
+  );
+  const rateMut = trpc.rating.rate.useMutation({
+    onSuccess: () => {
+      utils.rating.orderRatings.invalidate({ orderId });
+      toast.success("Thanks for rating!");
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   if (sessionLoading) return null;
 
@@ -240,6 +256,34 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
               ))}
             </div>
           </section>
+
+          {/* Rate your purchase — delivered orders only */}
+          {order.status === "delivered" && ratings && ratings.products.length > 0 && (
+            <section>
+              <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-muted-foreground/50 mb-4">
+                Rate your purchase
+              </p>
+              <div className="border border-border divide-y divide-border/50">
+                {ratings.products.map((p) => (
+                  <div key={p.productId} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium truncate">{p.productName}</p>
+                      <p className="text-[11px] text-muted-foreground/50 mt-0.5">
+                        {p.myRating ? "You rated this fragrance" : "How was this fragrance?"}
+                      </p>
+                    </div>
+                    <RatingPicker
+                      value={p.myRating}
+                      disabled={rateMut.isPending}
+                      onRate={(rating) =>
+                        rateMut.mutate({ productId: p.productId, orderId, rating })
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Financials */}
           <section>

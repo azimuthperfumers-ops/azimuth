@@ -22,6 +22,8 @@ export const productConcentrationEnum = pgEnum("product_concentration", [
 export const productStatusEnum = pgEnum("product_status", ["draft", "active", "archived"]);
 export const notePositionEnum = pgEnum("note_position", ["top", "mid", "base"]);
 export const variantStatusEnum = pgEnum("variant_status", ["active", "discontinued"]);
+// "mock" shows admin-configured placeholder rating until enough real ratings exist
+export const ratingDisplayModeEnum = pgEnum("rating_display_mode", ["real", "mock"]);
 
 export const categories = pgTable("categories", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -61,6 +63,10 @@ export const products = pgTable("products", {
   sillageRating: smallint("sillage_rating"),
   status: productStatusEnum("status").default("draft").notNull(),
   isFeatured: boolean("is_featured").default(false).notNull(),
+  // Rating display: storefront shows mock values until enough real ratings, admin switches
+  ratingDisplayMode: ratingDisplayModeEnum("rating_display_mode").default("mock").notNull(),
+  mockRating: numeric("mock_rating", { precision: 2, scale: 1 }).default("4.8").notNull(),
+  mockRatingCount: integer("mock_rating_count").default(24).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

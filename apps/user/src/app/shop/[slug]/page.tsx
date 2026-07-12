@@ -6,8 +6,21 @@ import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Heart, Minus, Plus, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { RatingDisplay } from "@/components/rating-stars";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+
+// Rating under the product title — hidden entirely when there's nothing to show
+// (real mode with zero ratings)
+function ProductRating({ productId }: { productId: string }) {
+  const { data } = trpc.rating.forProducts.useQuery(
+    { productIds: [productId] },
+    { staleTime: 5 * 60 * 1000 },
+  );
+  const rating = data?.[productId];
+  if (!rating) return null;
+  return <RatingDisplay rating={rating.rating} count={rating.count} className="mt-3" />;
+}
 import { authClient } from "@/lib/auth-client";
 import { useCart } from "@/hooks/use-cart";
 import { trpc } from "@/lib/trpc";
@@ -234,6 +247,7 @@ export default function ProductDetailPage() {
               <h1 className="font-heading text-[2.2rem] md:text-[3rem] font-medium leading-[1.05] tracking-tight text-foreground">
                 {product.name}
               </h1>
+              <ProductRating productId={product.id} />
               {product.description && (
                 <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
                   {product.description}

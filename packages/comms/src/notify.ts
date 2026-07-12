@@ -65,6 +65,24 @@ export async function notifyRefundInitiated(
   }
 }
 
+// Delivery confirmation + rating nudge — template should link to the orders page
+// where the customer can tap a star rating.
+export async function notifyOrderDelivered(
+  customer: CustomerContact,
+  order: OrderInfo,
+): Promise<void> {
+  const mobile = customer.phone ? toMobile(customer.phone) : null;
+  if (mobile && env.MSG91_WA_TEMPLATE_ORDER_DELIVERED) {
+    await fire(
+      `wa:order_delivered:${order.orderNumber}`,
+      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_ORDER_DELIVERED!, [
+        customer.name,
+        order.orderNumber,
+      ]),
+    );
+  }
+}
+
 export async function sendPasswordReset(
   email: string,
   name: string,

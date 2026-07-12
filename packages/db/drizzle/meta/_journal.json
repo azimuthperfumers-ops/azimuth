@@ -57,6 +57,13 @@
       "when": 1783682145940,
       "tag": "0007_thin_thunderball",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783843192673,
+      "tag": "0008_lethal_fenris",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,26 @@ import { trpc } from "@/lib/trpc";
 import { useSession } from "@/hooks/use-session";
 import { Colors, Fonts } from "@/constants/theme";
 
+// Rating under the product name — hidden when real mode has zero ratings
+function ProductRatingLine({ productId }: { productId: string }) {
+  const { data } = trpc.rating.forProducts.useQuery(
+    { productIds: [productId] },
+    { staleTime: 5 * 60 * 1000 },
+  );
+  const rating = data?.[productId];
+  if (!rating) return null;
+  return (
+    <View className="flex-row items-center gap-2 mb-4">
+      <Text className="text-[15px] text-[#1B1611]">
+        {"★".repeat(Math.round(rating.rating))}
+        <Text style={{ color: "#C9BFAE" }}>{"☆".repeat(5 - Math.round(rating.rating))}</Text>
+      </Text>
+      <Text className="text-[12px] font-semibold text-[#1B1611]">{rating.rating.toFixed(1)}</Text>
+      <Text className="text-[11px] text-[#57493A]">({rating.count})</Text>
+    </View>
+  );
+}
+
 const CONCENTRATION_LABEL: Record<string, string> = {
   edp: "Eau de Parfum", edt: "Eau de Toilette", parfum: "Parfum",
   cologne: "Cologne", attar: "Attar",
@@ -212,6 +232,8 @@ export default function ProductDetailScreen() {
           >
             {product.name}
           </Text>
+
+          <ProductRatingLine productId={product.id} />
 
           {/* Price */}
           <View className="flex-row items-baseline gap-3 mb-8">

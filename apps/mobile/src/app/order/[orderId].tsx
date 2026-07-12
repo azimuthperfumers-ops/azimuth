@@ -14,10 +14,42 @@ const STEP_LABEL: Record<string, string> = {
   delivered: "Delivered",
 };
 
+// Tap-to-rate star row for a delivered product
+function StarRow({
+  value,
+  disabled,
+  onRate,
+}: {
+  value: number | null;
+  disabled?: boolean;
+  onRate: (rating: number) => void;
+}) {
+  return (
+    <View className="flex-row items-center gap-1">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Pressable key={i} disabled={disabled} onPress={() => onRate(i)} hitSlop={6}>
+          <Text className="text-[22px]" style={{ color: (value ?? 0) >= i ? "#1B1611" : "#C9BFAE" }}>
+            {(value ?? 0) >= i ? "★" : "☆"}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 export default function OrderDetailScreen() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
   const router = useRouter();
   const { data: order, isLoading } = trpc.order.get.useQuery({ orderId });
+
+  const utils = trpc.useUtils();
+  const { data: ratings } = trpc.rating.orderRatings.useQuery(
+    { orderId },
+    { enabled: order?.status === "delivered" },
+  );
+  const rateMut = trpc.rating.rate.useMutation({
+    onSuccess: () => utils.rating.orderRatings.invalidate({ orderId }),
+  });
 
   if (isLoading) {
     return (
@@ -173,6 +205,35 @@ export default function OrderDetailScreen() {
             </View>
           ))}
         </View>
+
+        {/* ── Rate your purchase (delivered only) ── */}
+        {order.status === "delivered" && ratings && ratings.products.length > 0 && (
+          <View className="px-6 pt-8">
+            <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#57493A] uppercase mb-4">
+              Rate your purchase
+            </Text>
+            {ratings.products.map((p, i) => (
+              <View
+                key={p.productId}
+                className="flex-row items-center justify-between py-3"
+                style={{ borderTopWidth: i > 0 ? 1 : 0, borderColor: "#E3DDD1" }}
+              >
+                <Text
+                  className="text-[14px] text-[#1B1611] flex-1 pr-4"
+                  style={{ fontFamily: Fonts.serifItalic }}
+                  numberOfLines={1}
+                >
+                  {p.productName}
+                </Text>
+                <StarRow
+                  value={p.myRating}
+                  disabled={rateMut.isPending}
+                  onRate={(rating) => rateMut.mutate({ productId: p.productId, orderId, rating })}
+                />
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* ── Support CTA ── */}
         <View className="px-6 mt-8">
