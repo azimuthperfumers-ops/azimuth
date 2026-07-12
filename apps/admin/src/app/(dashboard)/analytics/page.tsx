@@ -388,7 +388,7 @@ export default function AnalyticsPage() {
             <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>
           ) : shippingChartData.every((d) => d["Customer paid"] === 0 && d["We absorbed"] === 0) ? (
             <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
-              No shipping cost data yet. Enter actual Delhivery cost when marking orders as shipped.
+              No shipping cost data yet. Enter actual Shiprocket cost when marking orders as shipped.
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>

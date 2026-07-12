@@ -141,7 +141,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
         <div className="space-y-8">
 
           {/* Tracking */}
-          {order.delhiveryWaybill && (
+          {order.waybill && (
             <section>
               <p className="label-xs mb-3">Shipment</p>
               <div className="border border-border p-4 flex flex-col gap-4">
@@ -150,7 +150,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
                     <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
                       Waybill
                     </p>
-                    <p className="font-mono text-sm font-semibold mt-0.5">{order.delhiveryWaybill}</p>
+                    <p className="font-mono text-sm font-semibold mt-0.5">{order.waybill}</p>
                   </div>
                   {order.trackingUrl && (
                     <a

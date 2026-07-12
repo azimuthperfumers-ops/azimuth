@@ -321,7 +321,7 @@ export default function AdminOrderDetailPage({
   // Detect failed shipment booking: processing + no waybill + error note in history
   const needsShipmentRetry =
     order.status === "processing" &&
-    !order.delhiveryWaybill;
+    !order.waybill;
 
   const bookingErrorEntry = needsShipmentRetry
     ? timeline.find(
@@ -555,14 +555,14 @@ export default function AdminOrderDetailPage({
           </section>
 
           {/* Shipping */}
-          {(order.delhiveryWaybill || order.trackingUrl || order.podImageUrl) && (
+          {(order.waybill || order.trackingUrl || order.podImageUrl) && (
             <section>
               <SectionLabel>Shipping</SectionLabel>
               <div className="border border-border p-4 space-y-2 text-[12px]">
-                {order.delhiveryWaybill && (
+                {order.waybill && (
                   <div className="flex justify-between gap-2">
                     <span className="text-muted-foreground shrink-0">Waybill</span>
-                    <span className="font-mono">{order.delhiveryWaybill}</span>
+                    <span className="font-mono">{order.waybill}</span>
                   </div>
                 )}
                 {order.estimatedDeliveryDate && (

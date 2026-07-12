@@ -6,7 +6,7 @@ import cors from "cors";
 import express from "express";
 
 import { loginRateLimitMiddleware } from "./middleware/rate-limit";
-import { razorpayWebhookHandler, shiprocketWebhookHandler, delhiveryWebhookHandler } from "@azimuth/webhooks";
+import { razorpayWebhookHandler, shiprocketWebhookHandler } from "@azimuth/webhooks";
 
 export const app = express();
 
@@ -47,11 +47,8 @@ app.post("/webhooks/razorpay", express.raw({ type: "application/json" }), razorp
 
 app.use(express.json());
 
-// Logistics tracking events — Shiprocket (kept for historical orders)
+// Logistics tracking events — Shiprocket (auth via x-api-key header)
 app.post("/webhooks/tracking", shiprocketWebhookHandler);
-
-// Delhivery scan-push webhook — auth via ?token=<DELHIVERY_WEBHOOK_TOKEN>
-app.post("/webhooks/delhivery", delhiveryWebhookHandler);
 
 app.use(
   "/trpc",

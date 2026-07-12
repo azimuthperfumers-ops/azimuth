@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
-import { advanceOrderStatus } from "@azimuth/api";
+import { advanceOrderStatus, applyOrderStockMovement } from "@azimuth/api";
 import { alertAdminDeliveryFailed } from "@azimuth/comms";
 import { orderInfo } from "@azimuth/queue";
 
@@ -82,7 +82,7 @@ export async function processForwardShipment(body: ShiprocketBody) {
   }
 
   const order = await db.query.orders.findFirst({
-    where: eq(schema.orders.delhiveryWaybill, awb),
+    where: eq(schema.orders.waybill, awb),
   });
   if (!order) {
     console.warn(`[webhook:shiprocket] no order for AWB=${awb} — possible spoofed request`);
@@ -109,6 +109,11 @@ export async function processForwardShipment(body: ShiprocketBody) {
 
   await advanceOrderStatus(db, order.id, targetStatus, "webhook:shiprocket", note || undefined);
   console.log(`[webhook:shiprocket] order ${order.orderNumber} → ${targetStatus}`);
+
+  // Courier RTO completed — undelivered parcel physically back at warehouse
+  if (targetStatus === "rto_delivered") {
+    await applyOrderStockMovement(db, order.id, "return", "RTO parcel received back at warehouse");
+  }
 
   // Shiprocket sends courier tracking notifications (shipped/OFD/delivered/NDR) to customers directly.
   // We only alert admin on delivery failure.

@@ -294,9 +294,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
                       <TableCell className="font-semibold tabular-nums">{formatInr(Number(order.total))}</TableCell>
                       <TableCell className="text-sm">{order.items.length} item{order.items.length !== 1 ? "s" : ""}</TableCell>
                       <TableCell className="text-xs font-mono text-muted-foreground">
-                        {order.delhiveryWaybill ? (
+                        {order.waybill ? (
                           <div className="flex items-center gap-1">
-                            {order.delhiveryWaybill}
+                            {order.waybill}
                             {order.trackingUrl && (
                               <a
                                 href={order.trackingUrl}

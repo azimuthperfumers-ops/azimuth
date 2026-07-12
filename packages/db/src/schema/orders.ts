@@ -68,8 +68,8 @@ export const orders = pgTable(
     razorpayOrderId: text("razorpay_order_id"),
     razorpayPaymentId: text("razorpay_payment_id"),
 
-    // Shipping
-    delhiveryWaybill: text("delhivery_waybill"),
+    // Shipping (Shiprocket AWB — DB column name predates the Delhivery→Shiprocket switch)
+    waybill: text("delhivery_waybill"),
     returnWaybill: text("return_waybill"),
     trackingUrl: text("tracking_url"),
     estimatedDeliveryDate: text("estimated_delivery_date"),

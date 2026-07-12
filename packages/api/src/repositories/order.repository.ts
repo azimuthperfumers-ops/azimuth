@@ -52,7 +52,27 @@ export type CreateOrderInput = {
   couponCode?: string | null;
 };
 
+function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string } };
+  return e?.code === "23505" || e?.cause?.code === "23505";
+}
+
 export async function createOrder(db: Database, input: CreateOrderInput) {
+  // Order number comes from a count — two concurrent checkouts can collide on the
+  // unique index. Retry with a fresh count instead of failing the checkout.
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await createOrderOnce(db, input);
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
+async function createOrderOnce(db: Database, input: CreateOrderInput) {
   return db.transaction(async (tx) => {
     const orderNumber = await generateOrderNumber(tx as unknown as Database);
 
@@ -119,6 +139,83 @@ export async function createOrder(db: Database, input: CreateOrderInput) {
 
     return order;
   });
+}
+
+// ── Order-driven inventory movements ─────────────────────────────────────────
+// Decrement on paid, restore when goods physically return. Idempotent: one ledger
+// row per (order, variant, reason) — safe to call from webhook retries and sweeps.
+
+import { createInventoryRepository } from "./inventory.repository";
+
+export type OrderStockMovement = "sale" | "return" | "replacement_in" | "replacement_out";
+
+export async function applyOrderStockMovement(
+  db: Database,
+  orderId: string,
+  movement: OrderStockMovement,
+  note?: string,
+) {
+  const items = await db.query.orderItems.findMany({
+    where: eq(schema.orderItems.orderId, orderId),
+  });
+
+  const inventory = createInventoryRepository(db);
+  const outbound = movement === "sale" || movement === "replacement_out";
+
+  for (const item of items) {
+    if (!item.variantId) continue; // variant deleted — snapshot order, nothing to move
+
+    const [existing] = await db
+      .select({ id: schema.inventoryLedger.id })
+      .from(schema.inventoryLedger)
+      .where(
+        and(
+          eq(schema.inventoryLedger.refType, "order"),
+          eq(schema.inventoryLedger.refId, orderId),
+          eq(schema.inventoryLedger.variantId, item.variantId),
+          eq(schema.inventoryLedger.reason, movement),
+        ),
+      )
+      .limit(1);
+    if (existing) continue;
+
+    try {
+      await inventory.recordMovement({
+        variantId: item.variantId,
+        delta: outbound ? -item.quantity : item.quantity,
+        reason: movement,
+        refType: "order",
+        refId: orderId,
+        note,
+        // Money is already captured for order-driven sales — never block the order
+        // pipeline on a stock guard; negative stock = oversold flag for admin.
+        allowNegative: outbound,
+      });
+    } catch (err) {
+      // Inventory must never break payment/shipping processing — log and move on
+      console.error(
+        `[inventory] ${movement} movement failed for order=${orderId} variant=${item.variantId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+}
+
+// True if a ticket on this order has an exchange scheduled — used to decide whether a
+// received return restocks for refund or is held for a replacement dispatch.
+export async function orderHasScheduledExchange(db: Database, orderId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.ticketActions.id })
+    .from(schema.ticketActions)
+    .innerJoin(schema.tickets, eq(schema.ticketActions.ticketId, schema.tickets.id))
+    .where(
+      and(
+        eq(schema.ticketActions.actionType, "exchange_scheduled"),
+        eq(schema.tickets.orderId, orderId),
+      ),
+    )
+    .limit(1);
+  return !!row;
 }
 
 // ── Advance order status ──────────────────────────────────────────────────────
@@ -262,7 +359,7 @@ export async function getAllOrders(
         ilike(schema.orders.orderNumber, q),
         sql`${schema.orders.shippingAddress}->>'fullName' ILIKE ${q}`,
         sql`${schema.orders.shippingAddress}->>'phone' ILIKE ${q}`,
-        ilike(schema.orders.delhiveryWaybill, q),
+        ilike(schema.orders.waybill, q),
       ),
     );
   }

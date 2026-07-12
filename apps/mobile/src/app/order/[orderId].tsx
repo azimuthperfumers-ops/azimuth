@@ -42,7 +42,7 @@ export default function OrderDetailScreen() {
   const currentStep = STATUS_STEPS.indexOf(order.status as (typeof STATUS_STEPS)[number]);
   const isTerminal = order.status === "cancelled" || order.status === "payment_failed" || order.status === "refunded";
   const waybill = (order as { shiprocketAwb?: string | null }).shiprocketAwb
-    ?? (order as { delhiveryWaybill?: string | null }).delhiveryWaybill;
+    ?? (order as { waybill?: string | null }).waybill;
 
   return (
     <SafeAreaView className="flex-1 bg-[#F5F0E7]" edges={["bottom"]}>

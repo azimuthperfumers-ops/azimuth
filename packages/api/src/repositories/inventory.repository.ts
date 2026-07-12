@@ -18,6 +18,10 @@ export function createInventoryRepository(db: Database) {
       note?: string;
       refType?: string;
       refId?: string;
+      // Order-driven sales may push stock negative (payment already captured — a
+      // negative balance is the honest "oversold" signal for admin). Manual admin
+      // adjustments keep the >= 0 guard.
+      allowNegative?: boolean;
     }) {
       return db.transaction(async (tx) => {
         const [variant] = await tx
@@ -31,7 +35,7 @@ export function createInventoryRepository(db: Database) {
         }
 
         const balanceAfter = variant.stockCached + params.delta;
-        if (balanceAfter < 0) {
+        if (balanceAfter < 0 && !params.allowNegative) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "stock cannot go below zero" });
         }
 
@@ -56,6 +60,71 @@ export function createInventoryRepository(db: Database) {
 
         return ledgerEntry;
       });
+    },
+
+    // Stock sold online but still physically in the warehouse (paid/processing —
+    // awaiting pickup). Admin keeps these units aside so offline sales can't take them.
+    // In-transit shown separately: those units already left the building.
+    async bookedStock() {
+      type OrderStatus = (typeof schema.orders.$inferSelect)["status"];
+      const BOOKED: OrderStatus[] = ["paid", "processing"];
+      const IN_TRANSIT: OrderStatus[] = ["picked_up", "shipped", "out_for_delivery", "delivery_attempted"];
+
+      const rows = await db
+        .select({
+          variantId: schema.orderItems.variantId,
+          sku: schema.productVariants.sku,
+          sizeMl: schema.productVariants.sizeMl,
+          productName: schema.products.name,
+          stockCached: schema.productVariants.stockCached,
+          status: schema.orders.status,
+          orderNumber: schema.orders.orderNumber,
+          quantity: schema.orderItems.quantity,
+        })
+        .from(schema.orderItems)
+        .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
+        .innerJoin(schema.productVariants, eq(schema.orderItems.variantId, schema.productVariants.id))
+        .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .where(inArray(schema.orders.status, [...BOOKED, ...IN_TRANSIT]));
+
+      const byVariant = new Map<string, {
+        variantId: string;
+        productName: string;
+        sku: string;
+        sizeMl: number;
+        stockCached: number;
+        bookedQty: number;
+        inTransitQty: number;
+        bookedOrders: { orderNumber: string; quantity: number; status: string }[];
+      }>();
+
+      for (const row of rows) {
+        if (!row.variantId) continue;
+        let entry = byVariant.get(row.variantId);
+        if (!entry) {
+          entry = {
+            variantId: row.variantId,
+            productName: row.productName,
+            sku: row.sku,
+            sizeMl: row.sizeMl,
+            stockCached: row.stockCached,
+            bookedQty: 0,
+            inTransitQty: 0,
+            bookedOrders: [],
+          };
+          byVariant.set(row.variantId, entry);
+        }
+        if (BOOKED.includes(row.status)) {
+          entry.bookedQty += row.quantity;
+          entry.bookedOrders.push({ orderNumber: row.orderNumber, quantity: row.quantity, status: row.status });
+        } else {
+          entry.inTransitQty += row.quantity;
+        }
+      }
+
+      return [...byVariant.values()].sort(
+        (a, b) => b.bookedQty - a.bookedQty || a.productName.localeCompare(b.productName),
+      );
     },
 
     async listLedgerForVariant(variantId: string, limit: number) {

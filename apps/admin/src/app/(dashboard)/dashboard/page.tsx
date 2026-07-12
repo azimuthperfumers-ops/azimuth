@@ -516,8 +516,8 @@ export default function DashboardPage() {
                   <Badge variant={ORDER_STATUS_VARIANT[o.status] ?? "outline"} className="text-[10px] h-4 px-1.5">
                     {ORDER_STATUS_LABEL[o.status] ?? o.status}
                   </Badge>
-                  {o.delhiveryWaybill && (
-                    <span className="text-muted-foreground font-mono">{o.delhiveryWaybill}</span>
+                  {o.waybill && (
+                    <span className="text-muted-foreground font-mono">{o.waybill}</span>
                   )}
                 </button>
               ))}

@@ -23,6 +23,8 @@ export async function shiprocketWebhookHandler(req: Request, res: Response) {
     ? (raw as ShiprocketBody[])
     : [(raw as ShiprocketBody)];
 
+  let anyFailed = false;
+
   for (const body of bodies) {
     const awb = String(body.awb ?? "").trim();
     if (!awb) continue;
@@ -36,17 +38,25 @@ export async function shiprocketWebhookHandler(req: Request, res: Response) {
       continue;
     }
 
-    await recordEvent("shiprocket", eventId, status || "unknown", body as Record<string, unknown>);
-
     try {
       if (isReturn) {
         await processReturnShipment(body);
       } else {
         await processForwardShipment(body);
       }
+      // Record only after successful processing — a failed handler must leave the
+      // idempotency key unconsumed so Shiprocket's retry re-delivers the event.
+      await recordEvent("shiprocket", eventId, status || "unknown", body as Record<string, unknown>);
     } catch (err) {
+      anyFailed = true;
       console.error(`[webhook:shiprocket] error processing ${eventId}:`, err);
     }
+  }
+
+  if (anyFailed) {
+    // Non-2xx → Shiprocket retries the batch; already-recorded events are skipped above
+    res.status(500).json({ status: "partial_failure" });
+    return;
   }
 
   res.json({ status: "ok" });

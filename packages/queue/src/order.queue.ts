@@ -2,11 +2,10 @@ import { Queue } from "bullmq";
 import { redisOpts } from "./connection.js";
 
 // Orders stuck in `pending_payment` with no webhook ever arriving (e.g. user abandons
-// the Razorpay checkout) would sit there forever without this sweep. Bump this back up
-// to something like 30 minutes before relying on this for real customers — real UPI/
-// netbanking payments can legitimately take a few minutes to settle. Currently short
-// for local testing.
-export const PENDING_PAYMENT_TIMEOUT_MS = 2 * 60 * 1000;
+// the Razorpay checkout) would sit there forever without this sweep. 30 minutes:
+// real UPI/netbanking payments can legitimately take a few minutes to settle, and the
+// sweep reconciles against Razorpay before failing anything.
+export const PENDING_PAYMENT_TIMEOUT_MS = 30 * 60 * 1000;
 
 export type PaymentCapturedJob = {
   type: "payment_captured";

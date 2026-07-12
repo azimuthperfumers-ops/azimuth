@@ -77,7 +77,7 @@ function ActionDialog({
 
   const DESC: Record<string, string> = {
     refund: "Full refund via Razorpay. Order marked refunded. Cannot be undone.",
-    return: "Schedule Delhivery reverse pickup from customer address.",
+    return: "Schedule Shiprocket reverse pickup from customer address.",
     exchange: "Schedule reverse pickup. Ship replacement after receiving item.",
     close: "Mark ticket as closed. Customer can still email for help.",
   };

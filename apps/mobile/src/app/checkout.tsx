@@ -267,6 +267,7 @@ export default function CheckoutScreen() {
   const createOrder = trpc.order.create.useMutation();
   const createRazorpayOrder = trpc.payment.createRazorpayOrder.useMutation();
   const verifyPayment = trpc.payment.verifyAndConfirmPayment.useMutation();
+  const markAbandoned = trpc.payment.markPaymentAbandoned.useMutation();
 
   const activeItems = cartItems.filter((i) => !i.isSaved);
   const subtotal = activeItems.reduce((sum, i) => sum + (i.effectivePrice ?? Number(i.mrp)) * i.quantity, 0);
@@ -356,6 +357,7 @@ export default function CheckoutScreen() {
 
     setPaying(true);
     payingRef.current = true;
+    let createdOrderId: string | null = null;
     try {
       if (showNewForm && saveToAccount) {
         await addAddressMut.mutateAsync({
@@ -405,6 +407,7 @@ export default function CheckoutScreen() {
         couponCode,
       });
 
+      createdOrderId = order.id;
       const rzpData = await createRazorpayOrder.mutateAsync({ orderId: order.id });
 
       const rzpResult = await RazorpayCheckout.open({
@@ -441,7 +444,16 @@ export default function CheckoutScreen() {
       }
       const msg = (err as { description?: string; message?: string })?.description
         ?? (err as { message?: string })?.message;
-      if (msg && !/cancel/i.test(msg)) {
+      if (msg && /cancel/i.test(msg)) {
+        // User dismissed the Razorpay sheet — close out the order right away
+        // (server re-checks Razorpay first, so an in-flight UPI payment is never failed)
+        if (createdOrderId) {
+          markAbandoned.mutate(
+            { orderId: createdOrderId },
+            { onSettled: () => utils.order.list.invalidate() },
+          );
+        }
+      } else if (msg) {
         Alert.alert("Payment failed", msg);
       }
     } finally {

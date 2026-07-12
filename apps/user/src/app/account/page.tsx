@@ -616,14 +616,14 @@ function OrdersTab() {
                     {ORDER_STATUS_LABEL[order.status] ?? order.status}
                   </p>
                   <p className="text-xl font-bold tabular-nums mt-1">{formatInr(Number(order.total))}</p>
-                  {order.delhiveryWaybill && order.trackingUrl && (
+                  {order.waybill && order.trackingUrl && (
                     <a
                       href={order.trackingUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[10px] font-semibold tracking-[0.1em] uppercase text-primary underline underline-offset-2 hover:opacity-70"
                     >
-                      Track — {order.delhiveryWaybill}
+                      Track — {order.waybill}
                     </a>
                   )}
                 </div>

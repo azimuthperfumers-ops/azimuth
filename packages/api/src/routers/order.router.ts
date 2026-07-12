@@ -18,11 +18,13 @@ import { createLogisticsService } from "../services/logistics.service";
 import { orderQueue } from "../lib/order-queue";
 import {
   advanceOrderStatus,
+  applyOrderStockMovement,
   createOrder,
   getAllOrders,
   getOrderById,
   getOrderByNumber,
   getUserOrders,
+  orderHasScheduledExchange,
 } from "../repositories/order.repository";
 import { router } from "../trpc";
 
@@ -50,7 +52,7 @@ function toOrderInfo(order: OrderRow): OrderInfo {
     totalInr: new Intl.NumberFormat("en-IN", {
       style: "currency", currency: "INR", maximumFractionDigits: 0,
     }).format(Number(order.total)),
-    waybill: order.delhiveryWaybill ?? undefined,
+    waybill: order.waybill ?? undefined,
     trackingUrl: order.trackingUrl ?? undefined,
   };
 }
@@ -78,6 +80,34 @@ const checkoutItemSchema = z.object({
   quantity: z.number().int().min(1),
   imageUrl: z.string().url().optional().nullable(),
 });
+
+// Shared by estimateShipping and order.create so the charge quoted at checkout and the
+// charge written on the order come from identical weight + rate logic.
+async function getShippingQuote(
+  db: Parameters<typeof advanceOrderStatus>[0],
+  pincode: string,
+  items: { variantId: string; sizeMl: number; quantity: number }[],
+) {
+  const variantIds = items.map((i) => i.variantId);
+  const variants = await db
+    .select({ id: schema.productVariants.id, weightGrams: schema.productVariants.weightGrams })
+    .from(schema.productVariants)
+    .where(inArray(schema.productVariants.id, variantIds));
+  const weightMap = new Map(variants.map((v) => [v.id, v.weightGrams]));
+
+  const totalGrams = items.reduce((sum, i) => {
+    const dbWeight = weightMap.get(i.variantId);
+    // Use DB weight if set; fall back to volumetric formula
+    const itemWeight = dbWeight != null ? Number(dbWeight) : (i.sizeMl + 300);
+    return sum + itemWeight * i.quantity;
+  }, 0);
+
+  // Match booking: +100g packaging buffer, minimum 500g
+  const weightGrams = Math.max(500, totalGrams + 100);
+
+  const logistics = createLogisticsService();
+  return logistics.getShippingRate(pincode, weightGrams);
+}
 
 const ORDER_STATUS_VALUES = [
   "pending_payment",
@@ -119,11 +149,16 @@ export const orderRouter = router({
       // Re-verify prices server-side — never trust client unitPrice
       const variantIds = input.items.map((i) => i.variantId);
       const variantRows = await ctx.db
-        .select({ id: schema.productVariants.id, mrp: schema.productVariants.mrp })
+        .select({
+          id: schema.productVariants.id,
+          mrp: schema.productVariants.mrp,
+          stockCached: schema.productVariants.stockCached,
+        })
         .from(schema.productVariants)
         .where(inArray(schema.productVariants.id, variantIds));
 
       const mrpMap = new Map(variantRows.map((v) => [v.id, Number(v.mrp)]));
+      const stockMap = new Map(variantRows.map((v) => [v.id, v.stockCached]));
       const discountMap = await fetchActiveDiscountMap(ctx.db, variantIds);
 
       const serverItems = input.items.map((item) => {
@@ -132,6 +167,13 @@ export const orderRouter = router({
         const effectivePrice = computeEffectivePrice(mrp, discountMap.get(item.variantId));
         if (Math.abs(item.unitPrice - effectivePrice) > 0.5) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Price mismatch — please refresh and retry" });
+        }
+        const stock = stockMap.get(item.variantId) ?? 0;
+        if (item.quantity > stock) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `Only ${Math.max(0, stock)} left in stock for ${item.productName} (${item.sizeMl}ml)`,
+          });
         }
         return { ...item, unitPrice: effectivePrice, mrp };
       });
@@ -149,13 +191,38 @@ export const orderRouter = router({
         serverDiscountAmount = validation.discountAmount;
       }
 
-      const serverTotal = Math.max(0, serverSubtotal - serverDiscountAmount) + input.shippingCharge + input.taxAmount;
+      // Re-compute shipping server-side — never trust client shippingCharge
+      const settings = await ctx.db.query.siteSettings.findFirst();
+      const freeThreshold = Number(settings?.freeShippingAboveInr ?? 999);
+      let serverShipping = 0;
+      if (serverSubtotal < freeThreshold) {
+        const quote = await getShippingQuote(
+          ctx.db,
+          input.shippingAddress.pincode,
+          input.items.map((i) => ({ variantId: i.variantId, sizeMl: i.sizeMl, quantity: i.quantity })),
+        );
+        if (!quote.available) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Delivery not available to this pincode" });
+        }
+        serverShipping = quote.chargeInr;
+      }
+
+      // Rate can drift between the checkout quote and this call — allow ₹5, else make
+      // the user re-confirm the new total instead of silently charging something else.
+      if (Math.abs(serverShipping - input.shippingCharge) > 5) {
+        throw new TRPCError({ code: "CONFLICT", message: "Shipping charge changed — please refresh and retry" });
+      }
+
+      // Prices are GST-inclusive; tax is never a separate client-supplied add-on
+      const serverTotal = Math.max(0, serverSubtotal - serverDiscountAmount) + serverShipping;
 
       return createOrder(ctx.db, {
         ...input,
         items: serverItems,
         subtotal: serverSubtotal,
         discountAmount: serverDiscountAmount,
+        shippingCharge: serverShipping,
+        taxAmount: 0,
         total: serverTotal,
         userId: ctx.session.user.id,
       });
@@ -198,30 +265,14 @@ export const orderRouter = router({
     .query(async ({ ctx, input }) => {
       const settings = await ctx.db.query.siteSettings.findFirst();
       const threshold = Number(settings?.freeShippingAboveInr ?? 999);
+
+      const rate = await getShippingQuote(ctx.db, input.pincode, input.items);
+
+      // Free shipping still surfaces the courier ETA — the customer shouldn't lose
+      // the delivery estimate just because the charge is waived.
       if (input.subtotal >= threshold) {
-        return { available: true, chargeInr: 0, estimatedDays: null, isFree: true };
+        return { available: true, chargeInr: 0, estimatedDays: rate.estimatedDays, isFree: true };
       }
-
-      // Look up actual variant weights from DB — same data booking uses, so estimate matches charge
-      const variantIds = input.items.map((i) => i.variantId);
-      const variants = await ctx.db
-        .select({ id: schema.productVariants.id, weightGrams: schema.productVariants.weightGrams })
-        .from(schema.productVariants)
-        .where(inArray(schema.productVariants.id, variantIds));
-      const weightMap = new Map(variants.map((v) => [v.id, v.weightGrams]));
-
-      const totalGrams = input.items.reduce((sum, i) => {
-        const dbWeight = weightMap.get(i.variantId);
-        // Use DB weight if set; fall back to volumetric formula
-        const itemWeight = dbWeight != null ? Number(dbWeight) : (i.sizeMl + 300);
-        return sum + itemWeight * i.quantity;
-      }, 0);
-
-      // Match booking: +100g packaging buffer, minimum 500g
-      const weightGrams = Math.max(500, totalGrams + 100);
-
-      const logistics = createLogisticsService();
-      const rate = await logistics.getShippingRate(input.pincode, weightGrams);
       return { ...rate, isFree: false };
     }),
 
@@ -347,11 +398,11 @@ export const orderRouter = router({
           await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
         }
 
-        if (currentOrder.delhiveryWaybill) {
+        if (currentOrder.waybill) {
           const cancelPayload = {
             type: "cancel_shipment" as const,
             orderId: input.orderId,
-            waybill: currentOrder.delhiveryWaybill,
+            waybill: currentOrder.waybill,
           };
           const [cancelJob] = await ctx.db
             .insert(schema.backgroundJobs)
@@ -389,7 +440,7 @@ export const orderRouter = router({
 
       if (input.waybill || input.trackingUrl || input.gstInvoiceNumber || input.shippingCostActual) {
         const update: Record<string, string> = {};
-        if (input.waybill) update.delhiveryWaybill = input.waybill;
+        if (input.waybill) update.waybill = input.waybill;
         if (input.trackingUrl) update.trackingUrl = input.trackingUrl;
         if (input.gstInvoiceNumber) update.gstInvoiceNumber = input.gstInvoiceNumber;
         if (input.shippingCostActual) update.shippingCostActual = String(input.shippingCostActual);
@@ -400,6 +451,24 @@ export const orderRouter = router({
       }
 
       const result = await advanceOrderStatus(ctx.db, input.orderId, input.status, adminId, input.note);
+
+      // ── Inventory side-effects of admin status changes (all idempotent) ────
+      if (input.status === "paid") {
+        await applyOrderStockMovement(ctx.db, input.orderId, "sale", "Marked paid by admin");
+      }
+      if (input.status === "cancelled" && ["paid", "processing"].includes(currentOrder.status)) {
+        // Goods never left the warehouse — put them back on the shelf
+        await applyOrderStockMovement(ctx.db, input.orderId, "return", "Order cancelled before dispatch");
+      }
+      if (input.status === "rto_delivered") {
+        if (await orderHasScheduledExchange(ctx.db, input.orderId)) {
+          // Exchange: returned unit in, replacement unit out — net zero, both on ledger
+          await applyOrderStockMovement(ctx.db, input.orderId, "replacement_in", "Exchange item received at warehouse");
+          await applyOrderStockMovement(ctx.db, input.orderId, "replacement_out", "Replacement dispatched for exchange");
+        } else {
+          await applyOrderStockMovement(ctx.db, input.orderId, "return", "Return received at warehouse");
+        }
+      }
 
       // Fire-and-forget notifications for status changes that originate from admin
       const order = await ctx.db.query.orders.findFirst({ where: eq(schema.orders.id, input.orderId) });
@@ -425,7 +494,7 @@ export const orderRouter = router({
       });
 
       if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
-      if (order.delhiveryWaybill) throw new TRPCError({ code: "BAD_REQUEST", message: "Order already has a waybill" });
+      if (order.waybill) throw new TRPCError({ code: "BAD_REQUEST", message: "Order already has a waybill" });
 
       const TERMINAL = ["delivered", "cancelled", "refunded", "rto_delivered"];
       if (TERMINAL.includes(order.status)) {
@@ -472,6 +541,9 @@ export const orderRouter = router({
       // Advance paid → processing (same as worker processPaymentCaptured)
       await advanceOrderStatus(ctx.db, input.orderId, "paid", ctx.session.user.id, "Manually marked paid by admin");
       await advanceOrderStatus(ctx.db, input.orderId, "processing", ctx.session.user.id, "Shipment booking queued");
+
+      // Same stock commitment as the webhook-driven paid path (idempotent)
+      await applyOrderStockMovement(ctx.db, input.orderId, "sale", `Order ${order.orderNumber} manually marked paid`);
 
       // Send order notifications
       const updatedOrder = await ctx.db.query.orders.findFirst({ where: eq(schema.orders.id, input.orderId) });

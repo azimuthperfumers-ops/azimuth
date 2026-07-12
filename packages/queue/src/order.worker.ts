@@ -2,7 +2,7 @@ import { UnrecoverableError, Worker } from "bullmq";
 import { and, eq, inArray, lt } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
-import { advanceOrderStatus } from "@azimuth/api";
+import { advanceOrderStatus, applyOrderStockMovement } from "@azimuth/api";
 import { alertAdminNewOrder, alertAdminRefund, notifyOrderPlaced, notifyRefundInitiated } from "@azimuth/comms";
 import { createLogisticsService, createRazorpayService } from "@azimuth/api";
 
@@ -72,6 +72,9 @@ async function markOrderPaidAndBookShipment(
   await advanceOrderStatus(db, order.id, "paid", "worker:order", note);
   await advanceOrderStatus(db, order.id, "processing", "worker:order", "Shipment booking queued");
 
+  // Stock committed the moment payment lands — idempotent per order+variant
+  await applyOrderStockMovement(db, order.id, "sale", `Order ${order.orderNumber} paid`);
+
   console.log(`[order-worker] Order ${order.orderNumber} marked paid → processing`);
 
   const updatedOrder = await db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) });
@@ -100,12 +103,35 @@ async function processPaymentCaptured(data: PaymentCapturedJob) {
     return {};
   }
 
-  if (order.status !== "pending_payment") {
+  // payment_failed is recoverable: the order may have been marked abandoned/expired
+  // moments before a slow UPI capture landed. Money arrived — fulfil the order.
+  if (order.status !== "pending_payment" && order.status !== "payment_failed") {
     console.log(`[order-worker] Order ${order.orderNumber} already ${order.status}, skipping capture`);
-    if ((order.status === "paid" || order.status === "processing") && !order.delhiveryWaybill) {
+    if ((order.status === "paid" || order.status === "processing") && !order.waybill) {
       await enqueueBookShipment(order.id);
     }
     return {};
+  }
+
+  if (order.status === "payment_failed") {
+    console.warn(`[order-worker] Late capture for ${order.orderNumber} (was payment_failed) — recovering`);
+  }
+
+  // Captured amount must cover the order total (rzp order is created server-side with
+  // the exact amount, so a mismatch means partial capture or tampering — hold for admin).
+  const expectedPaise = Math.round(Number(order.total) * 100);
+  if (amountPaise < expectedPaise) {
+    console.error(
+      `[order-worker] AMOUNT MISMATCH order ${order.orderNumber}: captured ₹${amountPaise / 100} < expected ₹${expectedPaise / 100} — NOT advancing, needs manual review`,
+    );
+    await db.insert(schema.orderStatusHistory).values({
+      orderId: order.id,
+      fromStatus: order.status,
+      toStatus: order.status,
+      note: `payment.captured amount mismatch: got ₹${amountPaise / 100}, expected ₹${expectedPaise / 100} (payment ${razorpayPaymentId}) — held for manual review`,
+      actorId: "worker:order",
+    });
+    return { held: "amount_mismatch" };
   }
 
   await markOrderPaidAndBookShipment(
@@ -259,9 +285,9 @@ async function processBookShipment(data: BookShipmentJob) {
     return {};
   }
 
-  if (order.delhiveryWaybill) {
-    console.log(`[order-worker] Order ${order.orderNumber} already has waybill ${order.delhiveryWaybill}, skipping`);
-    return { waybill: order.delhiveryWaybill };
+  if (order.waybill) {
+    console.log(`[order-worker] Order ${order.orderNumber} already has waybill ${order.waybill}, skipping`);
+    return { waybill: order.waybill };
   }
 
   const BOOK_SHIPMENT_BLOCKED = ["delivered", "cancelled", "payment_failed", "refunded", "rto_initiated", "rto_delivered", "refund_processing"];
@@ -311,7 +337,14 @@ async function processBookShipment(data: BookShipmentJob) {
     }
   }
 
-  totalWeightGrams += 100;
+  // +100g packaging, 500g floor — must match order.estimateShipping so the rate
+  // quoted at checkout is computed from the same billable weight as the booking.
+  totalWeightGrams = Math.max(500, totalWeightGrams + 100);
+
+  const orderUser = await db.query.user.findFirst({
+    where: eq(schema.user.id, order.userId),
+    columns: { email: true },
+  });
 
   const logistics = createLogisticsService();
   let result: Awaited<ReturnType<typeof logistics.createShipment>>;
@@ -320,6 +353,7 @@ async function processBookShipment(data: BookShipmentJob) {
       orderNumber: order.orderNumber,
       customerName: addr.fullName ?? "Customer",
       customerPhone: addr.phone ?? "",
+      customerEmail: orderUser?.email ?? undefined,
       address: {
         line1: addr.line1 ?? "",
         line2: addr.line2,
@@ -363,7 +397,7 @@ async function processBookShipment(data: BookShipmentJob) {
   await db
     .update(schema.orders)
     .set({
-      delhiveryWaybill: result.waybill,
+      waybill: result.waybill,
       trackingUrl: result.trackingUrl,
       estimatedDeliveryDate: result.estimatedDeliveryDate ?? null,
     })
@@ -403,6 +437,16 @@ async function processInitiateRefund(data: InitiateRefundJob) {
       notes: { orderId, orderNumber: order.orderNumber, reason },
     });
   } catch (err) {
+    // Retry after a crash between refund API success and status update: Razorpay
+    // rejects the second full refund — treat as already-refunded and complete.
+    if (err instanceof Error && err.message.toLowerCase().includes("fully refunded")) {
+      console.warn(`[order-worker] initiate_refund: payment already fully refunded for order ${order.orderNumber} — completing idempotently`);
+      await advanceOrderStatus(
+        db, orderId, "refund_processing", "worker:order",
+        "Razorpay reports payment already fully refunded (recovered on retry) — awaiting refund.processed webhook",
+      );
+      return { note: "already_fully_refunded_idempotent" };
+    }
     if (err instanceof Error && err.message.toLowerCase().includes("duplicate receipt")) {
       // Refund already submitted in a prior attempt (crash/timeout before job completed).
       // Idempotent: advance order to refund_processing so webhook can close the loop.
@@ -446,8 +490,8 @@ async function processCancelShipment(data: CancelShipmentJob) {
     return {};
   }
 
-  if (order.delhiveryWaybill !== waybill) {
-    console.log(`[order-worker] cancel_shipment: waybill mismatch for order ${order.orderNumber} (job=${waybill}, current=${order.delhiveryWaybill ?? "none"}) — skipping`);
+  if (order.waybill !== waybill) {
+    console.log(`[order-worker] cancel_shipment: waybill mismatch for order ${order.orderNumber} (job=${waybill}, current=${order.waybill ?? "none"}) — skipping`);
     return {};
   }
 

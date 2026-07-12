@@ -383,6 +383,7 @@ function CheckoutSummary({
   couponDiscount,
   shippingRate,
   shippingLoading,
+  estimatedDays,
   pincode,
   freeShippingAbove,
   paying,
@@ -393,6 +394,7 @@ function CheckoutSummary({
   couponDiscount: number | null;
   shippingRate: number | null;
   shippingLoading: boolean;
+  estimatedDays: number | null;
   pincode: string;
   freeShippingAbove: number;
   paying: boolean;
@@ -442,6 +444,15 @@ function CheckoutSummary({
               : formatInr(shippingRate)}
           </span>
         </div>
+
+        {estimatedDays != null && pincode.length === 6 && !shippingLoading && (
+          <div className="flex justify-between text-sm text-muted-foreground/60">
+            <span>Estimated delivery</span>
+            <span className="tabular-nums text-foreground/80 font-medium">
+              {estimatedDays} {estimatedDays === 1 ? "day" : "days"}
+            </span>
+          </div>
+        )}
 
         {subtotal < freeShippingAbove && (
           <p className="text-[10.5px] text-muted-foreground/50 border border-dashed border-border px-3 py-2 text-center">
@@ -510,6 +521,7 @@ export default function CheckoutPage() {
   const createOrder = trpc.order.create.useMutation();
   const createRazorpayOrder = trpc.payment.createRazorpayOrder.useMutation();
   const verifyPayment = trpc.payment.verifyAndConfirmPayment.useMutation();
+  const markAbandoned = trpc.payment.markPaymentAbandoned.useMutation();
 
   // Auto-select default address once loaded
   useEffect(() => {
@@ -570,6 +582,7 @@ export default function CheckoutPage() {
   // null = serviceable rate; null = not available/loading
   const shippingRate: number | null =
     shippingQuery.data?.available ? shippingQuery.data.chargeInr : null;
+  const estimatedDays: number | null = shippingQuery.data?.estimatedDays ?? null;
   const shippingLoading = currentPincode.length === 6 && shippingQuery.isLoading;
 
   const shippingForOrder = shippingRate ?? 0;
@@ -636,6 +649,7 @@ export default function CheckoutPage() {
     }
 
     setPaying(true);
+    let createdOrderId: string | null = null;
     try {
       // Optionally save new address to account first
       if (showNewForm && saveToAccount) {
@@ -693,6 +707,7 @@ export default function CheckoutPage() {
         couponId: cart.couponId ?? null,
         couponCode: cart.couponCode ?? null,
       });
+      createdOrderId = order.id;
 
       // 3. Create Razorpay order on server
       const rzpData = await createRazorpayOrder.mutateAsync({ orderId: order.id });
@@ -744,7 +759,17 @@ export default function CheckoutPage() {
       router.push("/account?tab=orders");
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message;
-      if (msg && msg !== "Payment cancelled") {
+      if (msg === "Payment cancelled") {
+        // User dismissed the Razorpay window — close out the order right away
+        // (server re-checks Razorpay first, so an in-flight UPI payment is never failed)
+        if (createdOrderId) {
+          markAbandoned.mutate(
+            { orderId: createdOrderId },
+            { onSettled: () => utils.order.list.invalidate() },
+          );
+        }
+        toast.info("Payment cancelled — your cart is untouched.");
+      } else if (msg) {
         toast.error(msg ?? "Payment failed. Please try again.");
       }
     } finally {
@@ -881,6 +906,7 @@ export default function CheckoutPage() {
             couponDiscount={cart.couponDiscount}
             shippingRate={shippingRate}
             shippingLoading={shippingLoading}
+            estimatedDays={estimatedDays}
             pincode={currentPincode}
             freeShippingAbove={freeShippingAbove}
             paying={paying}

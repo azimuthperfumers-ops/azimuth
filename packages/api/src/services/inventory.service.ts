@@ -27,6 +27,10 @@ export function createInventoryService(db: Database) {
       });
     },
 
+    bookedStock() {
+      return inventoryRepository.bookedStock();
+    },
+
     ledgerHistory(input: LedgerHistoryInput) {
       return inventoryRepository.listLedgerForVariant(input.variantId, input.limit);
     },

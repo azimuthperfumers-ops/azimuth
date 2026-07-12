@@ -33,7 +33,7 @@ export function orderInfo(order: OrderRow): OrderInfo {
   return {
     orderNumber: order.orderNumber,
     totalInr,
-    waybill: order.delhiveryWaybill ?? undefined,
+    waybill: order.waybill ?? undefined,
     trackingUrl: order.trackingUrl ?? undefined,
   };
 }

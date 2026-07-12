@@ -48,19 +48,28 @@ export const ticketRouter = router({
       }
 
       const userId = ctx.session.user.id;
-      const ticketNumber = await generateTicketNumber(ctx.db);
 
-      const [ticket] = await ctx.db
-        .insert(schema.tickets)
-        .values({
-          ticketNumber,
-          userId,
-          orderId: input.orderId ?? null,
-          type: input.type,
-          subject: input.subject,
-          status: "open",
-        })
-        .returning();
+      // Ticket number comes from a count — retry on unique collision under concurrency
+      let ticket: typeof schema.tickets.$inferSelect | undefined;
+      for (let attempt = 0; attempt < 3 && !ticket; attempt++) {
+        const ticketNumber = await generateTicketNumber(ctx.db);
+        try {
+          [ticket] = await ctx.db
+            .insert(schema.tickets)
+            .values({
+              ticketNumber,
+              userId,
+              orderId: input.orderId ?? null,
+              type: input.type,
+              subject: input.subject,
+              status: "open",
+            })
+            .returning();
+        } catch (err) {
+          const e = err as { code?: string; cause?: { code?: string } };
+          if (e?.code !== "23505" && e?.cause?.code !== "23505") throw err;
+        }
+      }
 
       if (!ticket) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -98,7 +107,7 @@ export const ticketRouter = router({
               status: true,
               total: true,
               razorpayPaymentId: true,
-              delhiveryWaybill: true,
+              waybill: true,
               shippingAddress: true,
             },
           },

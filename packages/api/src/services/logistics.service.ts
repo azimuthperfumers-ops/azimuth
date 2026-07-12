@@ -13,6 +13,7 @@ export type CreateShipmentInput = {
   orderNumber: string;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
   address: {
     line1: string;
     line2?: string | null;
@@ -96,19 +97,10 @@ export interface ILogisticsService {
 
 import { StubLogisticsProvider } from "./providers/stub.provider";
 import { ShiprocketProvider } from "./providers/shiprocket.provider";
-import { DelhiveryProvider } from "./providers/delhivery.provider";
 import { env } from "../env";
 
 export function createLogisticsService(): ILogisticsService {
   const provider = env.LOGISTICS_PROVIDER;
-
-  if (provider === "delhivery") {
-    if (!env.DELHIVERY_TOKEN) {
-      console.warn("[logistics] DELHIVERY_TOKEN not set — using stub");
-      return new StubLogisticsProvider();
-    }
-    return new DelhiveryProvider();
-  }
 
   if (provider === "shiprocket") {
     if (!env.SHIPROCKET_EMAIL || !env.SHIPROCKET_PASSWORD) {

@@ -12,6 +12,9 @@ export const inventoryRouter = router({
     .input(adjustStockSchema)
     .mutation(({ ctx, input }) => createInventoryService(ctx.db).adjustStock(input, ctx.session.user.id)),
 
+  bookedStock: adminProcedure
+    .query(({ ctx }) => createInventoryService(ctx.db).bookedStock()),
+
   ledgerHistory: adminProcedure
     .input(ledgerHistorySchema)
     .query(({ ctx, input }) => createInventoryService(ctx.db).ledgerHistory(input)),

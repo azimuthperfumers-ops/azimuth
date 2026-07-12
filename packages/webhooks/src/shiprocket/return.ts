@@ -1,7 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
-import { advanceOrderStatus } from "@azimuth/api";
+import { advanceOrderStatus, applyOrderStockMovement, orderHasScheduledExchange } from "@azimuth/api";
 import { orderQueue } from "@azimuth/queue";
 import { alertAdminExchangeReceived, alertAdminRefund, notifyRefundInitiated } from "@azimuth/comms";
 import { getCustomerContact, orderInfo } from "@azimuth/queue";
@@ -77,26 +77,28 @@ export async function processReturnShipment(body: ShiprocketBody) {
 
   if (targetStatus === "rto_delivered") {
     // Check if this was an exchange (ship replacement) or plain return (refund)
-    const exchangeAction = order.id
-      ? await db.query.ticketActions.findFirst({
-          where: and(
-            eq(schema.ticketActions.actionType, "exchange_scheduled"),
-          ),
-          with: {
-            ticket: { columns: { orderId: true } },
-          },
-        }).then((a) => a?.ticket?.orderId === order.id ? a : null)
-      : null;
+    const isExchange = await orderHasScheduledExchange(db, order.id);
 
-    if (exchangeAction) {
-      // Exchange: item back at warehouse — alert admin to ship replacement
+    if (isExchange) {
+      // Exchange: returned unit in, replacement unit out — net zero, both on ledger
+      await applyOrderStockMovement(db, order.id, "replacement_in", "Exchange item received at warehouse");
+      await applyOrderStockMovement(db, order.id, "replacement_out", "Replacement dispatched for exchange");
+
+      // Item back at warehouse — alert admin to ship replacement
       const info = orderInfo(order);
       await alertAdminExchangeReceived(info).catch((e) =>
         console.error("[webhook:shiprocket] [RETURN] exchange alert:", e),
       );
       console.log(`[webhook:shiprocket] [RETURN] exchange item received for ${order.orderNumber} — alert admin to ship`);
-    } else if (order.razorpayPaymentId) {
-      // Plain return: trigger refund
+    } else {
+      // Plain return: item physically back — restock even if refund must be manual
+      await applyOrderStockMovement(db, order.id, "return", "Return received at warehouse");
+
+      if (!order.razorpayPaymentId) {
+        console.warn(`[webhook:shiprocket] [RETURN] ${order.orderNumber} restocked but has no razorpayPaymentId — refund manually`);
+        return;
+      }
+
       const refundPayload = {
         type: "initiate_refund" as const,
         orderId: order.id,

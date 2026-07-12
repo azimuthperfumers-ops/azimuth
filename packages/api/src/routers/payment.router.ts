@@ -1,9 +1,10 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { schema } from "@azimuth/db";
 import { protectedProcedure } from "../middleware/auth.middleware";
+import { advanceOrderStatus } from "../repositories/order.repository";
 import { createLogisticsService } from "../services/logistics.service";
 import { createRazorpayService } from "../services/razorpay.service";
 import { publicProcedure, router } from "../trpc";
@@ -94,6 +95,12 @@ export const paymentRouter = router({
       // Already processed by webhook — idempotent
       if (order.status !== "pending_payment") return { success: true };
 
+      // The signature only proves razorpayOrderId+PaymentId belong together — it does
+      // not prove they belong to THIS order. Reject a payment from a different order.
+      if (order.razorpayOrderId !== input.razorpayOrderId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Payment does not belong to this order" });
+      }
+
       const svc = getRazorpay();
       const valid = svc.verifyPaymentSignature(
         input.razorpayOrderId,
@@ -137,6 +144,55 @@ export const paymentRouter = router({
         );
 
       return { success: true };
+    }),
+
+  // User dismissed the Razorpay window without paying. Marks the order
+  // payment_failed immediately instead of leaving it pending for the 30-min sweep.
+  // No inventory to release — stock is only committed when payment captures.
+  markPaymentAbandoned: protectedProcedure
+    .input(z.object({ orderId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const order = await ctx.db.query.orders.findFirst({
+        where: and(
+          eq(schema.orders.id, input.orderId),
+          eq(schema.orders.userId, ctx.session.user.id),
+        ),
+      });
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+
+      // Webhook already moved it on — nothing to abandon
+      if (order.status !== "pending_payment") return { status: order.status };
+
+      // UPI race: user scans the QR, dismisses the modal, money lands seconds later.
+      // Ask Razorpay before failing — never fail an order a payment arrived for.
+      if (order.razorpayOrderId) {
+        try {
+          const payments = await getRazorpay().fetchOrderPayments(order.razorpayOrderId);
+          if (payments.some((p) => p.status === "captured" || p.status === "authorized")) {
+            return { status: "pending_payment" as const, paymentInFlight: true };
+          }
+        } catch {
+          // Can't verify with Razorpay right now — leave pending, sweep will settle it
+          return { status: "pending_payment" as const };
+        }
+      }
+
+      await advanceOrderStatus(
+        ctx.db, order.id, "payment_failed", ctx.session.user.id,
+        "Checkout abandoned — Razorpay window dismissed by customer",
+      );
+
+      await ctx.db
+        .update(schema.paymentAttempts)
+        .set({ status: "failed" })
+        .where(
+          and(
+            eq(schema.paymentAttempts.orderId, order.id),
+            inArray(schema.paymentAttempts.status, ["created", "authorized"]),
+          ),
+        );
+
+      return { status: "payment_failed" as const };
     }),
 
   checkServiceability: publicProcedure

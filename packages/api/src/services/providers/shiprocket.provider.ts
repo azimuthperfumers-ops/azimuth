@@ -240,7 +240,7 @@ export class ShiprocketProvider implements ILogisticsService {
       billing_pincode: input.address.pincode,
       billing_state: input.address.state,
       billing_country: "India",
-      billing_email: "",
+      billing_email: input.customerEmail ?? "",
       billing_phone: input.customerPhone,
       shipping_is_billing: true,
       order_items: input.items.map((item) => ({
@@ -394,11 +394,45 @@ export class ShiprocketProvider implements ILogisticsService {
     }
   }
 
+  // Assign a reverse AWB to a return shipment. Shiprocket's create/return response
+  // does NOT include an AWB — "Generate AWB for Return Shipment" is a separate call:
+  // /courier/assign/awb with is_return: 1.
+  private async assignReturnAwb(shipmentId: number): Promise<{ awb?: string; error?: string }> {
+    type AwbResp = {
+      awb_assign_status?: number;
+      response?: {
+        data?: { awb_code?: string; awb_assign_error?: string };
+        error?: string;
+      };
+      message?: string | null;
+    };
+    try {
+      const resp = await apiPost<AwbResp>("/courier/assign/awb", {
+        shipment_id: shipmentId,
+        is_return: 1,
+      });
+      const awb = resp.response?.data?.awb_code;
+      if (awb) return { awb };
+      return {
+        error:
+          resp.response?.data?.awb_assign_error ||
+          resp.message ||
+          resp.response?.error ||
+          `Return AWB assignment failed (status=${resp.awb_assign_status ?? "?"})`,
+      };
+    } catch (err) {
+      return { error: String(err) };
+    }
+  }
+
   async createReturnShipment(input: CreateReturnShipmentInput): Promise<ShipmentResult> {
     type ReturnResp = {
+      order_id?: number;
+      shipment_id?: number;
       return_order_id?: number;
       return_shipment_id?: number;
       awb_code?: string;
+      status?: string;
       message?: string | string[];
     };
 
@@ -432,16 +466,27 @@ export class ShiprocketProvider implements ILogisticsService {
         weight: input.weightGrams / 1000,
       });
 
-      if (!resp.awb_code) {
-        const msg = Array.isArray(resp.message)
-          ? resp.message.join(", ")
-          : (resp.message ?? "Return shipment failed");
-        return { waybill: "", trackingUrl: "", status: "failed", errorMessage: msg };
+      // Some responses include the AWB directly; otherwise assign it in a second
+      // step against the return shipment_id (the documented flow).
+      let awb = resp.awb_code;
+      if (!awb) {
+        const shipmentId = resp.shipment_id ?? resp.return_shipment_id;
+        if (!shipmentId) {
+          const msg = Array.isArray(resp.message)
+            ? resp.message.join(", ")
+            : (resp.message ?? "Return order creation failed — no shipment_id in response");
+          return { waybill: "", trackingUrl: "", status: "failed", errorMessage: msg };
+        }
+        const assigned = await this.assignReturnAwb(shipmentId);
+        if (!assigned.awb) {
+          return { waybill: "", trackingUrl: "", status: "failed", errorMessage: `Return created (shipment ${shipmentId}) but AWB assignment failed: ${assigned.error}` };
+        }
+        awb = assigned.awb;
       }
 
       return {
-        waybill: resp.awb_code,
-        trackingUrl: `https://shiprocket.co/tracking/${resp.awb_code}`,
+        waybill: awb,
+        trackingUrl: `https://shiprocket.co/tracking/${awb}`,
         status: "created",
       };
     } catch (err) {
@@ -535,8 +580,20 @@ export class ShiprocketProvider implements ILogisticsService {
         return { status: "failed", errorMessage: msg };
       }
 
-      const returnAwb = resp.data.return_orders?.awb_code?.trim() || undefined;
+      let returnAwb = resp.data.return_orders?.awb_code?.trim() || undefined;
       const forwardAwb = resp.data.forward_orders?.awb_code?.trim() || undefined;
+
+      // Exchange creation may not assign the reverse AWB inline — without it the
+      // return-leg webhook can never be matched to the order, so assign explicitly.
+      const returnShipId = resp.data.return_orders?.shipment_id;
+      if (!returnAwb && returnShipId) {
+        const assigned = await this.assignReturnAwb(returnShipId);
+        if (assigned.awb) {
+          returnAwb = assigned.awb;
+        } else {
+          console.warn(`[shiprocket] exchange return AWB assignment failed for shipment ${returnShipId}: ${assigned.error}`);
+        }
+      }
       if (returnAwb) console.log(`[shiprocket] exchange return AWB=${returnAwb}`);
       if (forwardAwb) console.log(`[shiprocket] exchange forward AWB=${forwardAwb}`);
 

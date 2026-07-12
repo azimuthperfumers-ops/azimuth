@@ -127,9 +127,9 @@ function OrderRow({ order }: { order: Order }) {
       <TableCell className="font-semibold tabular-nums">{formatInr(Number(order.total))}</TableCell>
       <TableCell>
         <div className="text-sm">{order.items.length} item{order.items.length !== 1 ? "s" : ""}</div>
-        {order.delhiveryWaybill && (
+        {order.waybill && (
           <div className="flex items-center gap-1 mt-0.5">
-            <span className="font-mono text-[11px] text-muted-foreground">{order.delhiveryWaybill}</span>
+            <span className="font-mono text-[11px] text-muted-foreground">{order.waybill}</span>
             {order.trackingUrl && (
               <a
                 href={order.trackingUrl}
