@@ -13,13 +13,13 @@ export async function getCustomerContact(order: OrderRow): Promise<CustomerConta
   const addr = order.shippingAddress as ShippingAddr;
   const user = await db.query.user.findFirst({
     where: eq(schema.user.id, order.userId),
-    columns: { email: true, name: true, phone: true, phoneNumber: true },
+    columns: { email: true, name: true, phone: true },
   });
 
   return {
     name: addr.fullName ?? user?.name ?? "Customer",
     email: user?.email ?? undefined,
-    phone: addr.phone ?? user?.phone ?? user?.phoneNumber ?? undefined,
+    phone: addr.phone ?? user?.phone ?? undefined,
   };
 }
 

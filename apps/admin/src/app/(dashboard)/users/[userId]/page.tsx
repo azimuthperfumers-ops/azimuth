@@ -208,10 +208,10 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
                   <span className="inline-block size-1.5 rounded-full bg-green-500" title="Verified" />
                 )}
               </span>
-              {(user.phone ?? user.phoneNumber) && (
+              {user.phone && (
                 <span className="flex items-center gap-1.5">
                   <Phone className="size-3.5" />
-                  {user.phone ?? user.phoneNumber}
+                  {user.phone}
                 </span>
               )}
               <span className="flex items-center gap-1.5">

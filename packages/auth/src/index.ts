@@ -2,7 +2,7 @@ import { expo } from "@better-auth/expo";
 import { db, schema } from "@azimuth/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { bearer, phoneNumber } from "better-auth/plugins";
+import { bearer } from "better-auth/plugins";
 
 import { env } from "./env";
 
@@ -24,21 +24,7 @@ export const auth = betterAuth({
       clientSecret: env.GOOGLE_CLIENT_SECRET,
     },
   },
-  plugins: [
-    bearer(),
-    expo(),
-    phoneNumber({
-      // TODO: wire a real SMS provider (e.g. Twilio) before production —
-      // logging the code is fine for local dev since there's nowhere else to read it.
-      sendOTP: async ({ phoneNumber, code }) => {
-        console.log(`[dev] OTP for ${phoneNumber}: ${code}`);
-      },
-      signUpOnVerification: {
-        getTempEmail: (phoneNumber) => `${phoneNumber.replace(/[^a-zA-Z0-9]/g, "")}@phone.azimuth-perfumers.local`,
-        getTempName: (phoneNumber) => phoneNumber,
-      },
-    }),
-  ],
+  plugins: [bearer(), expo()],
   trustedOrigins: [env.ADMIN_APP_URL, env.USER_APP_URL, "azimuth://"],
   user: {
     additionalFields: {

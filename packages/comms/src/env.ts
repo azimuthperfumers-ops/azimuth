@@ -10,8 +10,6 @@ const schema = z.object({
   // Admin contact
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_WHATSAPP: z.string().optional(),
-  // SMS — OTP only (DLT-registered, required for auth)
-  MSG91_SMS_FLOW_OTP: z.string().optional(),
   // WhatsApp — primary customer + admin channel
   MSG91_WA_TEMPLATE_ORDER_PLACED: z.string().optional(),
   MSG91_WA_TEMPLATE_REFUND: z.string().optional(),

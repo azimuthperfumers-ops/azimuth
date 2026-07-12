@@ -3,9 +3,8 @@
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { authClient } from "@/lib/auth-client";
-import { emailSignInSchema, emailSignUpSchema, otpCodeSchema, phoneNumberSchema } from "@/lib/validation";
+import { emailSignInSchema, emailSignUpSchema } from "@/lib/validation";
 import { cn } from "@/lib/utils";
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
@@ -119,92 +118,9 @@ function EmailAuthForm() {
   );
 }
 
-// ─── Phone / OTP form ────────────────────────────────────────────────────────
-
-function PhoneAuthForm() {
-  const [step, setStep] = useState<"phone" | "code">("phone");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [code, setCode] = useState("");
-  const [pending, setPending] = useState(false);
-  const [phoneError, setPhoneError] = useState("");
-  const [codeError, setCodeError] = useState("");
-
-  async function sendCode(e: FormEvent) {
-    e.preventDefault();
-    const parsed = phoneNumberSchema.safeParse({ phoneNumber });
-    if (!parsed.success) {
-      setPhoneError(parsed.error.issues[0]?.message ?? "Enter a valid phone number");
-      return;
-    }
-    setPhoneError("");
-    setPending(true);
-    const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber });
-    setPending(false);
-    if (error) { toast.error(error.message ?? "Could not send code"); return; }
-    toast.success("Code sent");
-    setStep("code");
-  }
-
-  async function verifyCode(e: FormEvent) {
-    e.preventDefault();
-    const parsed = otpCodeSchema.safeParse({ code });
-    if (!parsed.success) {
-      setCodeError(parsed.error.issues[0]?.message ?? "Enter the 6-digit code");
-      return;
-    }
-    setCodeError("");
-    setPending(true);
-    const { error } = await authClient.phoneNumber.verify({ phoneNumber, code });
-    setPending(false);
-    if (error) toast.error(error.message ?? "Invalid code");
-  }
-
-  if (step === "phone") {
-    return (
-      <form onSubmit={sendCode} className="space-y-4">
-        <Field
-          label="Phone number" id="phone" type="tel"
-          value={phoneNumber}
-          onChange={(v) => { setPhoneNumber(v); setPhoneError(""); }}
-          placeholder="+91 98765 43210"
-          error={phoneError}
-        />
-        <SubmitBtn pending={pending} label="Send code" />
-      </form>
-    );
-  }
-
-  return (
-    <form onSubmit={verifyCode} className="space-y-5">
-      <div className="space-y-2">
-        <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-          Code sent to {phoneNumber}
-        </p>
-        <InputOTP maxLength={6} value={code} onChange={(v) => { setCode(v); setCodeError(""); }}>
-          <InputOTPGroup>
-            <InputOTPSlot index={0} />
-            <InputOTPSlot index={1} />
-            <InputOTPSlot index={2} />
-            <InputOTPSlot index={3} />
-            <InputOTPSlot index={4} />
-            <InputOTPSlot index={5} />
-          </InputOTPGroup>
-        </InputOTP>
-        {codeError && <p className="mt-1 text-[11px] text-primary">{codeError}</p>}
-      </div>
-      <SubmitBtn pending={pending} label="Verify" />
-      <button type="button" onClick={() => setStep("phone")} className="w-full text-center text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors">
-        Use a different number
-      </button>
-    </form>
-  );
-}
-
 // ─── Auth card ────────────────────────────────────────────────────────────────
 
 export function AuthCard() {
-  const [tab, setTab] = useState<"email" | "phone">("email");
-
   return (
     <div className="w-full max-w-[400px] border border-border bg-background px-8 py-10">
       {/* Header */}
@@ -242,26 +158,8 @@ export function AuthCard() {
         <div className="flex-1 border-t border-border/50" />
       </div>
 
-      {/* Tab switcher */}
-      <div className="mb-6 flex border-b border-border">
-        {(["email", "phone"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              "flex-1 pb-3 text-[10.5px] font-semibold tracking-[0.16em] uppercase transition-colors",
-              tab === t
-                ? "border-b-2 border-foreground text-foreground -mb-px"
-                : "text-muted-foreground/50 hover:text-foreground",
-            )}
-          >
-            {t === "email" ? "Email" : "Phone"}
-          </button>
-        ))}
-      </div>
-
-      {/* Forms */}
-      {tab === "email" ? <EmailAuthForm /> : <PhoneAuthForm />}
+      {/* Email form */}
+      <EmailAuthForm />
     </div>
   );
 }

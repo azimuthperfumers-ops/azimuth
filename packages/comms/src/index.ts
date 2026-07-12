@@ -4,7 +4,6 @@ export { sendEmail } from "./email.js";
 export {
   notifyOrderPlaced,
   notifyRefundInitiated,
-  sendOtp,
   sendPasswordReset,
   alertAdminNewOrder,
   alertAdminRefund,

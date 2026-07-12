@@ -35,12 +35,6 @@ export function ProfileCard({ user }: { user: SessionUser }) {
           <p>
             Role: <span className="font-medium">{user.role}</span>
           </p>
-          {user.phoneNumber && (
-            <p>
-              Phone: <span className="font-medium">{user.phoneNumber}</span>{" "}
-              {user.phoneNumberVerified ? "(verified)" : "(unverified)"}
-            </p>
-          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="profile-name">Name</Label>

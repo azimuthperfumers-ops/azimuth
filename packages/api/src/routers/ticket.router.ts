@@ -256,7 +256,7 @@ export const ticketRouter = router({
         where: eq(schema.tickets.id, input.ticketId),
         with: {
           order: true,
-          user: { columns: { name: true, email: true, phone: true, phoneNumber: true } },
+          user: { columns: { name: true, email: true, phone: true } },
         },
       });
 
@@ -338,7 +338,7 @@ export const ticketRouter = router({
           action: input.action as "return" | "exchange",
           originalOrderNumber: order.orderNumber,
           customerName: shippingAddr.fullName ?? ticket.user?.name ?? "Customer",
-          customerPhone: shippingAddr.phone ?? ticket.user?.phoneNumber ?? ticket.user?.phone ?? "",
+          customerPhone: shippingAddr.phone ?? ticket.user?.phone ?? "",
           pickupAddress: {
             line1: shippingAddr.line1!,
             line2: shippingAddr.line2,

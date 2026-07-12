@@ -1,4 +1,4 @@
-import { sendSms, toMobile } from "./sms.js";
+import { toMobile } from "./sms.js";
 import { sendWhatsapp } from "./whatsapp.js";
 import { sendEmail } from "./email.js";
 import { env } from "./env.js";
@@ -63,17 +63,6 @@ export async function notifyRefundInitiated(
       ]),
     );
   }
-}
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-
-export async function sendOtp(phone: string, otp: string): Promise<void> {
-  const flowId = env.MSG91_SMS_FLOW_OTP;
-  if (!flowId) {
-    console.warn("[comms] MSG91_SMS_FLOW_OTP not set — OTP not sent");
-    return;
-  }
-  await sendSms(toMobile(phone), flowId, { otp });
 }
 
 export async function sendPasswordReset(
