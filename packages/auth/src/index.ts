@@ -1,8 +1,9 @@
 import { expo } from "@better-auth/expo";
+import { sendEmailOtp } from "@azimuth/comms";
 import { db, schema } from "@azimuth/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { bearer } from "better-auth/plugins";
+import { bearer, emailOTP } from "better-auth/plugins";
 
 import { env } from "./env";
 
@@ -17,6 +18,12 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    // Unverified accounts cannot sign in — better-auth auto-sends the OTP
+    // (via emailOTP's overrideDefaultEmailVerification) and returns 403.
+    requireEmailVerification: true,
+  },
+  emailVerification: {
+    sendOnSignUp: true,
   },
   socialProviders: {
     google: {
@@ -24,7 +31,22 @@ export const auth = betterAuth({
       clientSecret: env.GOOGLE_CLIENT_SECRET,
     },
   },
-  plugins: [bearer(), expo()],
+  plugins: [
+    bearer(),
+    expo(),
+    emailOTP({
+      // Route email verification through MSG91 email OTP instead of links.
+      // Also powers the OTP-based password reset (type "forget-password").
+      overrideDefaultEmailVerification: true,
+      otpLength: 6,
+      expiresIn: 600,
+      allowedAttempts: 5,
+      storeOTP: "hashed",
+      async sendVerificationOTP({ email, otp }) {
+        await sendEmailOtp(email, otp);
+      },
+    }),
+  ],
   trustedOrigins: [env.ADMIN_APP_URL, env.USER_APP_URL, "azimuth://"],
   user: {
     additionalFields: {

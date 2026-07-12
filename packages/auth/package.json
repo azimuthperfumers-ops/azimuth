@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@azimuth/comms": "workspace:*",
     "@azimuth/db": "workspace:*",
     "@better-auth/expo": "1.6.20",
     "better-auth": "^1.6.20",

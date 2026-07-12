@@ -9,6 +9,7 @@ import { Fonts } from "@/constants/theme";
 import { Logo } from "@/components/logo";
 
 type Mode = "sign-in" | "sign-up";
+type AuthView = "credentials" | "verify-email" | "forgot" | "reset";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -25,18 +26,28 @@ function GoogleIcon() {
 
 export default function SignInScreen() {
   const router = useRouter();
+  const [view, setView] = useState<AuthView>("credentials");
   const [mode, setMode] = useState<Mode>("sign-in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const emailValid = EMAIL_RE.test(email);
   const passwordValid = password.length >= 8;
   const nameValid = mode === "sign-in" || name.trim().length > 0;
   const canSubmit = emailValid && passwordValid && nameValid && !loading;
+
+  function toView(v: AuthView) {
+    setView(v);
+    setOtp("");
+    setError(null);
+    setNotice(null);
+  }
 
   async function handleSubmit() {
     setError(null);
@@ -50,8 +61,68 @@ export default function SignInScreen() {
         ? await authClient.signUp.email({ email, password, name })
         : await authClient.signIn.email({ email, password });
     setLoading(false);
-    if (err) { setError(err.message ?? "Something went wrong"); return; }
+    if (!err) {
+      if (mode === "sign-up") {
+        // Locked until email verified — server has already emailed the OTP
+        toView("verify-email");
+        setNotice("We've emailed you a 6-digit verification code.");
+        return;
+      }
+      router.back();
+      return;
+    }
+    // Unverified account — server auto-sends a fresh OTP with this response
+    if (err.status === 403 || err.code === "EMAIL_NOT_VERIFIED") {
+      toView("verify-email");
+      setNotice("Verify your email to continue — code sent.");
+      return;
+    }
+    setError(err.message ?? "Something went wrong");
+  }
+
+  async function handleVerify() {
+    setError(null);
+    if (otp.trim().length !== 6) { setError("Enter the 6-digit code"); return; }
+    setLoading(true);
+    const { error: err } = await authClient.emailOtp.verifyEmail({ email, otp: otp.trim() });
+    setLoading(false);
+    if (err) { setError(err.message ?? "Invalid code"); return; }
     router.back();
+  }
+
+  async function handleResend(type: "email-verification" | "forget-password") {
+    setError(null);
+    const { error: err } =
+      type === "email-verification"
+        ? await authClient.emailOtp.sendVerificationOtp({ email, type })
+        : await authClient.forgetPassword.emailOtp({ email });
+    if (err) { setError(err.message ?? "Could not send code"); return; }
+    setNotice("Code sent.");
+  }
+
+  async function handleForgot() {
+    setError(null);
+    if (!emailValid) { setError("Enter a valid email address"); return; }
+    setLoading(true);
+    const { error: err } = await authClient.forgetPassword.emailOtp({ email });
+    setLoading(false);
+    if (err) { setError(err.message ?? "Could not send code"); return; }
+    toView("reset");
+    setNotice("Reset code sent to your email.");
+  }
+
+  async function handleReset() {
+    setError(null);
+    if (otp.trim().length !== 6) { setError("Enter the 6-digit code"); return; }
+    if (!passwordValid) { setError("Password must be at least 8 characters"); return; }
+    setLoading(true);
+    const { error: err } = await authClient.emailOtp.resetPassword({ email, otp: otp.trim(), password });
+    setLoading(false);
+    if (err) { setError(err.message ?? "Could not reset password"); return; }
+    setPassword("");
+    setMode("sign-in");
+    toView("credentials");
+    setNotice("Password updated — sign in with your new password.");
   }
 
   async function handleGoogle() {
@@ -87,12 +158,144 @@ export default function SignInScreen() {
           className="text-[40px] leading-none tracking-tight text-[#1B1611] mb-2"
           style={{ fontFamily: Fonts.serifItalic }}
         >
-          {mode === "sign-in" ? "Sign in" : "Create account"}
+          {view === "verify-email" ? "Verify email"
+            : view === "forgot" ? "Forgot password"
+            : view === "reset" ? "Reset password"
+            : mode === "sign-in" ? "Sign in" : "Create account"}
         </Text>
         <Text className="text-[14px] text-[#57493A] mb-8 leading-relaxed">
-          {mode === "sign-in" ? "Welcome back to Azimuth Perfumers." : "Join us for slow perfumery, composed in small batches."}
+          {view === "verify-email" ? `Enter the 6-digit code we sent to ${email}.`
+            : view === "forgot" ? "We'll email you a code to reset your password."
+            : view === "reset" ? `Code sent to ${email}. Choose a new password.`
+            : mode === "sign-in" ? "Welcome back to Azimuth Perfumers." : "Join us for slow perfumery, composed in small batches."}
         </Text>
 
+        {view === "verify-email" && (
+          <>
+            <View className="mb-8">
+              <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#57493A] uppercase mb-2">
+                Verification code
+              </Text>
+              <TextInput
+                className="border-b-2 border-[#1B1611] text-[16px] text-[#1B1611] pb-2"
+                placeholder="000000"
+                placeholderTextColor="#8A7A63"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={otp}
+                onChangeText={setOtp}
+                selectionColor="#9A5B2B"
+              />
+            </View>
+            <Pressable
+              className="h-14 items-center justify-center bg-[#1B1611] active:opacity-70 mb-4"
+              style={{ opacity: otp.trim().length === 6 && !loading ? 1 : 0.4 }}
+              disabled={otp.trim().length !== 6 || loading}
+              onPress={handleVerify}
+            >
+              {loading ? <ActivityIndicator color="white" /> : (
+                <Text className="text-white text-[11px] font-semibold tracking-[0.3em] uppercase">Verify email</Text>
+              )}
+            </Pressable>
+            <View className="flex-row justify-between">
+              <Pressable className="h-11 justify-center" onPress={() => handleResend("email-verification")}>
+                <Text className="text-[11px] text-[#57493A] tracking-wide">Resend code</Text>
+              </Pressable>
+              <Pressable className="h-11 justify-center" onPress={() => toView("credentials")}>
+                <Text className="text-[11px] text-[#57493A] tracking-wide">Back</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+
+        {view === "forgot" && (
+          <>
+            <View className="mb-8">
+              <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#57493A] uppercase mb-2">
+                Email
+              </Text>
+              <TextInput
+                className="border-b-2 border-[#1B1611] text-[16px] text-[#1B1611] pb-2"
+                placeholder="you@example.com"
+                placeholderTextColor="#8A7A63"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={email}
+                onChangeText={setEmail}
+                selectionColor="#9A5B2B"
+              />
+            </View>
+            <Pressable
+              className="h-14 items-center justify-center bg-[#1B1611] active:opacity-70 mb-4"
+              style={{ opacity: emailValid && !loading ? 1 : 0.4 }}
+              disabled={!emailValid || loading}
+              onPress={handleForgot}
+            >
+              {loading ? <ActivityIndicator color="white" /> : (
+                <Text className="text-white text-[11px] font-semibold tracking-[0.3em] uppercase">Send reset code</Text>
+              )}
+            </Pressable>
+            <Pressable className="h-11 items-center justify-center" onPress={() => toView("credentials")}>
+              <Text className="text-[11px] text-[#57493A] tracking-wide">Back to sign in</Text>
+            </Pressable>
+          </>
+        )}
+
+        {view === "reset" && (
+          <>
+            <View className="mb-5">
+              <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#57493A] uppercase mb-2">
+                Reset code
+              </Text>
+              <TextInput
+                className="border-b-2 border-[#1B1611] text-[16px] text-[#1B1611] pb-2"
+                placeholder="000000"
+                placeholderTextColor="#8A7A63"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={otp}
+                onChangeText={setOtp}
+                selectionColor="#9A5B2B"
+              />
+            </View>
+            <View className="mb-8">
+              <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#57493A] uppercase mb-2">
+                New password
+              </Text>
+              <TextInput
+                className="border-b-2 border-[#1B1611] text-[16px] text-[#1B1611] pb-2"
+                placeholder="••••••••"
+                placeholderTextColor="#8A7A63"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+                selectionColor="#9A5B2B"
+              />
+            </View>
+            <Pressable
+              className="h-14 items-center justify-center bg-[#1B1611] active:opacity-70 mb-4"
+              style={{ opacity: otp.trim().length === 6 && passwordValid && !loading ? 1 : 0.4 }}
+              disabled={otp.trim().length !== 6 || !passwordValid || loading}
+              onPress={handleReset}
+            >
+              {loading ? <ActivityIndicator color="white" /> : (
+                <Text className="text-white text-[11px] font-semibold tracking-[0.3em] uppercase">Reset password</Text>
+              )}
+            </Pressable>
+            <View className="flex-row justify-between">
+              <Pressable className="h-11 justify-center" onPress={() => handleResend("forget-password")}>
+                <Text className="text-[11px] text-[#57493A] tracking-wide">Resend code</Text>
+              </Pressable>
+              <Pressable className="h-11 justify-center" onPress={() => toView("credentials")}>
+                <Text className="text-[11px] text-[#57493A] tracking-wide">Back</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+
+        {view === "credentials" && (
+        <>
         {/* Google */}
         <Pressable
           className="h-14 flex-row items-center justify-center gap-3 border border-[#E3DDD1] active:opacity-70 mb-4"
@@ -190,6 +393,20 @@ export default function SignInScreen() {
             {mode === "sign-in" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
           </Text>
         </Pressable>
+
+        {mode === "sign-in" && (
+          <Pressable className="h-11 items-center justify-center" onPress={() => toView("forgot")}>
+            <Text className="text-[11px] text-[#57493A] tracking-wide underline">Forgot password?</Text>
+          </Pressable>
+        )}
+        </>
+        )}
+
+        {notice && !error && (
+          <View className="mt-3 px-4 py-3 border border-[#57493A]/20 bg-[#57493A]/5">
+            <Text className="text-[12.5px] text-[#57493A] text-center">{notice}</Text>
+          </View>
+        )}
 
         {error && (
           <View className="mt-3 px-4 py-3 border border-[#9A5B2B]/30 bg-[#9A5B2B]/5">

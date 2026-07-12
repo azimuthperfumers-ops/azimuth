@@ -31,6 +31,7 @@ export function orderInfo(order: OrderRow): OrderInfo {
   }).format(Number(order.total));
 
   return {
+    orderId: order.id,
     orderNumber: order.orderNumber,
     totalInr,
     waybill: order.waybill ?? undefined,

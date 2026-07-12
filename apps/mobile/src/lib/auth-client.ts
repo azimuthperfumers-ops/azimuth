@@ -1,5 +1,5 @@
 import { createAuthClient } from "better-auth/react";
-import { inferAdditionalFields } from "better-auth/client/plugins";
+import { emailOTPClient, inferAdditionalFields } from "better-auth/client/plugins";
 import { expoClient } from "@better-auth/expo/client";
 import * as SecureStore from "expo-secure-store";
 import type { auth } from "@azimuth/auth";
@@ -10,6 +10,7 @@ export const authClient = createAuthClient({
   baseURL: API_URL,
   plugins: [
     inferAdditionalFields<typeof auth>(),
+    emailOTPClient(),
     expoClient({
       scheme: "azimuth",
       storagePrefix: "azimuth",

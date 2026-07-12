@@ -3,7 +3,7 @@ import { and, eq, inArray, lt } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
 import { advanceOrderStatus, applyOrderStockMovement } from "@azimuth/api";
-import { alertAdminNewOrder, alertAdminRefund, notifyOrderPlaced, notifyRefundInitiated } from "@azimuth/comms";
+import { alertAdminNewOrder, alertAdminRefund, notifyOrderPlaced, notifyRefundInitiated, notifyReturnPickupScheduled } from "@azimuth/comms";
 import { createLogisticsService, createRazorpayService } from "@azimuth/api";
 
 import { redisOpts } from "./connection.js";
@@ -582,6 +582,10 @@ async function processReturnShipment(data: ReturnShipmentJob) {
       content: `We've scheduled a return pickup for your order. A replacement will be shipped once we receive the item back.`,
     });
 
+    await notifyReturnPickupScheduled(await getCustomerContact(order), orderInfo(order)).catch((e) =>
+      console.error("[order-worker] exchange pickup notify:", e),
+    );
+
     console.log(`[order-worker] Exchange scheduled for order ${orderId}: returnShipment=${exchangeResult.returnShipmentId}, forwardShipment=${exchangeResult.forwardShipmentId}`);
     return { returnShipmentId: exchangeResult.returnShipmentId, forwardShipmentId: exchangeResult.forwardShipmentId };
   }
@@ -624,6 +628,10 @@ async function processReturnShipment(data: ReturnShipmentJob) {
     ticketId, senderId: adminId, senderRole: "admin",
     content: `We've scheduled a return pickup for your order. Reverse AWB: ${returnResult.waybill}. Track at ${returnResult.trackingUrl}`,
   });
+
+  await notifyReturnPickupScheduled(await getCustomerContact(order), orderInfo(order)).catch((e) =>
+    console.error("[order-worker] return pickup notify:", e),
+  );
 
   console.log(`[order-worker] Return pickup scheduled for order ${orderId}: AWB=${returnResult.waybill}`);
   return { waybill: returnResult.waybill, trackingUrl: returnResult.trackingUrl };

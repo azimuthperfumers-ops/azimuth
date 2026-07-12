@@ -3,6 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 import { schema } from "@azimuth/db";
+import { alertAdminNewTicket } from "@azimuth/comms";
 import { advanceOrderStatus } from "../repositories/order.repository";
 import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import { router } from "../trpc";
@@ -80,6 +81,12 @@ export const ticketRouter = router({
         senderRole: "user",
         content: input.message,
         attachmentUrls: input.attachmentUrls ?? [],
+      });
+
+      await alertAdminNewTicket({
+        ticketNumber: ticket.ticketNumber,
+        type: input.type,
+        subject: input.subject,
       });
 
       return ticket;

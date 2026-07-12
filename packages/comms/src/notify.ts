@@ -12,6 +12,7 @@ export interface CustomerContact {
 }
 
 export interface OrderInfo {
+  orderId?: string; // internal UUID — used for the rating deep link
   orderNumber: string;
   totalInr: string;
   waybill?: string | null;
@@ -65,17 +66,38 @@ export async function notifyRefundInitiated(
   }
 }
 
-// Delivery confirmation + rating nudge — template should link to the orders page
-// where the customer can tap a star rating.
+// Delivery confirmation + rating nudge — {{3}} is a deep link straight to the
+// order page where the customer taps a star rating.
 export async function notifyOrderDelivered(
   customer: CustomerContact,
   order: OrderInfo,
 ): Promise<void> {
   const mobile = customer.phone ? toMobile(customer.phone) : null;
   if (mobile && env.MSG91_WA_TEMPLATE_ORDER_DELIVERED) {
+    const ratingUrl = order.orderId
+      ? `${env.USER_APP_URL}/orders/${order.orderId}`
+      : `${env.USER_APP_URL}/orders`;
     await fire(
       `wa:order_delivered:${order.orderNumber}`,
       sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_ORDER_DELIVERED!, [
+        customer.name,
+        order.orderNumber,
+        ratingUrl,
+      ]),
+    );
+  }
+}
+
+// Return/exchange pickup scheduled — courier will collect the item from the customer.
+export async function notifyReturnPickupScheduled(
+  customer: CustomerContact,
+  order: OrderInfo,
+): Promise<void> {
+  const mobile = customer.phone ? toMobile(customer.phone) : null;
+  if (mobile && env.MSG91_WA_TEMPLATE_RETURN_PICKUP) {
+    await fire(
+      `wa:return_pickup:${order.orderNumber}`,
+      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_RETURN_PICKUP!, [
         customer.name,
         order.orderNumber,
       ]),
@@ -83,26 +105,38 @@ export async function notifyOrderDelivered(
   }
 }
 
-export async function sendPasswordReset(
-  email: string,
-  name: string,
-  resetUrl: string,
-): Promise<void> {
-  const templateId = env.MSG91_EMAIL_TEMPLATE_PASSWORD_RESET;
+// Auth OTP — email verification and password reset share one template ({{otp}}).
+// better-auth awaits this via its background runner, so failures here never
+// block the auth response; we still swallow errors to be safe.
+export async function sendEmailOtp(email: string, otp: string): Promise<void> {
+  const templateId = env.MSG91_EMAIL_TEMPLATE_OTP;
   if (!templateId) {
-    console.warn("[comms] MSG91_EMAIL_TEMPLATE_PASSWORD_RESET not set");
+    if (process.env.NODE_ENV === "production") {
+      console.error("[comms] MSG91_EMAIL_TEMPLATE_OTP not set — OTP email NOT sent");
+    } else {
+      console.warn(`[comms] MSG91_EMAIL_TEMPLATE_OTP not set — dev OTP for ${email}: ${otp}`);
+    }
     return;
   }
   await fire(
-    `email:password_reset:${email}`,
+    `email:otp:${email}`,
     sendEmail({
       to: email,
-      name,
-      subject: "Reset your Azimuth Perfumers password",
+      name: email,
+      subject: "Your Azimuth Perfumers verification code",
       templateId,
-      vars: { name, reset_url: resetUrl },
+      vars: { otp },
     }),
   );
+}
+
+// Placeholder — new-product launch email campaign. Wire to the MSG91 campaign
+// API once the campaign template and audience list exist.
+export async function sendNewProductCampaign(product: {
+  name: string;
+  url: string;
+}): Promise<void> {
+  console.warn(`[comms] sendNewProductCampaign not implemented — skipped campaign for "${product.name}" (${product.url})`);
 }
 
 // ── Admin alerts (WhatsApp) ───────────────────────────────────────────────────
@@ -115,6 +149,36 @@ export async function alertAdminNewOrder(order: OrderInfo): Promise<void> {
       sendWhatsapp(adminWhatsapp, env.MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER!, [
         order.orderNumber,
         order.totalInr,
+      ]),
+    );
+  }
+}
+
+export async function alertAdminOrderDelivered(order: OrderInfo): Promise<void> {
+  const adminWhatsapp = env.ADMIN_WHATSAPP;
+  if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_ORDER_DELIVERED) {
+    await fire(
+      `wa:admin:order_delivered:${order.orderNumber}`,
+      sendWhatsapp(adminWhatsapp, env.MSG91_WA_TEMPLATE_ADMIN_ORDER_DELIVERED!, [
+        order.orderNumber,
+      ]),
+    );
+  }
+}
+
+export async function alertAdminNewTicket(ticket: {
+  ticketNumber: string;
+  type: string;
+  subject: string;
+}): Promise<void> {
+  const adminWhatsapp = env.ADMIN_WHATSAPP;
+  if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_NEW_TICKET) {
+    await fire(
+      `wa:admin:new_ticket:${ticket.ticketNumber}`,
+      sendWhatsapp(adminWhatsapp, env.MSG91_WA_TEMPLATE_ADMIN_NEW_TICKET!, [
+        ticket.ticketNumber,
+        ticket.type,
+        ticket.subject,
       ]),
     );
   }

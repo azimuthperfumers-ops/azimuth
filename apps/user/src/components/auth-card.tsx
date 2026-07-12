@@ -64,16 +64,26 @@ function SubmitBtn({ pending, label }: { pending: boolean; label: string }) {
 
 // ─── Email form ───────────────────────────────────────────────────────────────
 
+type View = "credentials" | "verify-email" | "forgot" | "reset";
+
 function EmailAuthForm() {
+  const [view, setView] = useState<View>("credentials");
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function clearErr(key: string) {
     if (errors[key]) setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
+  }
+
+  function toView(v: View) {
+    setView(v);
+    setOtp("");
+    setErrors({});
   }
 
   async function onSubmit(e: FormEvent) {
@@ -96,7 +106,123 @@ function EmailAuthForm() {
         ? await authClient.signUp.email({ email, password, name })
         : await authClient.signIn.email({ email, password });
     setPending(false);
-    if (error) toast.error(error.message ?? "Something went wrong");
+    if (!error) {
+      if (mode === "sign-up") {
+        // Account created but locked until the email is verified — OTP already sent
+        toView("verify-email");
+        toast.success("We've emailed you a verification code");
+      }
+      return;
+    }
+    // Unverified account — the server auto-sends a fresh OTP with this response
+    if (error.status === 403 || error.code === "EMAIL_NOT_VERIFIED") {
+      toView("verify-email");
+      toast.info("Verify your email to continue — code sent");
+      return;
+    }
+    toast.error(error.message ?? "Something went wrong");
+  }
+
+  async function onVerify(e: FormEvent) {
+    e.preventDefault();
+    if (otp.trim().length !== 6) { setErrors({ otp: "Enter the 6-digit code" }); return; }
+    setPending(true);
+    const { error } = await authClient.emailOtp.verifyEmail({ email, otp: otp.trim() });
+    setPending(false);
+    if (error) { toast.error(error.message ?? "Invalid code"); return; }
+    toast.success("Email verified — welcome!");
+  }
+
+  async function resendOtp(type: "email-verification" | "forget-password") {
+    const { error } =
+      type === "email-verification"
+        ? await authClient.emailOtp.sendVerificationOtp({ email, type })
+        : await authClient.forgetPassword.emailOtp({ email });
+    if (error) toast.error(error.message ?? "Could not send code");
+    else toast.success("Code sent");
+  }
+
+  async function onForgot(e: FormEvent) {
+    e.preventDefault();
+    if (!email) { setErrors({ email: "Enter your email" }); return; }
+    setPending(true);
+    const { error } = await authClient.forgetPassword.emailOtp({ email });
+    setPending(false);
+    if (error) { toast.error(error.message ?? "Could not send code"); return; }
+    toView("reset");
+    toast.success("Reset code sent to your email");
+  }
+
+  async function onReset(e: FormEvent) {
+    e.preventDefault();
+    const errs: Record<string, string> = {};
+    if (otp.trim().length !== 6) errs.otp = "Enter the 6-digit code";
+    if (password.length < 8) errs.password = "Password must be at least 8 characters";
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    setPending(true);
+    const { error } = await authClient.emailOtp.resetPassword({ email, otp: otp.trim(), password });
+    setPending(false);
+    if (error) { toast.error(error.message ?? "Could not reset password"); return; }
+    setPassword("");
+    setMode("sign-in");
+    toView("credentials");
+    toast.success("Password updated — sign in with your new password");
+  }
+
+  if (view === "verify-email") {
+    return (
+      <form onSubmit={onVerify} className="space-y-4">
+        <p className="text-[13px] text-muted-foreground/70 leading-relaxed">
+          Enter the 6-digit code we sent to <span className="text-foreground font-medium">{email}</span>
+        </p>
+        <Field label="Verification code" id="otp" value={otp} onChange={(v) => { setOtp(v); clearErr("otp"); }} placeholder="000000" error={errors.otp} />
+        <SubmitBtn pending={pending} label="Verify email" />
+        <div className="flex items-center justify-between text-[11px]">
+          <button type="button" onClick={() => resendOtp("email-verification")} className="text-muted-foreground/60 hover:text-foreground transition-colors">
+            Resend code
+          </button>
+          <button type="button" onClick={() => toView("credentials")} className="text-muted-foreground/60 hover:text-foreground transition-colors">
+            Back
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  if (view === "forgot") {
+    return (
+      <form onSubmit={onForgot} className="space-y-4">
+        <p className="text-[13px] text-muted-foreground/70 leading-relaxed">
+          We&apos;ll email you a code to reset your password.
+        </p>
+        <Field label="Email" id="email" type="email" value={email} onChange={(v) => { setEmail(v); clearErr("email"); }} error={errors.email} />
+        <SubmitBtn pending={pending} label="Send reset code" />
+        <button type="button" onClick={() => toView("credentials")} className="w-full text-center text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors">
+          Back to sign in
+        </button>
+      </form>
+    );
+  }
+
+  if (view === "reset") {
+    return (
+      <form onSubmit={onReset} className="space-y-4">
+        <p className="text-[13px] text-muted-foreground/70 leading-relaxed">
+          Code sent to <span className="text-foreground font-medium">{email}</span>. Choose a new password.
+        </p>
+        <Field label="Reset code" id="otp" value={otp} onChange={(v) => { setOtp(v); clearErr("otp"); }} placeholder="000000" error={errors.otp} />
+        <Field label="New password" id="new-password" type="password" value={password} onChange={(v) => { setPassword(v); clearErr("password"); }} error={errors.password} />
+        <SubmitBtn pending={pending} label="Reset password" />
+        <div className="flex items-center justify-between text-[11px]">
+          <button type="button" onClick={() => resendOtp("forget-password")} className="text-muted-foreground/60 hover:text-foreground transition-colors">
+            Resend code
+          </button>
+          <button type="button" onClick={() => toView("credentials")} className="text-muted-foreground/60 hover:text-foreground transition-colors">
+            Back
+          </button>
+        </div>
+      </form>
+    );
   }
 
   return (
@@ -106,6 +232,11 @@ function EmailAuthForm() {
       )}
       <Field label="Email" id="email" type="email" value={email} onChange={(v) => { setEmail(v); clearErr("email"); }} error={errors.email} />
       <Field label="Password" id="password" type="password" value={password} onChange={(v) => { setPassword(v); clearErr("password"); }} error={errors.password} />
+      {mode === "sign-in" && (
+        <button type="button" onClick={() => toView("forgot")} className="block w-full text-right text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors -mt-2">
+          Forgot password?
+        </button>
+      )}
       <SubmitBtn pending={pending} label={mode === "sign-up" ? "Create account" : "Sign in"} />
       <button
         type="button"
