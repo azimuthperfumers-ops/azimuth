@@ -7,6 +7,7 @@ import { CollectionSection } from "@/components/landing/collection-section";
 import { QuoteBand } from "@/components/landing/quote-band";
 import { CraftSection } from "@/components/landing/craft-section";
 import { MiniaturesCta } from "@/components/landing/miniatures-cta";
+import { ReviewsSection } from "@/components/landing/reviews-section";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { trpc } from "@/lib/trpc";
@@ -42,11 +43,12 @@ export default function HomePage() {
       <main>
         <LandingHero copy={heroCopy} products={heroList} isLoading={products.isLoading} />
         <NotesMarquee />
-        <MoodSection categories={categories.data ?? []} />
+        <MoodSection categories={categories.data ?? []} products={productRows} />
         <CollectionSection products={productRows} isLoading={products.isLoading} />
         <QuoteBand />
         <CraftSection />
         <MiniaturesCta />
+        <ReviewsSection />
       </main>
       <SiteFooter />
     </>

@@ -137,6 +137,24 @@
   animation: spin-slow 26s linear infinite;
 }
 
+/* Postage-stamp frame — scalloped edge punched with a tiled radial mask */
+.stamp-frame {
+  --stamp-hole: 7px;
+  padding: 14px;
+  -webkit-mask:
+    radial-gradient(var(--stamp-hole), transparent 98%, #000) round
+      calc(-1.5 * var(--stamp-hole)) calc(-1.5 * var(--stamp-hole)) /
+      calc(3 * var(--stamp-hole)) calc(3 * var(--stamp-hole)),
+    linear-gradient(#000 0 0) no-repeat 50% /
+      calc(100% - 3 * var(--stamp-hole)) calc(100% - 3 * var(--stamp-hole));
+  mask:
+    radial-gradient(var(--stamp-hole), transparent 98%, #000) round
+      calc(-1.5 * var(--stamp-hole)) calc(-1.5 * var(--stamp-hole)) /
+      calc(3 * var(--stamp-hole)) calc(3 * var(--stamp-hole)),
+    linear-gradient(#000 0 0) no-repeat 50% /
+      calc(100% - 3 * var(--stamp-hole)) calc(100% - 3 * var(--stamp-hole));
+}
+
 /* Ken Burns drift on the active hero slide */
 @keyframes kenburns {
   from { transform: scale(1.07); }
