@@ -43,7 +43,7 @@ export default function HomePage() {
       <main>
         <LandingHero copy={heroCopy} products={heroList} isLoading={products.isLoading} />
         <NotesMarquee />
-        <MoodSection categories={categories.data ?? []} products={productRows} />
+        <MoodSection categories={categories.data ?? []} />
         <CollectionSection products={productRows} isLoading={products.isLoading} />
         <QuoteBand />
         <CraftSection />

@@ -1,63 +1,88 @@
 import Link from "next/link";
 
 import { Reveal } from "@/components/reveal";
-import { primaryImage, type LandingProduct } from "./types";
+import { IngredientCarousel, type IngredientName } from "./ingredient-carousel";
 
 type Category = { id: string; name: string };
 
-const MOODS = [
+const CREAM = "#FAF6EE";
+
+const GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+
+const MOODS: {
+  numeral: string;
+  title: string;
+  notes: string;
+  desc: string;
+  leads: string;
+  card: string;
+  fieldFrom: string;
+  fieldTo: string;
+  ingredients: IngredientName[];
+  categoryMatch: string;
+}[] = [
   {
-    numeral: "i.",
+    numeral: "i",
     title: "Warm & magnetic",
+    notes: "Amber · Cedar · Citrus",
     desc: "Amber, woods and a trace of smoke. For evenings that run long and rooms that turn when you enter.",
     leads: "Shop For Him",
-    bg: "#8B7443",
+    card: "#6E5B33",
+    fieldFrom: "#8B7443",
+    fieldTo: "#55431F",
+    ingredients: ["Amber", "Cedarwood", "Citrus"],
     categoryMatch: "for him",
   },
   {
-    numeral: "ii.",
+    numeral: "ii",
     title: "Soft & lingering",
+    notes: "Rose · Vanilla · Chamomile",
     desc: "Rose, ylang ylang and sandalwood that settle like skin. Presence that speaks before you do.",
     leads: "Shop For Her",
-    bg: "#C58E85",
+    card: "#A5675D",
+    fieldFrom: "#C58E85",
+    fieldTo: "#7E463D",
+    ingredients: ["Rose", "Vanilla", "Chamomile"],
     categoryMatch: "for her",
   },
   {
-    numeral: "iii.",
+    numeral: "iii",
     title: "Dark & unhurried",
+    notes: "Oud · Patchouli · Incense",
     desc: "Oud, incense and night air. A slow burn for the ones who never explain themselves.",
     leads: "Shop Unisex",
-    bg: "#2E2C42",
+    card: "#262338",
+    fieldFrom: "#3A3654",
+    fieldTo: "#17152A",
+    ingredients: ["Oud", "Patchouli", "Incense"],
     categoryMatch: "unisex",
   },
-] as const;
+];
 
-// Stamp interior when no product photo exists yet — mood-coloured wash with an
-// arched bottle silhouette, so the card never renders empty.
-function MoodPlaceholder({ bg }: { bg: string }) {
+// Rubber postmark riding the stamp's corner
+function Postmark({ color }: { color: string }) {
   return (
     <div
-      className="flex aspect-[4/3] w-full items-end justify-center gap-2 pb-5"
-      style={{ background: `linear-gradient(160deg, ${bg} 0%, ${bg}CC 60%, ${bg}99 100%)` }}
+      className="pointer-events-none absolute -top-4 -right-3 z-10 size-[84px] -rotate-12"
+      style={{ color }}
     >
-      {[56, 84, 44].map((h, i) => (
-        <div
-          key={i}
-          className="w-7 rounded-t-full bg-background/25"
-          style={{ height: `${h}px` }}
-        />
-      ))}
+      <svg viewBox="0 0 100 100" className="size-full opacity-60">
+        <defs>
+          <path id="postmark-arc" d="M50,50 m-36,0 a36,36 0 1,1 72,0 a36,36 0 1,1 -72,0" />
+        </defs>
+        <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.7" />
+        <text className="fill-current" style={{ fontSize: "10.5px", letterSpacing: "2.6px" }}>
+          <textPath href="#postmark-arc">AZIMUTH · PERFUMERS · POST ·</textPath>
+        </text>
+        <path d="M20 86 q10 -6 20 0 t20 0 t20 0" fill="none" stroke="currentColor" strokeWidth="1.4" opacity="0.7" />
+      </svg>
     </div>
   );
 }
 
-export function MoodSection({
-  categories,
-  products,
-}: {
-  categories: Category[];
-  products: LandingProduct[];
-}) {
+export function MoodSection({ categories }: { categories: Category[] }) {
   return (
     <section id="quiz" className="border-t border-foreground/8 px-6 pt-24 pb-20 sm:px-10 md:px-16">
       <div className="flex flex-wrap items-end justify-between gap-8">
@@ -78,50 +103,63 @@ export function MoodSection({
         {MOODS.map((mood, i) => {
           const category = categories.find((c) => c.name.toLowerCase() === mood.categoryMatch);
           const href = category ? `/shop?category=${category.id}` : "/shop";
-          const moodProduct = products.find(
-            (p) => p.category?.name.toLowerCase() === mood.categoryMatch && primaryImage(p)?.url,
-          );
-          const photo = moodProduct ? primaryImage(moodProduct)?.url : undefined;
           return (
             <Reveal key={mood.numeral} delay={i * 110}>
               <Link
                 href={href}
-                className="group block h-full rounded-3xl border border-foreground/12 px-7 pt-7 pb-8 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_18px_40px_rgba(27,22,17,0.12)]"
-                style={{ backgroundColor: `color-mix(in srgb, ${mood.bg} 9%, var(--card))` }}
+                className="group relative block h-full overflow-hidden rounded-[28px] px-7 pt-8 pb-8 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_22px_48px_rgba(27,22,17,0.28)]"
+                style={{ backgroundColor: mood.card, color: CREAM }}
               >
-                {/* Stamp tilts anticlockwise, photo tilts clockwise — straightens on hover */}
-                <div className="stamp-frame -rotate-2 bg-background transition-transform duration-500 group-hover:rotate-0">
-                  <div className="overflow-hidden">
-                    {photo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={photo}
-                        alt={moodProduct?.name ?? mood.title}
-                        className="aspect-[4/3] w-full rotate-[4deg] scale-110 object-cover transition-transform duration-500 group-hover:rotate-0 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="rotate-[4deg] scale-110 transition-transform duration-500 group-hover:rotate-0 group-hover:scale-105">
-                        <MoodPlaceholder bg={mood.bg} />
+                <div
+                  className="pointer-events-none absolute inset-0 opacity-[0.06]"
+                  style={{ backgroundImage: GRAIN, backgroundSize: "200px 200px" }}
+                />
+
+                {/* Ghost numeral bleeding off the top corner */}
+                <div
+                  aria-hidden
+                  className="font-heading pointer-events-none absolute -top-7 right-3 text-[130px] leading-none italic"
+                  style={{ color: CREAM, opacity: 0.1 }}
+                >
+                  {mood.numeral}.
+                </div>
+
+                {/* Cream stamp tilts anticlockwise; ingredient plate tilts clockwise */}
+                <div className="relative mt-2">
+                  <Postmark color={CREAM} />
+                  <div
+                    className="stamp-frame -rotate-2 transition-transform duration-500 group-hover:rotate-0"
+                    style={{ backgroundColor: CREAM, "--stamp-hole": "9px" } as React.CSSProperties}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="rotate-[3.5deg] scale-110 transition-transform duration-500 group-hover:rotate-0 group-hover:scale-105">
+                        <IngredientCarousel
+                          items={mood.ingredients}
+                          from={mood.fieldFrom}
+                          to={mood.fieldTo}
+                        />
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center justify-between">
-                  <div className="font-heading text-[40px] leading-none text-primary italic">
-                    {mood.numeral}
-                  </div>
-                  <span
-                    className="inline-block h-3.5 w-3.5 rounded-full transition-all duration-300 group-hover:w-10"
-                    style={{ backgroundColor: mood.bg }}
-                  />
+                <div
+                  className="mt-7 text-[10px] font-semibold tracking-[0.3em] uppercase"
+                  style={{ color: CREAM, opacity: 0.65 }}
+                >
+                  {mood.notes}
                 </div>
-                <div className="font-heading mt-4 text-[30px] text-foreground">{mood.title}</div>
-                <p className="mt-3 min-h-[68px] text-[14px] leading-[1.65] text-muted-foreground">
+                <div className="font-heading mt-2.5 text-[32px] leading-tight italic">
+                  {mood.title}
+                </div>
+                <p className="mt-3 min-h-[68px] text-[14px] leading-[1.7]" style={{ opacity: 0.78 }}>
                   {mood.desc}
                 </p>
-                <div className="mt-5 text-[11px] font-semibold tracking-[0.22em] text-foreground uppercase transition-colors group-hover:text-primary">
-                  {mood.leads} →
+                <div className="mt-5 inline-flex items-center gap-2 text-[11px] font-semibold tracking-[0.22em] uppercase">
+                  <span className="border-b pb-0.5" style={{ borderColor: `${CREAM}66` }}>
+                    {mood.leads}
+                  </span>
+                  <span className="transition-transform duration-300 group-hover:translate-x-1.5">→</span>
                 </div>
               </Link>
             </Reveal>
