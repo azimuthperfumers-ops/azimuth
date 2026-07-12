@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { BookOpen } from "lucide-react";
+import { BookOpen, ChartLine } from "lucide-react";
 
 import { AddStockDialog } from "@/components/products/add-stock-dialog";
 import { AddVariantDialog } from "@/components/products/add-variant-dialog";
@@ -95,6 +95,12 @@ export default function ProductDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={data.status === "active" ? "default" : "secondary"}>{data.status}</Badge>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/products/${data.id}/analytics`}>
+              <ChartLine className="size-3.5 mr-1.5" />
+              Analytics
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href={`/products/${data.id}/ledger`}>
               <BookOpen className="size-3.5 mr-1.5" />

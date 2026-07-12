@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, avg, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 
 import { schema } from "@azimuth/db";
 import { adminProcedure } from "../middleware/auth.middleware";
+import { cacheGetOrSet } from "../lib/redis";
 import { router } from "../trpc";
 
 const CONFIRMED_STATUSES = [
@@ -174,4 +175,213 @@ export const analyticsRouter = router({
         },
       };
     }),
+
+  // ── Per-product deep-dive (heavy aggregates — Redis-cached 10 min) ──────────
+
+  productDetail: adminProcedure
+    .input(z.object({ productId: z.string().uuid() }))
+    .query(({ ctx, input }) =>
+      cacheGetOrSet(`analytics:product:${input.productId}`, 600, async () => {
+        const db = ctx.db;
+
+        const product = await db.query.products.findFirst({
+          where: eq(schema.products.id, input.productId),
+          columns: { id: true, name: true, ratingDisplayMode: true, mockRating: true, mockRatingCount: true },
+          with: { variants: { columns: { id: true, sku: true, sizeMl: true, mrp: true, stockCached: true } } },
+        });
+        if (!product) return null;
+
+        const variantIds = product.variants.map((v) => v.id);
+        if (variantIds.length === 0) return null;
+
+        const confirmedList = sql.raw(CONFIRMED_STATUSES.map((s) => `'${s}'`).join(","));
+
+        // ── Lifetime + windowed revenue/units from order lines ──────────────────
+        const now = new Date();
+        const d30 = new Date(now.getTime() - 30 * 86400000);
+        const d90 = new Date(now.getTime() - 90 * 86400000);
+
+        const [lifetime] = await db
+          .select({
+            revenue: sql<number>`COALESCE(SUM(${schema.orderItems.lineTotal}::numeric) FILTER (WHERE ${schema.orders.status} IN (${confirmedList})), 0)`,
+            units: sql<number>`COALESCE(SUM(${schema.orderItems.quantity}) FILTER (WHERE ${schema.orders.status} IN (${confirmedList})), 0)::int`,
+            orders: sql<number>`COUNT(DISTINCT ${schema.orders.id}) FILTER (WHERE ${schema.orders.status} IN (${confirmedList}))::int`,
+            buyers: sql<number>`COUNT(DISTINCT ${schema.orders.userId}) FILTER (WHERE ${schema.orders.status} IN (${confirmedList}))::int`,
+            revenue30: sql<number>`COALESCE(SUM(${schema.orderItems.lineTotal}::numeric) FILTER (WHERE ${schema.orders.status} IN (${confirmedList}) AND ${schema.orders.createdAt} >= ${d30}), 0)`,
+            units30: sql<number>`COALESCE(SUM(${schema.orderItems.quantity}) FILTER (WHERE ${schema.orders.status} IN (${confirmedList}) AND ${schema.orders.createdAt} >= ${d30}), 0)::int`,
+            deliveredOrders: sql<number>`COUNT(DISTINCT ${schema.orders.id}) FILTER (WHERE ${schema.orders.status} = 'delivered')::int`,
+            returnedOrders: sql<number>`COUNT(DISTINCT ${schema.orders.id}) FILTER (WHERE ${schema.orders.status} IN ('rto_initiated','rto_delivered','refund_processing','refunded'))::int`,
+            cancelledOrders: sql<number>`COUNT(DISTINCT ${schema.orders.id}) FILTER (WHERE ${schema.orders.status} = 'cancelled')::int`,
+            allOrders: sql<number>`COUNT(DISTINCT ${schema.orders.id})::int`,
+            avgSellingPrice: sql<number>`COALESCE(AVG(${schema.orderItems.unitPrice}::numeric) FILTER (WHERE ${schema.orders.status} IN (${confirmedList})), 0)`,
+            avgMrp: sql<number>`COALESCE(AVG(${schema.orderItems.mrp}::numeric) FILTER (WHERE ${schema.orders.status} IN (${confirmedList})), 0)`,
+          })
+          .from(schema.orderItems)
+          .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
+          .where(inArray(schema.orderItems.variantId, variantIds));
+
+        // ── Monthly trend, last 12 months ────────────────────────────────────────
+        const d365 = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+        const monthExpr = sql<string>`date_trunc('month', ${schema.orders.createdAt} AT TIME ZONE 'Asia/Kolkata')`;
+        const trend = await db
+          .select({
+            month: monthExpr,
+            revenue: sql<number>`COALESCE(SUM(${schema.orderItems.lineTotal}::numeric), 0)`,
+            units: sql<number>`COALESCE(SUM(${schema.orderItems.quantity}), 0)::int`,
+          })
+          .from(schema.orderItems)
+          .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
+          .where(
+            and(
+              inArray(schema.orderItems.variantId, variantIds),
+              gte(schema.orders.createdAt, d365),
+              sql`${schema.orders.status} IN (${confirmedList})`,
+            ),
+          )
+          .groupBy(monthExpr)
+          .orderBy(monthExpr);
+
+        // ── Per-variant split ────────────────────────────────────────────────────
+        const variantSplit = await db
+          .select({
+            variantId: schema.orderItems.variantId,
+            revenue: sql<number>`COALESCE(SUM(${schema.orderItems.lineTotal}::numeric), 0)`,
+            units: sql<number>`COALESCE(SUM(${schema.orderItems.quantity}), 0)::int`,
+          })
+          .from(schema.orderItems)
+          .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
+          .where(
+            and(
+              inArray(schema.orderItems.variantId, variantIds),
+              sql`${schema.orders.status} IN (${confirmedList})`,
+            ),
+          )
+          .groupBy(schema.orderItems.variantId);
+        const splitMap = new Map(variantSplit.map((v) => [v.variantId, v]));
+
+        // ── Repeat buyers ────────────────────────────────────────────────────────
+        const repeat = await db
+          .select({
+            userId: schema.orders.userId,
+            orderCount: sql<number>`COUNT(DISTINCT ${schema.orders.id})::int`,
+          })
+          .from(schema.orderItems)
+          .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
+          .where(
+            and(
+              inArray(schema.orderItems.variantId, variantIds),
+              sql`${schema.orders.status} IN (${confirmedList})`,
+            ),
+          )
+          .groupBy(schema.orders.userId);
+        const repeatBuyers = repeat.filter((r) => Number(r.orderCount) >= 2).length;
+
+        // ── Ratings: real aggregate + 1–5 distribution ───────────────────────────
+        const [ratingAgg] = await db
+          .select({ avg: avg(schema.productRatings.rating), count: count() })
+          .from(schema.productRatings)
+          .where(eq(schema.productRatings.productId, input.productId));
+        const distribution = await db
+          .select({ rating: schema.productRatings.rating, count: count() })
+          .from(schema.productRatings)
+          .where(eq(schema.productRatings.productId, input.productId))
+          .groupBy(schema.productRatings.rating);
+
+        // ── Demand signals + share of store revenue ──────────────────────────────
+        const [wishlisted] = await db
+          .select({ count: count() })
+          .from(schema.wishlistItems)
+          .where(eq(schema.wishlistItems.productId, input.productId));
+        const [inCarts] = await db
+          .select({ count: count() })
+          .from(schema.cartItems)
+          .where(and(inArray(schema.cartItems.variantId, variantIds), eq(schema.cartItems.isSaved, false)));
+        const [store] = await db
+          .select({
+            revenue: sql<number>`COALESCE(SUM(${schema.orders.total}::numeric) FILTER (WHERE ${schema.orders.status} IN (${confirmedList})), 0)`,
+          })
+          .from(schema.orders);
+
+        // Windowed revenue 31–90 days back, for a momentum comparison vs last 30
+        const [prevWindow] = await db
+          .select({
+            revenue: sql<number>`COALESCE(SUM(${schema.orderItems.lineTotal}::numeric), 0)`,
+          })
+          .from(schema.orderItems)
+          .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
+          .where(
+            and(
+              inArray(schema.orderItems.variantId, variantIds),
+              gte(schema.orders.createdAt, d90),
+              lt(schema.orders.createdAt, d30),
+              sql`${schema.orders.status} IN (${confirmedList})`,
+            ),
+          );
+
+        const totalStock = product.variants.reduce((s, v) => s + v.stockCached, 0);
+        const l = lifetime!;
+        const delivered = Number(l.deliveredOrders);
+        const returned = Number(l.returnedOrders);
+        const completedOrReturned = delivered + returned;
+
+        return {
+          product: { id: product.id, name: product.name },
+          revenue: {
+            lifetime: Number(l.revenue),
+            last30Days: Number(l.revenue30),
+            prev30To90Days: Number(prevWindow?.revenue ?? 0) / 2, // 60-day window halved → per-30d comparable
+            storeShare: Number(store?.revenue) > 0 ? Number(l.revenue) / Number(store!.revenue) : 0,
+          },
+          units: {
+            lifetime: Number(l.units),
+            last30Days: Number(l.units30),
+            currentStock: totalStock,
+            // Months of stock left at the last-30-days run rate
+            stockCoverMonths: Number(l.units30) > 0 ? totalStock / Number(l.units30) : null,
+          },
+          orders: {
+            confirmed: Number(l.orders),
+            buyers: Number(l.buyers),
+            repeatBuyers,
+            repeatRate: Number(l.buyers) > 0 ? repeatBuyers / Number(l.buyers) : 0,
+            avgRevenuePerOrder: Number(l.orders) > 0 ? Number(l.revenue) / Number(l.orders) : 0,
+          },
+          ratios: {
+            returnRate: completedOrReturned > 0 ? returned / completedOrReturned : 0,
+            cancellationRate: Number(l.allOrders) > 0 ? Number(l.cancelledOrders) / Number(l.allOrders) : 0,
+            realizedDiscount: Number(l.avgMrp) > 0 ? 1 - Number(l.avgSellingPrice) / Number(l.avgMrp) : 0,
+            avgSellingPrice: Number(l.avgSellingPrice),
+          },
+          rating: {
+            displayMode: product.ratingDisplayMode,
+            real: ratingAgg?.avg != null ? Math.round(Number(ratingAgg.avg) * 10) / 10 : null,
+            realCount: Number(ratingAgg?.count ?? 0),
+            mock: Number(product.mockRating),
+            mockCount: product.mockRatingCount,
+            distribution: [1, 2, 3, 4, 5].map((r) => ({
+              rating: r,
+              count: Number(distribution.find((d) => d.rating === r)?.count ?? 0),
+            })),
+          },
+          demand: {
+            wishlisted: Number(wishlisted?.count ?? 0),
+            inCarts: Number(inCarts?.count ?? 0),
+          },
+          monthlyTrend: trend.map((t) => ({
+            month: String(t.month),
+            revenue: Number(t.revenue),
+            units: Number(t.units),
+          })),
+          variantSplit: product.variants.map((v) => ({
+            variantId: v.id,
+            sku: v.sku,
+            sizeMl: v.sizeMl,
+            stock: v.stockCached,
+            revenue: Number(splitMap.get(v.id)?.revenue ?? 0),
+            units: Number(splitMap.get(v.id)?.units ?? 0),
+          })),
+          cachedAt: new Date().toISOString(),
+        };
+      }),
+    ),
 });
