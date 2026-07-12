@@ -200,6 +200,8 @@ export const analyticsRouter = router({
         const now = new Date();
         const d30 = new Date(now.getTime() - 30 * 86400000);
         const d90 = new Date(now.getTime() - 90 * 86400000);
+        // Raw sql`` templates can't take Date params (postgres.js serialization) — use ISO strings
+        const d30Iso = d30.toISOString();
 
         const [lifetime] = await db
           .select({
@@ -207,8 +209,8 @@ export const analyticsRouter = router({
             units: sql<number>`COALESCE(SUM(${schema.orderItems.quantity}) FILTER (WHERE ${schema.orders.status} IN (${confirmedList})), 0)::int`,
             orders: sql<number>`COUNT(DISTINCT ${schema.orders.id}) FILTER (WHERE ${schema.orders.status} IN (${confirmedList}))::int`,
             buyers: sql<number>`COUNT(DISTINCT ${schema.orders.userId}) FILTER (WHERE ${schema.orders.status} IN (${confirmedList}))::int`,
-            revenue30: sql<number>`COALESCE(SUM(${schema.orderItems.lineTotal}::numeric) FILTER (WHERE ${schema.orders.status} IN (${confirmedList}) AND ${schema.orders.createdAt} >= ${d30}), 0)`,
-            units30: sql<number>`COALESCE(SUM(${schema.orderItems.quantity}) FILTER (WHERE ${schema.orders.status} IN (${confirmedList}) AND ${schema.orders.createdAt} >= ${d30}), 0)::int`,
+            revenue30: sql<number>`COALESCE(SUM(${schema.orderItems.lineTotal}::numeric) FILTER (WHERE ${schema.orders.status} IN (${confirmedList}) AND ${schema.orders.createdAt} >= ${d30Iso}), 0)`,
+            units30: sql<number>`COALESCE(SUM(${schema.orderItems.quantity}) FILTER (WHERE ${schema.orders.status} IN (${confirmedList}) AND ${schema.orders.createdAt} >= ${d30Iso}), 0)::int`,
             deliveredOrders: sql<number>`COUNT(DISTINCT ${schema.orders.id}) FILTER (WHERE ${schema.orders.status} = 'delivered')::int`,
             returnedOrders: sql<number>`COUNT(DISTINCT ${schema.orders.id}) FILTER (WHERE ${schema.orders.status} IN ('rto_initiated','rto_delivered','refund_processing','refunded'))::int`,
             cancelledOrders: sql<number>`COUNT(DISTINCT ${schema.orders.id}) FILTER (WHERE ${schema.orders.status} = 'cancelled')::int`,
