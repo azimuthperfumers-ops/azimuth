@@ -47,7 +47,7 @@ export default function HomePage() {
         <CollectionSection products={productRows} isLoading={products.isLoading} />
         <QuoteBand />
         <CraftSection />
-        <MiniaturesCta />
+        <MiniaturesCta products={productRows} />
         <ReviewsSection />
       </main>
       <SiteFooter />

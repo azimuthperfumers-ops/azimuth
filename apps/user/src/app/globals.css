@@ -142,6 +142,16 @@
   animation: spin-slow 140s linear infinite;
 }
 
+/* Vertical image columns — stack duplicated twice, drifts top to bottom */
+@keyframes column-drift {
+  from { transform: translateY(-50%); }
+  to   { transform: translateY(0); }
+}
+
+.drift-col {
+  animation: column-drift var(--drift-duration, 44s) linear infinite;
+}
+
 /* Postage-stamp frame — scalloped edge punched with a tiled radial mask */
 .stamp-frame {
   --stamp-hole: 7px;
@@ -180,6 +190,7 @@
   .notes-track,
   .stamp-rotate,
   .compass-spin,
+  .drift-col,
   .kenburns {
     animation: none !important;
   }

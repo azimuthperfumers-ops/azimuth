@@ -11,7 +11,7 @@ import { trpc } from "@/lib/trpc";
 
 const TICKER_ITEMS = [
   "Handcrafted in small batches",
-  "Miniatures with every purchase",
+  "Batch-numbered bottles",
   "Premium naturals & resins",
   "Pan-India delivery",
 ];

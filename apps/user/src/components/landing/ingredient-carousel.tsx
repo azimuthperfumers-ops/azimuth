@@ -113,6 +113,9 @@ const ICONS = {
 
 export type IngredientName = keyof typeof ICONS;
 
+// Reused by the vertical drift columns in the collection CTA
+export const INGREDIENT_ICONS = ICONS;
+
 export function IngredientCarousel({
   items,
   from,

@@ -1,4 +1,5 @@
 import { Reveal } from "@/components/reveal";
+import { INGREDIENT_ICONS } from "./ingredient-carousel";
 
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
@@ -56,6 +57,35 @@ function CompassRose() {
   );
 }
 
+// Atlas marginalia — vertical bearings and a half-bled botanical on each edge
+function Marginalia() {
+  const Rose = INGREDIENT_ICONS.Rose;
+  const Oud = INGREDIENT_ICONS.Oud;
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 hidden text-background lg:block">
+      {/* Left edge */}
+      <div className="absolute inset-y-0 left-10 flex flex-col items-center justify-center gap-7">
+        <span className="h-16 w-px bg-current opacity-25" />
+        <span className="text-[10px] font-semibold tracking-[0.4em] uppercase opacity-40 [writing-mode:vertical-rl]">
+          Bearing 241.7° SW
+        </span>
+        <span className="h-16 w-px bg-current opacity-25" />
+      </div>
+      <Rose className="absolute top-1/2 -left-14 size-44 -translate-y-1/2 -rotate-12 opacity-[0.08]" />
+
+      {/* Right edge */}
+      <div className="absolute inset-y-0 right-10 flex flex-col items-center justify-center gap-7">
+        <span className="h-16 w-px bg-current opacity-25" />
+        <span className="text-[10px] font-semibold tracking-[0.4em] uppercase opacity-40 [writing-mode:vertical-rl]">
+          28.61° N · 77.23° E
+        </span>
+        <span className="h-16 w-px bg-current opacity-25" />
+      </div>
+      <Oud className="absolute top-1/2 -right-14 size-44 -translate-y-1/2 rotate-12 opacity-[0.08]" />
+    </div>
+  );
+}
+
 export function QuoteBand() {
   return (
     <section className="relative overflow-hidden bg-foreground px-6 py-36 text-center sm:px-10 md:px-16">
@@ -64,6 +94,7 @@ export function QuoteBand() {
         style={{ backgroundImage: GRAIN, backgroundSize: "200px 200px" }}
       />
       <CompassRose />
+      <Marginalia />
       <Reveal className="relative">
         <div className="font-heading text-[26px] leading-none text-primary italic">✳</div>
         <div className="mt-5 text-[11px] font-semibold tracking-[0.34em] text-primary/80 uppercase">
