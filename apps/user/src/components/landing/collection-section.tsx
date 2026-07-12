@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Reveal } from "@/components/reveal";
 import { CONCENTRATION_LABEL, defaultVariant, primaryImage, secondaryImage, type LandingProduct } from "./types";
 
 function CardSkeleton() {
@@ -49,13 +50,13 @@ export function CollectionSection({
       {!isLoading && shown.length > 0 && (
         <>
           <div className="mt-16 grid grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-3">
-            {shown.map((product) => {
+            {shown.map((product, i) => {
               const image = primaryImage(product);
               const secondary = secondaryImage(product);
               const variant = defaultVariant(product);
               const slug = product.slug ?? product.id;
               return (
-                <div key={product.id} className="flex flex-col">
+                <Reveal key={product.id} delay={(i % 3) * 90} className="flex flex-col">
                   <Link
                     href={`/shop/${slug}`}
                     className="group relative block aspect-[3/4] overflow-hidden"
@@ -108,7 +109,7 @@ export function CollectionSection({
                   >
                     Discover {product.name} →
                   </Link>
-                </div>
+                </Reveal>
               );
             })}
           </div>

@@ -21,6 +21,28 @@ function truncate(text: string, max: number) {
   return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
 }
 
+// Slow-rotating apothecary stamp riding the hero arch
+function HeroStamp() {
+  return (
+    <div className="absolute -top-2 right-4 z-10 hidden size-[108px] items-center justify-center rounded-full border border-foreground/15 bg-background/85 shadow-[0_10px_30px_rgba(27,22,17,0.12)] backdrop-blur-sm sm:flex lg:-right-8 lg:top-14">
+      <svg viewBox="0 0 120 120" className="stamp-rotate size-[92px] text-foreground">
+        <defs>
+          <path
+            id="hero-stamp-arc"
+            d="M60,60 m-45,0 a45,45 0 1,1 90,0 a45,45 0 1,1 -90,0"
+          />
+        </defs>
+        <text className="fill-current" style={{ fontSize: "11px", letterSpacing: "3.2px" }}>
+          <textPath href="#hero-stamp-arc">
+            SMALL BATCH · HAND BLENDED · AZIMUTH ·
+          </textPath>
+        </text>
+      </svg>
+      <span className="absolute font-heading text-[22px] leading-none text-primary italic">Az</span>
+    </div>
+  );
+}
+
 export function LandingHero({
   copy,
   products,
@@ -87,9 +109,11 @@ export function LandingHero({
         </div>
       </div>
 
-      {/* Photo carousel — portrait card so the whole bottle shows */}
+      {/* Photo carousel — arched portrait, the shoulder of a perfume bottle */}
       <div className="flex items-center justify-center px-6 py-8 sm:px-10 md:px-12 lg:pr-12 lg:pl-0">
-        <div className="relative aspect-[4/5] w-full max-w-[540px] overflow-hidden bg-muted">
+        <div className="relative w-full max-w-[540px]">
+        <HeroStamp />
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-b-[28px] rounded-t-[999px] bg-muted">
         {isLoading ? (
           <div className="absolute inset-0 animate-pulse bg-muted" />
         ) : products.length === 0 ? (
@@ -99,13 +123,13 @@ export function LandingHero({
             const url = primaryImage(p)?.url;
             const show = i === Math.min(index, products.length - 1);
             return (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={p.id}
-                // eslint-disable-next-line @next/next/no-img-element
                 src={url}
                 alt={p.name}
                 aria-hidden={!show}
-                className="absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-1000 ease-out"
+                className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-1000 ease-out ${show ? "kenburns" : ""}`}
                 style={{ opacity: show ? 1 : 0 }}
               />
             );
@@ -115,7 +139,7 @@ export function LandingHero({
         {active && !isLoading && (
           <Link
             href={slug ? `/shop/${slug}` : "/shop"}
-            className="absolute bottom-6 left-6 max-w-[260px] bg-background/94 px-6 py-5 backdrop-blur-sm transition-opacity hover:opacity-90"
+            className="absolute bottom-6 left-6 max-w-[260px] rounded-2xl bg-background/94 px-6 py-5 backdrop-blur-sm transition-opacity hover:opacity-90"
           >
             <div className="text-[10px] font-semibold tracking-[0.28em] text-primary uppercase">
               {active.isFeatured ? "Signature" : (active.category?.name ?? "Fragrance")}
@@ -143,6 +167,7 @@ export function LandingHero({
             ))}
           </div>
         )}
+        </div>
         </div>
       </div>
     </section>

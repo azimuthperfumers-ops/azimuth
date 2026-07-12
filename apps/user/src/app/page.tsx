@@ -1,6 +1,7 @@
 "use client";
 
 import { LandingHero } from "@/components/landing/landing-hero";
+import { NotesMarquee } from "@/components/landing/notes-marquee";
 import { MoodSection } from "@/components/landing/mood-section";
 import { CollectionSection } from "@/components/landing/collection-section";
 import { QuoteBand } from "@/components/landing/quote-band";
@@ -40,6 +41,7 @@ export default function HomePage() {
       <SiteHeader />
       <main>
         <LandingHero copy={heroCopy} products={heroList} isLoading={products.isLoading} />
+        <NotesMarquee />
         <MoodSection categories={categories.data ?? []} />
         <CollectionSection products={productRows} isLoading={products.isLoading} />
         <QuoteBand />

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { Reveal } from "@/components/reveal";
+
 const STEPS = [
   { num: "01", title: "Sourced whole", desc: "Resins, ouds and florals from growers we know." },
   { num: "02", title: "Rested for weeks", desc: "Time rounds the edges until the accord settles." },
@@ -17,8 +19,8 @@ export function CraftSection() {
       </h2>
 
       <div className="mx-auto mt-14 grid max-w-[1080px] grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        {STEPS.map((step) => (
-          <div key={step.num} className="border-l border-foreground/14 px-9 py-2">
+        {STEPS.map((step, i) => (
+          <Reveal key={step.num} delay={i * 110} className="border-l border-foreground/14 px-9 py-2">
             <div className="font-heading text-[56px] leading-none text-primary italic">
               {step.num}
             </div>
@@ -28,7 +30,7 @@ export function CraftSection() {
             <p className="mx-auto mt-2.5 max-w-[30ch] text-[14px] leading-[1.6] text-muted-foreground">
               {step.desc}
             </p>
-          </div>
+          </Reveal>
         ))}
       </div>
 

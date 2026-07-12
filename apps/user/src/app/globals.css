@@ -100,3 +100,63 @@
 .ticker-track:hover {
   animation-play-state: paused;
 }
+
+/* ── 2026 layer — motion & texture ──────────────────────────────────────────── */
+
+/* Scroll reveal (driven by <Reveal>) */
+.reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity 0.9s cubic-bezier(0.2, 0.65, 0.25, 1),
+    transform 0.9s cubic-bezier(0.2, 0.65, 0.25, 1);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Scent-notes marquee — slower, statelier cousin of the ticker */
+.notes-track {
+  display: flex;
+  width: max-content;
+  animation: ticker 46s linear infinite;
+}
+
+.notes-track:hover {
+  animation-play-state: paused;
+}
+
+/* Rotating hero stamp */
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+.stamp-rotate {
+  animation: spin-slow 26s linear infinite;
+}
+
+/* Ken Burns drift on the active hero slide */
+@keyframes kenburns {
+  from { transform: scale(1.07); }
+  to   { transform: scale(1); }
+}
+
+.kenburns {
+  animation: kenburns 5s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .ticker-track,
+  .notes-track,
+  .stamp-rotate,
+  .kenburns {
+    animation: none !important;
+  }
+}

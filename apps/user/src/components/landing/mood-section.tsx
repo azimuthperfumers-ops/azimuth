@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { Reveal } from "@/components/reveal";
+
 type Category = { id: string; name: string };
 
 const MOODS = [
@@ -47,32 +49,34 @@ export function MoodSection({ categories }: { categories: Category[] }) {
       </div>
 
       <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {MOODS.map((mood) => {
+        {MOODS.map((mood, i) => {
           const category = categories.find((c) => c.name.toLowerCase() === mood.categoryMatch);
           const href = category ? `/shop?category=${category.id}` : "/shop";
           return (
-            <Link
-              key={mood.numeral}
-              href={href}
-              className="block border border-foreground/12 bg-card px-8 pt-9 pb-8 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_18px_40px_rgba(27,22,17,0.1)]"
-            >
-              <div className="flex items-center justify-between">
-                <div className="font-heading text-[44px] leading-none text-primary italic">
-                  {mood.numeral}
+            <Reveal key={mood.numeral} delay={i * 110}>
+              <Link
+                href={href}
+                className="group block h-full rounded-3xl border border-foreground/12 bg-card px-8 pt-9 pb-8 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_18px_40px_rgba(27,22,17,0.1)]"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-heading text-[44px] leading-none text-primary italic">
+                    {mood.numeral}
+                  </div>
+                  {/* Mood swatch stretches into a pill on hover */}
+                  <span
+                    className="inline-block h-3.5 w-3.5 rounded-full transition-all duration-300 group-hover:w-10"
+                    style={{ backgroundColor: mood.bg }}
+                  />
                 </div>
-                <span
-                  className="inline-block size-3.5 rounded-full"
-                  style={{ backgroundColor: mood.bg }}
-                />
-              </div>
-              <div className="font-heading mt-5.5 text-[30px] text-foreground">{mood.title}</div>
-              <p className="mt-3 min-h-[68px] text-[14px] leading-[1.65] text-muted-foreground">
-                {mood.desc}
-              </p>
-              <div className="mt-5 text-[11px] font-semibold tracking-[0.22em] text-foreground uppercase">
-                {mood.leads} →
-              </div>
-            </Link>
+                <div className="font-heading mt-5.5 text-[30px] text-foreground">{mood.title}</div>
+                <p className="mt-3 min-h-[68px] text-[14px] leading-[1.65] text-muted-foreground">
+                  {mood.desc}
+                </p>
+                <div className="mt-5 text-[11px] font-semibold tracking-[0.22em] text-foreground uppercase transition-colors group-hover:text-primary">
+                  {mood.leads} →
+                </div>
+              </Link>
+            </Reveal>
           );
         })}
       </div>
