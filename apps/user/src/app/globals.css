@@ -137,6 +137,11 @@
   animation: spin-slow 26s linear infinite;
 }
 
+/* Compass rose behind the quote — a full turn takes two minutes */
+.compass-spin {
+  animation: spin-slow 140s linear infinite;
+}
+
 /* Postage-stamp frame — scalloped edge punched with a tiled radial mask */
 .stamp-frame {
   --stamp-hole: 7px;
@@ -174,6 +179,7 @@
   .ticker-track,
   .notes-track,
   .stamp-rotate,
+  .compass-spin,
   .kenburns {
     animation: none !important;
   }
