@@ -43,12 +43,14 @@ function ColumnCell({ cell }: { cell: Cell }) {
   return (
     <div className="w-full shrink-0 overflow-hidden rounded-xl">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={cell.url} alt={cell.alt} className="aspect-[3/4] w-full object-cover" loading="lazy" />
+      <img src={cell.url} alt={cell.alt} className="aspect-[3/4] w-full object-cover" />
     </div>
   );
 }
 
-// Three columns drifting top-to-bottom at different speeds
+// Three columns drifting top-to-bottom at different speeds. The strand is
+// duplicated flat with a uniform per-cell margin so translateY(-50%) lands
+// exactly one copy down — a seamless, never-stopping loop.
 function DriftColumns({
   products,
   ingredients,
@@ -61,17 +63,17 @@ function DriftColumns({
     <div className="absolute inset-0 flex gap-3 px-6 py-0">
       {[0, 1, 2].map((col) => {
         const cells = buildColumn(products, ingredients, col);
+        if (cells.length === 0) return <div key={col} className="min-w-0 flex-1" />;
+        const strand = [...cells, ...cells];
         return (
           <div key={col} className="min-w-0 flex-1 overflow-hidden">
             <div
-              className="drift-col flex flex-col gap-3"
+              className="drift-col flex flex-col"
               style={{ "--drift-duration": durations[col] } as React.CSSProperties}
             >
-              {[0, 1].map((copy) => (
-                <div key={copy} className="flex flex-col gap-3 pb-3" aria-hidden={copy === 1}>
-                  {cells.map((cell, i) => (
-                    <ColumnCell key={`${copy}-${i}`} cell={cell} />
-                  ))}
+              {strand.map((cell, i) => (
+                <div key={i} className="mb-3" aria-hidden={i >= cells.length}>
+                  <ColumnCell cell={cell} />
                 </div>
               ))}
             </div>
