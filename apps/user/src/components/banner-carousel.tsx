@@ -27,19 +27,11 @@ export function BannerCarousel({ banners }: { banners: Banner[] }) {
       {active.map((b, i) => (
         <div
           key={b.id}
-          className="absolute inset-0 transition-opacity duration-[1600ms] ease-in-out"
+          className="absolute inset-0 bg-secondary transition-opacity duration-[1600ms] ease-in-out"
           style={{ opacity: i === idx ? 1 : 0 }}
         >
-          {/* Blurred fill so the whole designed banner shows (contain) without
-              ugly letterbox bars — the fill is the same image, cover + blur. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={b.imageUrl}
-            alt=""
-            aria-hidden
-            className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
-          />
-          {/* The complete banner, never cropped. */}
+          {/* The complete banner on a clean brand-cream field — never cropped,
+              never smeared. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={b.imageUrl}
@@ -48,8 +40,6 @@ export function BannerCarousel({ banners }: { banners: Banner[] }) {
           />
         </div>
       ))}
-      {/* Feather the bottom into the page rather than a flat dark wash. */}
-      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/25 to-transparent" />
     </div>
   );
 }
