@@ -27,16 +27,15 @@ export function BannerCarousel({ banners }: { banners: Banner[] }) {
       {active.map((b, i) => (
         <div
           key={b.id}
-          className="absolute inset-0 bg-secondary transition-opacity duration-[1600ms] ease-in-out"
+          className="absolute inset-0 transition-opacity duration-[1600ms] ease-in-out"
           style={{ opacity: i === idx ? 1 : 0 }}
         >
-          {/* The complete banner on a clean brand-cream field — never cropped,
-              never smeared. */}
+          {/* Full-bleed cover — the banner fills the frame edge to edge. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={b.imageUrl}
             alt={b.alt || ""}
-            className="absolute inset-0 h-full w-full object-contain"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         </div>
       ))}
