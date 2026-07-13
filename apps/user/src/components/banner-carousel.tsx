@@ -15,7 +15,8 @@ export function BannerCarousel({ banners }: { banners: Banner[] }) {
 
   useEffect(() => {
     if (active.length <= 1) return;
-    const id = setInterval(() => setIdx((i) => (i + 1) % active.length), 5000);
+    // Slow, unhurried crossfade — a new banner every 8s.
+    const id = setInterval(() => setIdx((i) => (i + 1) % active.length), 8000);
     return () => clearInterval(id);
   }, [active.length]);
 
@@ -24,16 +25,31 @@ export function BannerCarousel({ banners }: { banners: Banner[] }) {
   return (
     <div className="absolute inset-0 overflow-hidden">
       {active.map((b, i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <div
           key={b.id}
-          src={b.imageUrl}
-          alt={b.alt || ""}
-          className="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000"
+          className="absolute inset-0 transition-opacity duration-[1600ms] ease-in-out"
           style={{ opacity: i === idx ? 1 : 0 }}
-        />
+        >
+          {/* Blurred fill so the whole designed banner shows (contain) without
+              ugly letterbox bars — the fill is the same image, cover + blur. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={b.imageUrl}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
+          />
+          {/* The complete banner, never cropped. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={b.imageUrl}
+            alt={b.alt || ""}
+            className="absolute inset-0 h-full w-full object-contain"
+          />
+        </div>
       ))}
-      <div className="absolute inset-0 bg-black/40" />
+      {/* Feather the bottom into the page rather than a flat dark wash. */}
+      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/25 to-transparent" />
     </div>
   );
 }

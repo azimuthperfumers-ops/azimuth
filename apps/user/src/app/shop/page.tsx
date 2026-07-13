@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
 import { BannerCarousel } from "@/components/banner-carousel";
+import { CraftSection } from "@/components/landing/craft-section";
 import { ProductCard } from "@/components/product-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -207,6 +208,9 @@ function ShopPageInner() {
           </>
         )}
       </div>
+
+      {/* The craft — same three stations as the landing, between banner and grid */}
+      <CraftSection />
 
       <main className="mx-auto max-w-[1400px] px-4 md:px-10 py-10 md:py-16 pb-48 md:pb-56">
         {/* Page header */}
