@@ -10,7 +10,7 @@ export function Ticker() {
 
   const { CONTENT, SINGLE_WIDTH } = useMemo(() => {
     const items = [
-      "MINIATURES WITH EVERY PURCHASE",
+      "BATCH-NUMBERED BOTTLES",
       `FREE SHIPPING ABOVE ₹${freeShippingAbove}`,
       "PREMIUM NATURALS & RESINS",
       "PAN-INDIA DELIVERY",

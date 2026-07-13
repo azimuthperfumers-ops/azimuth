@@ -5,6 +5,10 @@ import { ChevronDown } from "lucide-react-native";
 
 import { HeroBannerCarousel, type HeroCopy } from "@/components/hero-banner-carousel";
 import { HeroProductShowcase } from "@/components/hero-product-showcase";
+import { NotesMarquee } from "@/components/landing/notes-marquee";
+import { MoodSection } from "@/components/landing/mood-section";
+import { ReviewsStrip } from "@/components/landing/reviews-strip";
+import { QuoteBand } from "@/components/landing/quote-band";
 import { trpc } from "@/lib/trpc";
 import { Colors, Fonts } from "@/constants/theme";
 
@@ -141,6 +145,12 @@ export default function HomeScreen() {
           </View>
         </View>
       )}
+
+      {/* ── Notes river ── */}
+      <NotesMarquee />
+
+      {/* ── Moods: three colour-blocked stamp cards ── */}
+      <MoodSection />
 
       {/* ── The Collection ── */}
       {collection.length > 0 && (
@@ -280,18 +290,11 @@ export default function HomeScreen() {
         );
       })()}
 
-      {/* ── Brand statement ── */}
-      <View className="mt-12 bg-[#1B1611] px-8 py-14 items-center">
-        <Text className="text-[9.5px] font-semibold tracking-[0.3em] text-white/45 uppercase">
-          The Azimuth way
-        </Text>
-        <Text
-          className="mt-5 text-[27px] leading-[1.15] text-white text-center"
-          style={{ fontFamily: Fonts.serifItalic }}
-        >
-          &quot;An accord becomes unmistakably yours.&quot;
-        </Text>
-      </View>
+      {/* ── Reviews: rotated postcards ── */}
+      <ReviewsStrip />
+
+      {/* ── Brand statement + compass ── */}
+      <QuoteBand />
 
       {/* ── The craft ── */}
       <View className="px-6 py-12">
