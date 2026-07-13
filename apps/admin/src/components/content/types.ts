@@ -90,6 +90,10 @@ export const LANDING_IMAGERY_DEFAULTS: LandingImagery = {
     { url: "/ingredients/lavender.webp", label: "Lavender" },
     { url: "/ingredients/smoke.webp", label: "Smoke" },
     { url: "/ingredients/strawberry.webp", label: "Berry" },
+    { url: "/ingredients/jasmine.webp", label: "Jasmine" },
+    { url: "/ingredients/cedar.webp", label: "Cedarwood" },
+    { url: "/ingredients/marine.webp", label: "Marine" },
+    { url: "/ingredients/candy.webp", label: "Sweet" },
   ],
 };
 
