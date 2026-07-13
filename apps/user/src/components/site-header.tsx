@@ -61,7 +61,7 @@ export function SiteHeader() {
           </button>
           <Link
             href="/shop"
-            className="group hidden items-center gap-1.5 rounded-full bg-primary py-2 pr-3 pl-4 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md sm:inline-flex"
+            className="group hidden items-center gap-1.5 bg-primary py-2 pr-3 pl-4 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md sm:inline-flex"
           >
             Shop
             <ChevronRight className="nudge-x size-4 stroke-[2.5] transition-transform group-hover:translate-x-0.5" />
