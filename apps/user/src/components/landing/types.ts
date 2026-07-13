@@ -47,3 +47,18 @@ export const CONCENTRATION_LABEL: Record<string, string> = {
   cologne: "Cologne",
   attar: "Attar",
 };
+
+// Landing imagery — real ingredient/mood photos the admin can swap in the
+// content playground ("Landing" surface). These bundled webp files are the
+// fallback shown until (or unless) the admin uploads their own.
+export type IngredientImage = { url: string; label: string };
+
+export const LANDING_INGREDIENT_DEFAULTS: IngredientImage[] = [
+  { url: "/ingredients/amber.webp", label: "Amber" },
+  { url: "/ingredients/rose.webp", label: "Rose" },
+  { url: "/ingredients/citrus.webp", label: "Citrus" },
+  { url: "/ingredients/patchouli.webp", label: "Patchouli" },
+  { url: "/ingredients/lavender.webp", label: "Lavender" },
+  { url: "/ingredients/smoke.webp", label: "Smoke" },
+  { url: "/ingredients/strawberry.webp", label: "Berry" },
+];

@@ -1,78 +1,66 @@
 import Link from "next/link";
 
 import { Reveal } from "@/components/reveal";
-import { INGREDIENT_ICONS, type IngredientName } from "./ingredient-carousel";
-import { primaryImage, type LandingProduct } from "./types";
+import { trpc } from "@/lib/trpc";
+import {
+  LANDING_INGREDIENT_DEFAULTS,
+  primaryImage,
+  type IngredientImage,
+  type LandingProduct,
+} from "./types";
 
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
-const TILE_WASHES = ["#6E5B33", "#A5675D", "#262338"];
+type Cell = { url: string; alt: string };
 
-const COLUMN_INGREDIENTS: IngredientName[][] = [
-  ["Amber", "Rose", "Oud"],
-  ["Citrus", "Vanilla", "Patchouli"],
-  ["Cedarwood", "Chamomile", "Incense"],
-];
-
-type Cell =
-  | { kind: "photo"; url: string; alt: string }
-  | { kind: "tile"; name: IngredientName; wash: string };
-
-function buildColumn(products: LandingProduct[], col: number): Cell[] {
+// Interleave product bottles with real ingredient photos, one strand per column.
+function buildColumn(
+  products: LandingProduct[],
+  ingredients: IngredientImage[],
+  col: number,
+): Cell[] {
   const photos: Cell[] = products
     .map((p) => ({ url: primaryImage(p)?.url, alt: p.name }))
-    .filter((p): p is { url: string; alt: string } => !!p.url)
+    .filter((p): p is Cell => !!p.url)
     .filter((_, i) => i % 3 === col)
-    .slice(0, 3)
-    .map((p) => ({ kind: "photo", ...p }));
+    .slice(0, 3);
 
-  const tiles: Cell[] = COLUMN_INGREDIENTS[col]!.map((name, i) => ({
-    kind: "tile",
-    name,
-    wash: TILE_WASHES[(col + i) % TILE_WASHES.length]!,
-  }));
+  const ings: Cell[] = ingredients
+    .filter((_, i) => i % 3 === col)
+    .map((ing) => ({ url: ing.url, alt: ing.label }));
 
-  // Interleave photo / tile; tiles alone when the catalog has no photos yet
   const cells: Cell[] = [];
-  const max = Math.max(photos.length, tiles.length);
+  const max = Math.max(photos.length, ings.length);
   for (let i = 0; i < max; i++) {
-    const photo = photos[i];
-    const tile = tiles[i];
-    if (photo) cells.push(photo);
-    if (tile) cells.push(tile);
+    if (photos[i]) cells.push(photos[i]!);
+    if (ings[i]) cells.push(ings[i]!);
   }
   return cells;
 }
 
 function ColumnCell({ cell }: { cell: Cell }) {
-  if (cell.kind === "photo") {
-    return (
-      <div className="w-full shrink-0 overflow-hidden rounded-xl">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={cell.url} alt={cell.alt} className="aspect-[3/4] w-full object-cover" />
-      </div>
-    );
-  }
-  const Icon = INGREDIENT_ICONS[cell.name];
   return (
-    <div
-      className="flex aspect-[3/4] w-full shrink-0 flex-col items-center justify-center gap-2 rounded-xl text-[#FAF6EE]"
-      style={{ background: `linear-gradient(160deg, ${cell.wash} 0%, ${cell.wash}C0 100%)` }}
-    >
-      <Icon className="size-11" />
-      <div className="font-heading text-[15px] leading-none italic">{cell.name}</div>
+    <div className="w-full shrink-0 overflow-hidden rounded-xl">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={cell.url} alt={cell.alt} className="aspect-[3/4] w-full object-cover" loading="lazy" />
     </div>
   );
 }
 
 // Three columns drifting top-to-bottom at different speeds
-function DriftColumns({ products }: { products: LandingProduct[] }) {
+function DriftColumns({
+  products,
+  ingredients,
+}: {
+  products: LandingProduct[];
+  ingredients: IngredientImage[];
+}) {
   const durations = ["36s", "52s", "44s"];
   return (
     <div className="absolute inset-0 flex gap-3 px-6 py-0">
       {[0, 1, 2].map((col) => {
-        const cells = buildColumn(products, col);
+        const cells = buildColumn(products, ingredients, col);
         return (
           <div key={col} className="min-w-0 flex-1 overflow-hidden">
             <div
@@ -95,6 +83,11 @@ function DriftColumns({ products }: { products: LandingProduct[] }) {
 }
 
 export function MiniaturesCta({ products }: { products: LandingProduct[] }) {
+  const imagery = trpc.content.getSection.useQuery({ section: "landing_imagery" });
+  const configured = imagery.data?.ingredients as IngredientImage[] | undefined;
+  const ingredients =
+    configured && configured.length > 0 ? configured : LANDING_INGREDIENT_DEFAULTS;
+
   return (
     <section className="px-6 pb-28 sm:px-10 md:px-16">
       <Reveal>
@@ -122,10 +115,7 @@ export function MiniaturesCta({ products }: { products: LandingProduct[] }) {
               className="pointer-events-none absolute inset-0 z-10 opacity-[0.07]"
               style={{ backgroundImage: GRAIN, backgroundSize: "200px 200px" }}
             />
-            {/* Fade masks top and bottom so columns emerge from the dark */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16 bg-gradient-to-b from-foreground to-transparent" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-16 bg-gradient-to-t from-foreground to-transparent" />
-            <DriftColumns products={products} />
+            <DriftColumns products={products} ingredients={ingredients} />
           </div>
         </div>
       </Reveal>

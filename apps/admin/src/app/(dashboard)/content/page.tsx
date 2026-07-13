@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   BookOpen,
+  Droplets,
   Eye,
   EyeOff,
   GripVertical,
@@ -35,11 +36,13 @@ import { LivePreview, type ProductLite } from "@/components/content/live-preview
 import { SANS_FONTS, SERIF_FONTS } from "@/components/content/fonts";
 import {
   HOME_HERO_DEFAULTS,
+  LANDING_IMAGERY_DEFAULTS,
   OUR_STORY_DEFAULTS,
   SHOP_COVER_DEFAULTS,
   THEME_COLOR_FIELDS,
   THEME_DEFAULTS,
   type HomeHero,
+  type LandingImagery,
   type OurStory,
   type ShopCover,
   type Surface,
@@ -197,6 +200,102 @@ function BannerList({ page }: { page: "home" | "shop" }) {
   );
 }
 
+// ─── Landing imagery: real ingredient/mood photos in the drift columns ───────
+
+function IngredientImageUploader({ onUploaded }: { onUploaded: (url: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const getUrl = trpc.storage.getLandingUploadUrl.useMutation();
+
+  async function handleFile(file: File) {
+    if (!file.type.startsWith("image/")) return toast.error("Only image files allowed");
+    setUploading(true);
+    try {
+      const { uploadUrl, publicUrl } = await getUrl.mutateAsync({ filename: file.name, contentType: file.type });
+      const res = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+      onUploaded(publicUrl);
+      toast.success("Image uploaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = ""; }}
+      />
+      <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()} className="gap-2">
+        {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+        Add image
+      </Button>
+    </div>
+  );
+}
+
+function IngredientImageManager({
+  items,
+  onChange,
+}: {
+  items: { url: string; label: string }[];
+  onChange: (items: { url: string; label: string }[]) => void;
+}) {
+  function setLabel(idx: number, label: string) {
+    onChange(items.map((it, i) => (i === idx ? { ...it, label } : it)));
+  }
+  function remove(idx: number) {
+    onChange(items.filter((_, i) => i !== idx));
+  }
+  function move(idx: number, dir: -1 | 1) {
+    const to = idx + dir;
+    if (to < 0 || to >= items.length) return;
+    const next = [...items];
+    [next[idx], next[to]] = [next[to]!, next[idx]!];
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ingredient photos</p>
+        <IngredientImageUploader onUploaded={(url) => onChange([...items, { url, label: "" }])} />
+      </div>
+      <p className="text-[11px] text-muted-foreground/60">
+        These real photos drift in the &ldquo;small batch&rdquo; panel on the home page, mixed with your product bottles. Leave empty to use the bundled defaults.
+      </p>
+      {items.length === 0 && (
+        <p className="border border-dashed border-border py-4 text-center text-sm text-muted-foreground/60">Using bundled defaults — upload to override</p>
+      )}
+      <div className="space-y-2">
+        {items.map((it, idx) => (
+          <div key={idx} className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 p-2">
+            <GripVertical className="size-4 shrink-0 text-muted-foreground/40" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={it.url} alt={it.label || "ingredient"} className="size-16 shrink-0 rounded bg-muted object-cover" />
+            <div className="min-w-0 flex-1">
+              <Input value={it.label} onChange={(e) => setLabel(idx, e.target.value)} placeholder="Label (e.g. Amber)…" className="h-7 text-xs" />
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button type="button" variant="ghost" size="icon" className="size-7" onClick={() => move(idx, -1)} disabled={idx === 0}>↑</Button>
+              <Button type="button" variant="ghost" size="icon" className="size-7" onClick={() => move(idx, 1)} disabled={idx === items.length - 1}>↓</Button>
+              <Button type="button" variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => remove(idx)}>
+                <Trash2 className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Draft hook: load a content section into local state ─────────────────────
 
 function useSectionDraft<T extends Record<string, unknown>>(section: string, defaults: T) {
@@ -238,6 +337,7 @@ const SURFACES: { key: Surface; label: string; icon: React.ComponentType<{ class
   { key: "shop", label: "Shop", icon: ShoppingBag },
   { key: "story", label: "Our Story", icon: BookOpen },
   { key: "featured", label: "Featured", icon: Star },
+  { key: "landing", label: "Landing", icon: Droplets },
   { key: "banners", label: "Banners", icon: Layers },
 ];
 
@@ -248,6 +348,7 @@ export default function ContentPage() {
   const home = useSectionDraft<HomeHero>("home_hero", HOME_HERO_DEFAULTS);
   const shop = useSectionDraft<ShopCover>("shop_cover", SHOP_COVER_DEFAULTS);
   const story = useSectionDraft<OurStory>("our_story", OUR_STORY_DEFAULTS);
+  const landing = useSectionDraft<LandingImagery>("landing_imagery", LANDING_IMAGERY_DEFAULTS);
 
   const products = trpc.catalog.listProducts.useQuery({ status: "active", limit: 100 });
   const allProducts = (products.data ?? []) as unknown as ProductLite[];
@@ -383,6 +484,16 @@ export default function ContentPage() {
           )}
 
           {surface === "featured" && <FeaturedPicker />}
+
+          {surface === "landing" && (
+            <div className="space-y-4">
+              <IngredientImageManager
+                items={landing.draft.ingredients ?? []}
+                onChange={(ingredients) => landing.setDraft((d) => ({ ...d, ingredients }))}
+              />
+              <SaveBar onSave={landing.persist} saving={landing.saving} dirty />
+            </div>
+          )}
 
           {surface === "banners" && (
             <div className="space-y-6">

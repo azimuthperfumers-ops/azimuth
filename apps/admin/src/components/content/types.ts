@@ -76,4 +76,21 @@ export const OUR_STORY_DEFAULTS: OurStory = {
   ].join("\n\n"),
 };
 
-export type Surface = "theme" | "home" | "shop" | "story" | "featured" | "banners";
+// Landing imagery — the real ingredient/mood photos drifting in the landing
+// "small batch" CTA. Bundled webp defaults live in the storefront; leaving this
+// empty falls back to them. Uploading here overrides the whole set.
+export type IngredientImage = { url: string; label: string };
+export type LandingImagery = { ingredients: IngredientImage[] };
+export const LANDING_IMAGERY_DEFAULTS: LandingImagery = {
+  ingredients: [
+    { url: "/ingredients/amber.webp", label: "Amber" },
+    { url: "/ingredients/rose.webp", label: "Rose" },
+    { url: "/ingredients/citrus.webp", label: "Citrus" },
+    { url: "/ingredients/patchouli.webp", label: "Patchouli" },
+    { url: "/ingredients/lavender.webp", label: "Lavender" },
+    { url: "/ingredients/smoke.webp", label: "Smoke" },
+    { url: "/ingredients/strawberry.webp", label: "Berry" },
+  ],
+};
+
+export type Surface = "theme" | "home" | "shop" | "story" | "featured" | "landing" | "banners";
