@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, ShoppingBag, X } from "lucide-react";
+import { ChevronRight, Menu, ShoppingBag, X } from "lucide-react";
 
 import { useCartCount } from "@/hooks/use-cart";
 import { authClient } from "@/lib/auth-client";
@@ -59,8 +59,12 @@ export function SiteHeader() {
           >
             {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>
-          <Link href="/shop" className="hidden text-foreground transition-colors hover:text-primary sm:inline">
+          <Link
+            href="/shop"
+            className="group hidden items-center gap-1.5 rounded-full bg-primary py-2 pr-3 pl-4 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md sm:inline-flex"
+          >
             Shop
+            <ChevronRight className="nudge-x size-4 stroke-[2.5] transition-transform group-hover:translate-x-0.5" />
           </Link>
           <Link href="/our-story" className="hidden text-foreground transition-colors hover:text-primary sm:inline">
             Our Story
