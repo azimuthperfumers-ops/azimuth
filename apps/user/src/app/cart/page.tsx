@@ -497,7 +497,7 @@ function OrderSummary({
       <div className="px-6 pb-6">
         <button
           className="w-full bg-foreground py-4 text-[11px] font-bold tracking-[0.26em] text-background uppercase transition-all hover:opacity-85"
-          onClick={() => session ? router.push("/checkout") : router.push("/account")}
+          onClick={() => session ? router.push("/checkout") : router.push(`/account?next=${encodeURIComponent("/checkout")}`)}
         >
           Proceed to checkout
         </button>

@@ -5,11 +5,16 @@ import { useRouter } from "expo-router";
 import Svg, { Path } from "react-native-svg";
 
 import { authClient } from "@/lib/auth-client";
+import { authErrorMessage } from "@/lib/auth-errors";
 import { Fonts } from "@/constants/theme";
 import { Logo } from "@/components/logo";
 
 type Mode = "sign-in" | "sign-up";
-type AuthView = "credentials" | "verify-email" | "forgot" | "reset";
+type AuthView = "credentials" | "check-email" | "forgot" | "reset";
+
+// After the customer taps the verification link (opens in browser), the server
+// verifies and redirects here — deep-links back into the app.
+const VERIFY_CALLBACK = "azimuth://";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -58,45 +63,34 @@ export default function SignInScreen() {
     setLoading(true);
     const { error: err } =
       mode === "sign-up"
-        ? await authClient.signUp.email({ email, password, name })
+        ? await authClient.signUp.email({ email, password, name, callbackURL: VERIFY_CALLBACK })
         : await authClient.signIn.email({ email, password });
     setLoading(false);
     if (!err) {
       if (mode === "sign-up") {
-        // Locked until email verified — server has already emailed the OTP
-        toView("verify-email");
-        setNotice("We've emailed you a 6-digit verification code.");
+        // Locked until email verified — server has emailed a verification link
+        toView("check-email");
+        setNotice("We've emailed you a verification link. Tap it to activate your account.");
         return;
       }
       router.back();
       return;
     }
-    // Unverified account — server auto-sends a fresh OTP with this response
+    // Unverified account — the sign-in attempt above already made the SERVER
+    // re-send the verification link (gated behind a valid password). The client
+    // never asks the server to send mail directly.
     if (err.status === 403 || err.code === "EMAIL_NOT_VERIFIED") {
-      toView("verify-email");
-      setNotice("Verify your email to continue — code sent.");
+      toView("check-email");
+      setNotice("Please verify your email — we've re-sent the link.");
       return;
     }
-    setError(err.message ?? "Something went wrong");
+    setError(authErrorMessage(err));
   }
 
-  async function handleVerify() {
+  async function handleResendReset() {
     setError(null);
-    if (otp.trim().length !== 6) { setError("Enter the 6-digit code"); return; }
-    setLoading(true);
-    const { error: err } = await authClient.emailOtp.verifyEmail({ email, otp: otp.trim() });
-    setLoading(false);
-    if (err) { setError(err.message ?? "Invalid code"); return; }
-    router.back();
-  }
-
-  async function handleResend(type: "email-verification" | "forget-password") {
-    setError(null);
-    const { error: err } =
-      type === "email-verification"
-        ? await authClient.emailOtp.sendVerificationOtp({ email, type })
-        : await authClient.forgetPassword.emailOtp({ email });
-    if (err) { setError(err.message ?? "Could not send code"); return; }
+    const { error: err } = await authClient.forgetPassword.emailOtp({ email });
+    if (err) { setError(authErrorMessage(err, "Could not send code")); return; }
     setNotice("Code sent.");
   }
 
@@ -106,7 +100,7 @@ export default function SignInScreen() {
     setLoading(true);
     const { error: err } = await authClient.forgetPassword.emailOtp({ email });
     setLoading(false);
-    if (err) { setError(err.message ?? "Could not send code"); return; }
+    if (err) { setError(authErrorMessage(err, "Could not send code")); return; }
     toView("reset");
     setNotice("Reset code sent to your email.");
   }
@@ -118,7 +112,7 @@ export default function SignInScreen() {
     setLoading(true);
     const { error: err } = await authClient.emailOtp.resetPassword({ email, otp: otp.trim(), password });
     setLoading(false);
-    if (err) { setError(err.message ?? "Could not reset password"); return; }
+    if (err) { setError(authErrorMessage(err, "Could not reset password")); return; }
     setPassword("");
     setMode("sign-in");
     toView("credentials");
@@ -130,7 +124,7 @@ export default function SignInScreen() {
     setGoogleLoading(true);
     const { error: err } = await authClient.signIn.social({ provider: "google" });
     setGoogleLoading(false);
-    if (err) { setError(err.message ?? "Google sign-in failed"); return; }
+    if (err) { setError(authErrorMessage(err, "Google sign-in failed")); return; }
     router.back();
   }
 
@@ -158,53 +152,26 @@ export default function SignInScreen() {
           className="text-[40px] leading-none tracking-tight text-[#1B1611] mb-2"
           style={{ fontFamily: Fonts.serifItalic }}
         >
-          {view === "verify-email" ? "Verify email"
+          {view === "check-email" ? "Check your email"
             : view === "forgot" ? "Forgot password"
             : view === "reset" ? "Reset password"
             : mode === "sign-in" ? "Sign in" : "Create account"}
         </Text>
         <Text className="text-[14px] text-[#57493A] mb-8 leading-relaxed">
-          {view === "verify-email" ? `Enter the 6-digit code we sent to ${email}.`
+          {view === "check-email" ? `We've sent a verification link to ${email}. Tap it to activate your account, then return here to sign in.`
             : view === "forgot" ? "We'll email you a code to reset your password."
             : view === "reset" ? `Code sent to ${email}. Choose a new password.`
             : mode === "sign-in" ? "Welcome back to Azimuth Perfumers." : "Join us for slow perfumery, composed in small batches."}
         </Text>
 
-        {view === "verify-email" && (
+        {view === "check-email" && (
           <>
-            <View className="mb-8">
-              <Text className="text-[10px] font-semibold tracking-[0.18em] text-[#57493A] uppercase mb-2">
-                Verification code
-              </Text>
-              <TextInput
-                className="border-b-2 border-[#1B1611] text-[16px] text-[#1B1611] pb-2"
-                placeholder="000000"
-                placeholderTextColor="#8A7A63"
-                keyboardType="number-pad"
-                maxLength={6}
-                value={otp}
-                onChangeText={setOtp}
-                selectionColor="#9A5B2B"
-              />
-            </View>
-            <Pressable
-              className="h-14 items-center justify-center bg-[#1B1611] active:opacity-70 mb-4"
-              style={{ opacity: otp.trim().length === 6 && !loading ? 1 : 0.4 }}
-              disabled={otp.trim().length !== 6 || loading}
-              onPress={handleVerify}
-            >
-              {loading ? <ActivityIndicator color="white" /> : (
-                <Text className="text-white text-[11px] font-semibold tracking-[0.3em] uppercase">Verify email</Text>
-              )}
+            <Text className="text-[12px] text-[#57493A]/70 mb-4 leading-relaxed">
+              Didn&apos;t get it? Sign in again with your password — we&apos;ll re-send the link.
+            </Text>
+            <Pressable className="h-11 justify-center" onPress={() => toView("credentials")}>
+              <Text className="text-[11px] text-[#57493A] tracking-wide">Back to sign in</Text>
             </Pressable>
-            <View className="flex-row justify-between">
-              <Pressable className="h-11 justify-center" onPress={() => handleResend("email-verification")}>
-                <Text className="text-[11px] text-[#57493A] tracking-wide">Resend code</Text>
-              </Pressable>
-              <Pressable className="h-11 justify-center" onPress={() => toView("credentials")}>
-                <Text className="text-[11px] text-[#57493A] tracking-wide">Back</Text>
-              </Pressable>
-            </View>
           </>
         )}
 
@@ -284,7 +251,7 @@ export default function SignInScreen() {
               )}
             </Pressable>
             <View className="flex-row justify-between">
-              <Pressable className="h-11 justify-center" onPress={() => handleResend("forget-password")}>
+              <Pressable className="h-11 justify-center" onPress={handleResendReset}>
                 <Text className="text-[11px] text-[#57493A] tracking-wide">Resend code</Text>
               </Pressable>
               <Pressable className="h-11 justify-center" onPress={() => toView("credentials")}>

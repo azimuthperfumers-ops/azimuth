@@ -5,6 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { schema } from "@azimuth/db";
 import { alertAdminNewTicket } from "@azimuth/comms";
 import { advanceOrderStatus } from "../repositories/order.repository";
+import { createWalletRepository } from "../repositories/wallet.repository";
 import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import { router } from "../trpc";
 import { orderQueue } from "../lib/order-queue";
@@ -34,17 +35,19 @@ export const ticketRouter = router({
       z.object({
         subject: z.string().min(5).max(200),
         message: z.string().min(10),
-        type: z.enum(["general", "return", "exchange", "refund", "damaged", "other"]).default("general"),
+        type: z.enum(["general", "refund", "damaged", "other"]).default("general"),
         orderId: z.string().uuid().optional(),
         attachmentUrls: z.array(z.string().url()).max(5).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const PHOTO_REQUIRED = new Set(["return", "exchange", "damaged"]);
-      if (PHOTO_REQUIRED.has(input.type) && (!input.attachmentUrls || input.attachmentUrls.length === 0)) {
+      // Refund policy: no returns/exchanges. Refund only with proof — a photo to
+      // compare against the courier's delivery (POD) image, or an unpacking video.
+      const PROOF_REQUIRED = new Set(["refund", "damaged"]);
+      if (PROOF_REQUIRED.has(input.type) && (!input.attachmentUrls || input.attachmentUrls.length === 0)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "At least one photo is required for return, exchange, and damaged item requests.",
+          message: "Proof is required for refund and damaged item requests — attach photos of the parcel or an unpacking video.",
         });
       }
 
@@ -84,6 +87,7 @@ export const ticketRouter = router({
       });
 
       await alertAdminNewTicket({
+        ticketId: ticket.id,
         ticketNumber: ticket.ticketNumber,
         type: input.type,
         subject: input.subject,
@@ -116,6 +120,9 @@ export const ticketRouter = router({
               razorpayPaymentId: true,
               waybill: true,
               shippingAddress: true,
+              // Courier's proof-of-delivery image — admin compares it against the
+              // customer's uploaded photos/video before approving a refund.
+              podImageUrl: true,
             },
           },
           user: { columns: { name: true, email: true } },
@@ -244,16 +251,17 @@ export const ticketRouter = router({
       return { ok: true };
     }),
 
-  // ── Admin: take action (refund / return / exchange / close) ───────────────
+  // ── Admin: take action (refund / close / reopen) ───────────────────────────
+  // No returns/exchanges — refund-only policy, granted after verifying proof.
 
   adminAction: adminProcedure
     .input(
       z.object({
         ticketId: z.string().uuid(),
-        action: z.enum(["refund", "return", "exchange", "close", "reopen"]),
+        action: z.enum(["refund", "close", "reopen"]),
         note: z.string().optional(),
-        returnReason: z.string().optional(),
-        pickupDate: z.string().optional(),
+        // Where a refund goes: bank/card (Razorpay) or in-app wallet.
+        refundDestination: z.enum(["razorpay", "wallet"]).default("razorpay"),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -275,11 +283,41 @@ export const ticketRouter = router({
 
       if (input.action === "refund") {
         if (!order) throw new TRPCError({ code: "BAD_REQUEST", message: "No order linked to ticket" });
-        if (!order.razorpayPaymentId) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "No Razorpay payment ID on order" });
-        }
 
         const amountPaise = Math.round(Number(order.total) * 100);
+        // Wallet-paid orders can only be refunded to the wallet.
+        const destination = order.paymentMethod === "wallet" ? "wallet" : input.refundDestination;
+
+        // ── Refund to wallet — instant store credit ──────────────────────────
+        if (destination === "wallet") {
+          await createWalletRepository(ctx.db).record({
+            userId: order.userId,
+            amount: Number(order.total),
+            type: "refund_credit",
+            refType: "order",
+            refId: order.id,
+            note: input.note ?? `Refund for order ${order.orderNumber}`,
+            actorId: adminId,
+            idempotent: true,
+          });
+          await ctx.db.update(schema.orders).set({ refundMethod: "wallet" }).where(eq(schema.orders.id, order.id));
+          await advanceOrderStatus(ctx.db, order.id, "refunded", adminId, `Refunded ₹${Number(order.total)} to wallet. ${input.note ?? ""}`.trim());
+          await ctx.db.insert(schema.ticketActions).values({
+            ticketId: ticket.id, adminId, actionType: "refund_initiated",
+            metadata: { destination: "wallet", amountPaise },
+          });
+          await ctx.db.update(schema.tickets).set({ status: "awaiting_user", updatedAt: new Date() }).where(eq(schema.tickets.id, ticket.id));
+          await ctx.db.insert(schema.ticketMessages).values({
+            ticketId: ticket.id, senderId: adminId, senderRole: "admin",
+            content: input.note ?? `We've refunded ₹${Number(order.total)} to your Azimuth wallet.`,
+          });
+          return { ok: true, detail: `Refunded ₹${Number(order.total)} to wallet` };
+        }
+
+        // ── Refund to bank (Razorpay) ────────────────────────────────────────
+        if (!order.razorpayPaymentId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "No Razorpay payment on order — refund to wallet instead." });
+        }
         const payload = {
           type: "initiate_refund" as const,
           orderId: order.id,
@@ -300,12 +338,13 @@ export const ticketRouter = router({
           .update(schema.backgroundJobs)
           .set({ bullmqJobId: bullJob.id?.toString() })
           .where(eq(schema.backgroundJobs.id, dbJob.id));
+        await ctx.db.update(schema.orders).set({ refundMethod: "razorpay" }).where(eq(schema.orders.id, order.id));
 
         await ctx.db.insert(schema.ticketActions).values({
           ticketId: ticket.id,
           adminId,
           actionType: "refund_initiated",
-          metadata: { dbJobId: dbJob.id, amountPaise },
+          metadata: { dbJobId: dbJob.id, amountPaise, destination: "razorpay" },
         });
 
         await ctx.db.update(schema.tickets)
@@ -320,62 +359,6 @@ export const ticketRouter = router({
         }
 
         return { ok: true, detail: `Refund ₹${Number(order.total)} queued — processing in background` };
-      }
-
-      // ── Return or Exchange ────────────────────────────────────────────────
-
-      if (input.action === "return" || input.action === "exchange") {
-        if (!order) throw new TRPCError({ code: "BAD_REQUEST", message: "No order linked to ticket" });
-
-        const shippingAddr = order.shippingAddress as {
-          fullName?: string; phone?: string;
-          line1?: string; line2?: string | null;
-          city?: string; state?: string; pincode?: string;
-        };
-
-        if (!shippingAddr.pincode || !shippingAddr.city || !shippingAddr.line1) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Order has incomplete shipping address" });
-        }
-
-        const jobType = input.action === "exchange" ? "exchange_shipment" : "return_shipment";
-        const payload = {
-          type: "return_shipment" as const,
-          orderId: order.id,
-          ticketId: ticket.id,
-          action: input.action as "return" | "exchange",
-          originalOrderNumber: order.orderNumber,
-          customerName: shippingAddr.fullName ?? ticket.user?.name ?? "Customer",
-          customerPhone: shippingAddr.phone ?? ticket.user?.phone ?? "",
-          pickupAddress: {
-            line1: shippingAddr.line1!,
-            line2: shippingAddr.line2,
-            city: shippingAddr.city!,
-            state: shippingAddr.state ?? "",
-            pincode: shippingAddr.pincode!,
-          },
-          returnReason: input.returnReason ?? "Customer requested return",
-          adminId,
-          pickupDate: input.pickupDate,
-        };
-
-        const [dbJob] = await ctx.db
-          .insert(schema.backgroundJobs)
-          .values({ type: jobType, status: "pending", payload, orderId: order.id, ticketId: ticket.id })
-          .returning({ id: schema.backgroundJobs.id });
-
-        if (!dbJob) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-        const bullJob = await orderQueue.add("return_shipment", { ...payload, dbJobId: dbJob.id });
-        await ctx.db
-          .update(schema.backgroundJobs)
-          .set({ bullmqJobId: bullJob.id?.toString() })
-          .where(eq(schema.backgroundJobs.id, dbJob.id));
-
-        await ctx.db.update(schema.tickets)
-          .set({ status: "awaiting_user", updatedAt: new Date() })
-          .where(eq(schema.tickets.id, ticket.id));
-
-        return { ok: true, detail: `${input.action === "exchange" ? "Exchange" : "Return"} pickup queued — processing in background` };
       }
 
       // ── Close ─────────────────────────────────────────────────────────────

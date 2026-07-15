@@ -51,65 +51,34 @@ export type ShippingRateResult = {
   estimatedDays: number | null;
 };
 
-export type CreateReturnShipmentInput = {
-  originalOrderNumber: string;
-  customerName: string;
-  customerPhone: string;
-  pickupAddress: {
-    line1: string;
-    line2?: string | null;
-    city: string;
-    state: string;
-    pincode: string;
-  };
-  returnReason: string;
-  weightGrams: number;
-  lengthCm: number;
-  widthCm: number;
-  heightCm: number;
-  pickupDate?: string;
-};
-
-export type ExchangeShipmentResult = {
-  status: "created" | "failed";
-  errorMessage?: string;
-  returnOrderId?: number;
-  forwardOrderId?: number;
-  returnShipmentId?: number;
-  forwardShipmentId?: number;
-  returnAwb?: string;
-  forwardAwb?: string;
-};
-
 // ── Interface ─────────────────────────────────────────────────────────────────
+// Forward shipping only — refund-only policy, no reverse pickups or exchanges.
 
 export interface ILogisticsService {
   checkServiceability(pincode: string): Promise<ServiceabilityResult>;
   getShippingRate(destPincode: string, weightGrams: number): Promise<ShippingRateResult>;
   createShipment(input: CreateShipmentInput): Promise<ShipmentResult>;
   trackShipment(waybill: string): Promise<TrackingResult>;
-  createReturnShipment(input: CreateReturnShipmentInput): Promise<ShipmentResult>;
-  createExchangeShipment(input: CreateReturnShipmentInput & { items: { name: string; sku: string; units: number; price: number }[] }): Promise<ExchangeShipmentResult>;
   cancelShipment(waybill: string): Promise<{ cancelled: boolean; message?: string }>;
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────────
+// No silent fallback: a misconfigured provider must fail the call (and the boot
+// check in each app), never fake waybills.
 
-import { StubLogisticsProvider } from "./providers/stub.provider";
 import { ShiprocketProvider } from "./providers/shiprocket.provider";
 import { env } from "../env";
 
 export function createLogisticsService(): ILogisticsService {
   const provider = env.LOGISTICS_PROVIDER;
 
-  if (provider === "shiprocket") {
-    if (!env.SHIPROCKET_EMAIL || !env.SHIPROCKET_PASSWORD) {
-      console.warn("[logistics] SHIPROCKET_EMAIL or SHIPROCKET_PASSWORD not set — using stub");
-      return new StubLogisticsProvider();
-    }
-    return new ShiprocketProvider();
+  if (provider !== "shiprocket") {
+    throw new Error(
+      `[logistics] unknown LOGISTICS_PROVIDER="${provider}" — only "shiprocket" is supported`,
+    );
   }
-
-  console.warn(`[logistics] unknown LOGISTICS_PROVIDER="${provider}" — using stub`);
-  return new StubLogisticsProvider();
+  if (!env.SHIPROCKET_EMAIL || !env.SHIPROCKET_PASSWORD) {
+    throw new Error("[logistics] SHIPROCKET_EMAIL / SHIPROCKET_PASSWORD not set");
+  }
+  return new ShiprocketProvider();
 }

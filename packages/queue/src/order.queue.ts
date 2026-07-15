@@ -48,34 +48,12 @@ export type ExpirePendingPaymentsJob = {
   type: "expire_pending_payments";
 };
 
-export type ReturnShipmentJob = {
-  type: "return_shipment";
-  dbJobId?: string;
-  orderId: string;
-  ticketId: string;
-  action: "return" | "exchange";
-  originalOrderNumber: string;
-  customerName: string;
-  customerPhone: string;
-  pickupAddress: {
-    line1: string;
-    line2?: string | null;
-    city: string;
-    state: string;
-    pincode: string;
-  };
-  returnReason: string;
-  adminId: string;
-  pickupDate?: string;
-};
-
 export type OrderJobData =
   | PaymentCapturedJob
   | PaymentFailedJob
   | BookShipmentJob
   | InitiateRefundJob
   | CancelShipmentJob
-  | ReturnShipmentJob
   | ExpirePendingPaymentsJob;
 
 export const orderQueue = new Queue<OrderJobData>("order-events", {

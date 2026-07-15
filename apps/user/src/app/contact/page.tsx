@@ -54,7 +54,7 @@ export default function ContactPage() {
               <div>
                 <div className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground/60 uppercase">Email</div>
                 <div className="font-heading mt-2 text-[26px] text-foreground group-hover:text-primary">{EMAIL}</div>
-                <div className="mt-1 text-[13px] text-muted-foreground">For orders, returns & wholesale</div>
+                <div className="mt-1 text-[13px] text-muted-foreground">For orders, refunds & wholesale</div>
               </div>
             </a>
 

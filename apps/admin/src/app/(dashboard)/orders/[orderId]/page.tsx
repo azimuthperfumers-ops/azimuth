@@ -40,7 +40,6 @@ const ORDER_STATUSES = [
   "picked_up", "out_for_delivery", "delivery_attempted",
   "shipped", "delivered", "cancelled", "refunded",
   "rto_initiated", "rto_delivered",
-  "return_requested", "return_approved", "exchange_requested",
 ] as const;
 
 type OrderStatus = (typeof ORDER_STATUSES)[number];
@@ -59,9 +58,6 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   refunded: "Refunded",
   rto_initiated: "RTO initiated",
   rto_delivered: "RTO delivered",
-  return_requested: "Return requested",
-  return_approved: "Return approved",
-  exchange_requested: "Exchange requested",
 };
 
 const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive" | "outline"> = {
@@ -78,20 +74,17 @@ const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive
   refunded: "outline",
   rto_initiated: "destructive",
   rto_delivered: "outline",
-  return_requested: "outline",
-  return_approved: "secondary",
-  exchange_requested: "outline",
 };
 
 // ─── Update status dialog ─────────────────────────────────────────────────────
 
-const PAID_STATUSES: OrderStatus[] = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted", "return_requested", "return_approved"];
+const PAID_STATUSES: OrderStatus[] = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted"];
 const REFUND_TRIGGERS: OrderStatus[] = ["cancelled", "rto_delivered"];
 
 // Statuses an admin can manually set — excludes system/payment/courier-driven states
 const ADMIN_SETTABLE_STATUSES: OrderStatus[] = [
   "processing", "picked_up", "out_for_delivery", "delivery_attempted",
-  "shipped", "delivered", "cancelled", "return_approved", "rto_delivered",
+  "shipped", "delivered", "cancelled", "rto_delivered",
 ];
 
 function UpdateStatusDialog({

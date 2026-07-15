@@ -18,6 +18,7 @@ import { settingsRouter } from "./settings.router";
 import { contentRouter } from "./content.router";
 import { jobRouter } from "./job.router";
 import { ratingRouter } from "./rating.router";
+import { walletRouter } from "./wallet.router";
 
 export const appRouter = router({
   analytics: analyticsRouter,
@@ -39,6 +40,7 @@ export const appRouter = router({
   content: contentRouter,
   job: jobRouter,
   rating: ratingRouter,
+  wallet: walletRouter,
 });
 
 export type AppRouter = typeof appRouter;

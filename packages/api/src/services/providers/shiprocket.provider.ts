@@ -16,8 +16,6 @@ import type {
   CreateShipmentInput,
   ShipmentResult,
   TrackingResult,
-  CreateReturnShipmentInput,
-  ExchangeShipmentResult,
 } from "../logistics.service";
 import { env } from "../../env";
 
@@ -110,17 +108,31 @@ export class ShiprocketProvider implements ILogisticsService {
   private readonly warehouseCity: string;
   private readonly warehouseState: string;
   private readonly warehouseAddress: string;
-  private readonly locationId: string | undefined;
 
   constructor() {
-    this.pickupLocation = env.SHIPROCKET_PICKUP_LOCATION ?? "Primary";
+    // No placeholder defaults: a missing warehouse field would silently mis-serve
+    // serviceability/rates. assertCriticalEnv catches this at boot; this guard
+    // covers any other entry point.
+    const required = {
+      SHIPROCKET_PICKUP_LOCATION: env.SHIPROCKET_PICKUP_LOCATION,
+      SHIPROCKET_WAREHOUSE_PINCODE: env.SHIPROCKET_WAREHOUSE_PINCODE,
+      SHIPROCKET_WAREHOUSE_PHONE: env.SHIPROCKET_WAREHOUSE_PHONE,
+      SHIPROCKET_WAREHOUSE_CITY: env.SHIPROCKET_WAREHOUSE_CITY,
+      SHIPROCKET_WAREHOUSE_STATE: env.SHIPROCKET_WAREHOUSE_STATE,
+      SHIPROCKET_WAREHOUSE_ADDRESS: env.SHIPROCKET_WAREHOUSE_ADDRESS,
+    };
+    const missing = Object.entries(required).filter(([, v]) => !v).map(([k]) => k);
+    if (missing.length > 0) {
+      throw new Error(`[shiprocket] missing env: ${missing.join(", ")}`);
+    }
+
+    this.pickupLocation = env.SHIPROCKET_PICKUP_LOCATION!;
     this.channelId = env.SHIPROCKET_CHANNEL_ID;
-    this.warehousePincode = env.SHIPROCKET_WAREHOUSE_PINCODE ?? "110001";
-    this.warehousePhone = env.SHIPROCKET_WAREHOUSE_PHONE ?? "";
-    this.warehouseCity = env.SHIPROCKET_WAREHOUSE_CITY ?? "";
-    this.warehouseState = env.SHIPROCKET_WAREHOUSE_STATE ?? "";
-    this.warehouseAddress = env.SHIPROCKET_WAREHOUSE_ADDRESS ?? "Warehouse";
-    this.locationId = env.SHIPROCKET_LOCATION_ID;
+    this.warehousePincode = env.SHIPROCKET_WAREHOUSE_PINCODE!;
+    this.warehousePhone = env.SHIPROCKET_WAREHOUSE_PHONE!;
+    this.warehouseCity = env.SHIPROCKET_WAREHOUSE_CITY!;
+    this.warehouseState = env.SHIPROCKET_WAREHOUSE_STATE!;
+    this.warehouseAddress = env.SHIPROCKET_WAREHOUSE_ADDRESS!;
   }
 
   async checkServiceability(pincode: string): Promise<ServiceabilityResult> {
@@ -391,223 +403,6 @@ export class ShiprocketProvider implements ILogisticsService {
     } catch (err) {
       console.error("[shiprocket] track error:", err);
       return { waybill, status: "Unknown", statusDetail: "Tracking unavailable" };
-    }
-  }
-
-  // Assign a reverse AWB to a return shipment. Shiprocket's create/return response
-  // does NOT include an AWB — "Generate AWB for Return Shipment" is a separate call:
-  // /courier/assign/awb with is_return: 1.
-  private async assignReturnAwb(shipmentId: number): Promise<{ awb?: string; error?: string }> {
-    type AwbResp = {
-      awb_assign_status?: number;
-      response?: {
-        data?: { awb_code?: string; awb_assign_error?: string };
-        error?: string;
-      };
-      message?: string | null;
-    };
-    try {
-      const resp = await apiPost<AwbResp>("/courier/assign/awb", {
-        shipment_id: shipmentId,
-        is_return: 1,
-      });
-      const awb = resp.response?.data?.awb_code;
-      if (awb) return { awb };
-      return {
-        error:
-          resp.response?.data?.awb_assign_error ||
-          resp.message ||
-          resp.response?.error ||
-          `Return AWB assignment failed (status=${resp.awb_assign_status ?? "?"})`,
-      };
-    } catch (err) {
-      return { error: String(err) };
-    }
-  }
-
-  async createReturnShipment(input: CreateReturnShipmentInput): Promise<ShipmentResult> {
-    type ReturnResp = {
-      order_id?: number;
-      shipment_id?: number;
-      return_order_id?: number;
-      return_shipment_id?: number;
-      awb_code?: string;
-      status?: string;
-      message?: string | string[];
-    };
-
-    try {
-      const resp = await apiPost<ReturnResp>("/orders/create/return", {
-        order_id: `RET-${input.originalOrderNumber}`,
-        order_date: new Date().toISOString().split("T")[0],
-        channel_id: this.channelId,
-        pickup_customer_name: input.customerName,
-        pickup_phone: input.customerPhone,
-        pickup_address: input.pickupAddress.line1 + (input.pickupAddress.line2 ? ` ${input.pickupAddress.line2}` : ""),
-        pickup_city: input.pickupAddress.city,
-        pickup_state: input.pickupAddress.state,
-        pickup_country: "India",
-        pickup_pincode: input.pickupAddress.pincode,
-        shipping_customer_name: "Azimuth Perfumers",
-        shipping_phone: this.warehousePhone,
-        shipping_address: this.warehouseAddress,
-        shipping_city: this.warehouseCity,
-        shipping_state: this.warehouseState,
-        shipping_country: "India",
-        shipping_pincode: this.warehousePincode,
-        payment_method: "Prepaid",
-        sub_total: 0,
-        return_reason: input.returnReason,
-        pickup_date: input.pickupDate ?? new Date(Date.now() + 86400000).toISOString().split("T")[0],
-        order_items: [{ name: "Return", sku: `RET-${input.originalOrderNumber}`, units: 1, selling_price: 0 }],
-        length: input.lengthCm,
-        breadth: input.widthCm,
-        height: input.heightCm,
-        weight: input.weightGrams / 1000,
-      });
-
-      // Some responses include the AWB directly; otherwise assign it in a second
-      // step against the return shipment_id (the documented flow).
-      let awb = resp.awb_code;
-      if (!awb) {
-        const shipmentId = resp.shipment_id ?? resp.return_shipment_id;
-        if (!shipmentId) {
-          const msg = Array.isArray(resp.message)
-            ? resp.message.join(", ")
-            : (resp.message ?? "Return order creation failed — no shipment_id in response");
-          return { waybill: "", trackingUrl: "", status: "failed", errorMessage: msg };
-        }
-        const assigned = await this.assignReturnAwb(shipmentId);
-        if (!assigned.awb) {
-          return { waybill: "", trackingUrl: "", status: "failed", errorMessage: `Return created (shipment ${shipmentId}) but AWB assignment failed: ${assigned.error}` };
-        }
-        awb = assigned.awb;
-      }
-
-      return {
-        waybill: awb,
-        trackingUrl: `https://shiprocket.co/tracking/${awb}`,
-        status: "created",
-      };
-    } catch (err) {
-      return { waybill: "", trackingUrl: "", status: "failed", errorMessage: String(err) };
-    }
-  }
-
-  async createExchangeShipment(
-    input: CreateReturnShipmentInput & { items: { name: string; sku: string; units: number; price: number }[] },
-  ): Promise<ExchangeShipmentResult> {
-    type ExchangeResp = {
-      success?: boolean;
-      message?: string | string[];
-      data?: {
-        forward_orders?: { order_id?: number; shipment_id?: number; awb_code?: string };
-        return_orders?: { order_id?: number; shipment_id?: number; awb_code?: string };
-      };
-    };
-
-    try {
-      const nameParts = input.customerName.trim().split(" ");
-      const firstName = nameParts[0] ?? input.customerName;
-      const lastName = nameParts.slice(1).join(" ") || firstName;
-
-      const addr = input.pickupAddress.line1 + (input.pickupAddress.line2 ? ` ${input.pickupAddress.line2}` : "");
-      const weightKg = input.weightGrams / 1000;
-      const subTotal = input.items.reduce((s, i) => s + i.price * i.units, 0);
-
-      const resp = await apiPost<ExchangeResp>("/orders/create/exchange", {
-        exchange_order_id: `EX-${input.originalOrderNumber}`,
-        return_order_id: `R-${input.originalOrderNumber}`,
-        order_date: new Date().toISOString().split("T")[0],
-        channel_id: this.channelId,
-        payment_method: "prepaid",
-
-        // pickup = collect return from customer
-        buyer_pickup_first_name: firstName,
-        buyer_pickup_last_name: lastName,
-        buyer_pickup_address: addr,
-        buyer_pickup_address_2: "",
-        buyer_pickup_city: input.pickupAddress.city,
-        buyer_pickup_state: input.pickupAddress.state,
-        buyer_pickup_country: "India",
-        buyer_pickup_pincode: input.pickupAddress.pincode,
-        buyer_pickup_phone: input.customerPhone,
-
-        // shipping = deliver replacement to customer (same address)
-        buyer_shipping_first_name: firstName,
-        buyer_shipping_last_name: lastName,
-        buyer_shipping_address: addr,
-        buyer_shipping_address_2: "",
-        buyer_shipping_city: input.pickupAddress.city,
-        buyer_shipping_state: input.pickupAddress.state,
-        buyer_shipping_country: "India",
-        buyer_shipping_pincode: input.pickupAddress.pincode,
-        buyer_shipping_phone: input.customerPhone,
-
-        seller_pickup_location_id: this.locationId,
-        seller_shipping_location_id: this.locationId,
-
-        sub_total: subTotal,
-        total_discount: 0,
-        return_reason: "29",
-        qc_check: "true",
-
-        order_items: input.items.map((i) => ({
-          name: i.name,
-          sku: i.sku,
-          units: i.units,
-          selling_price: String(i.price),
-          hsn: 3303,
-          exchange_item_name: i.name,
-          exchange_item_sku: i.sku,
-        })),
-
-        // return package dims
-        return_length: input.lengthCm,
-        return_breadth: input.widthCm,
-        return_height: input.heightCm,
-        return_weight: weightKg,
-
-        // exchange (forward) package dims — same product
-        exchange_length: input.lengthCm,
-        exchange_breadth: input.widthCm,
-        exchange_height: input.heightCm,
-        exchange_weight: weightKg,
-      });
-
-      if (!resp.success || !resp.data) {
-        const msg = Array.isArray(resp.message) ? resp.message.join(", ") : (resp.message ?? "Exchange shipment failed");
-        return { status: "failed", errorMessage: msg };
-      }
-
-      let returnAwb = resp.data.return_orders?.awb_code?.trim() || undefined;
-      const forwardAwb = resp.data.forward_orders?.awb_code?.trim() || undefined;
-
-      // Exchange creation may not assign the reverse AWB inline — without it the
-      // return-leg webhook can never be matched to the order, so assign explicitly.
-      const returnShipId = resp.data.return_orders?.shipment_id;
-      if (!returnAwb && returnShipId) {
-        const assigned = await this.assignReturnAwb(returnShipId);
-        if (assigned.awb) {
-          returnAwb = assigned.awb;
-        } else {
-          console.warn(`[shiprocket] exchange return AWB assignment failed for shipment ${returnShipId}: ${assigned.error}`);
-        }
-      }
-      if (returnAwb) console.log(`[shiprocket] exchange return AWB=${returnAwb}`);
-      if (forwardAwb) console.log(`[shiprocket] exchange forward AWB=${forwardAwb}`);
-
-      return {
-        status: "created",
-        returnOrderId: resp.data.return_orders?.order_id,
-        forwardOrderId: resp.data.forward_orders?.order_id,
-        returnShipmentId: resp.data.return_orders?.shipment_id,
-        forwardShipmentId: resp.data.forward_orders?.shipment_id,
-        returnAwb,
-        forwardAwb,
-      };
-    } catch (err) {
-      return { status: "failed", errorMessage: String(err) };
     }
   }
 

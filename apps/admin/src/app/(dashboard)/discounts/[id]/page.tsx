@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { ArrowLeft, Calendar, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Calendar, Check, Lock, Pencil, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -27,15 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { formatInr } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -281,12 +274,37 @@ function VariantTable({ discountId, discountProducts, onDone }: VariantTableProp
     }
   }
 
+  // Select / clear every selectable (non-locked, not-already-in-state) variant of a product
+  function toggleProduct(p: AllProduct, select: boolean) {
+    for (const v of p.variants) {
+      if (lockedByOther.has(v.id)) continue; // owned by another discount — skip
+      const linked = isLinked(v.id);
+      if (select && !linked) handleToggle(p.id, v.id, `${p.name} · ${variantLabel(v)}`, true);
+      else if (!select && linked) handleToggle(p.id, v.id, `${p.name} · ${variantLabel(v)}`, false);
+    }
+  }
+
   const products: AllProduct[] = (allProducts.data as AllProduct[] | undefined) ?? [];
+
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const withVariants = products.filter((p) => p.variants.length > 0);
+    if (!q) return withVariants;
+    return withVariants.filter(
+      (p) => p.name.toLowerCase().includes(q) || (p.category?.name ?? "").toLowerCase().includes(q),
+    );
+  }, [products, query]);
+
+  const selectedCount = useMemo(
+    () => products.reduce((n, p) => n + p.variants.filter((v) => isLinked(v.id)).length, 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [products, optimistic, linkedVariants.data, discountProducts],
+  );
 
   if (allProducts.isLoading || linkedVariants.isLoading) {
     return <p className="text-body-sm text-muted-foreground px-6 py-4">Loading products…</p>;
   }
-
   if (allProducts.isError) {
     return (
       <p className="text-body-sm text-destructive px-6 py-4">
@@ -294,7 +312,6 @@ function VariantTable({ discountId, discountProducts, onDone }: VariantTableProp
       </p>
     );
   }
-
   if (products.length === 0) {
     return (
       <p className="text-body-sm text-muted-foreground px-6 py-8 text-center">
@@ -304,87 +321,110 @@ function VariantTable({ discountId, discountProducts, onDone }: VariantTableProp
   }
 
   return (
-    <div className="rounded-md border border-border overflow-hidden mx-6 mb-6">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-12 pl-4" />
-            <TableHead>Product · Variant</TableHead>
-            <TableHead>Size</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead>Price</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {products.map((p) => {
-            const variants = p.variants.length > 0 ? p.variants : [];
-            if (variants.length === 0) return null;
+    <div className="px-6 pb-6 space-y-4">
+      {/* Search + selected count */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/50" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search products or categories…"
+            className="pl-9"
+          />
+        </div>
+        <Badge variant={selectedCount > 0 ? "default" : "secondary"} className="ml-auto tabular-nums">
+          {selectedCount} variant{selectedCount === 1 ? "" : "s"} selected
+        </Badge>
+      </div>
 
-            return variants.map((v, vi) => {
-              const linked = isLinked(v.id);
-              const locked = !linked && lockedByOther.has(v.id);
-              const lockedByName = lockedByOther.get(v.id);
-              const label = `${p.name} · ${variantLabel(v)}`;
-              return (
-                <TableRow
-                  key={v.id}
-                  className={`select-none ${locked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"} ${linked ? "bg-primary/5 hover:bg-primary/10" : ""}`}
-                  onClick={() => !locked && handleToggle(p.id, v.id, label, !linked)}
-                >
-                  <TableCell className="pl-4" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={linked}
-                      disabled={locked}
-                      onCheckedChange={(val) => !locked && handleToggle(p.id, v.id, label, !!val)}
-                      aria-label={`Toggle ${label}`}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {vi === 0 ? (
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="size-2.5 rounded-full shrink-0 ring-1 ring-foreground/10"
-                          style={{ backgroundColor: p.themeColor ?? "oklch(0.875 0.032 75)" }}
-                        />
-                        <span className={`font-medium ${linked ? "text-primary" : ""}`}>
-                          {p.name}
-                        </span>
-                        <span className="text-muted-foreground/50">·</span>
-                        <span className="text-body-sm text-muted-foreground">
-                          {variantLabel(v)}
+      {filtered.length === 0 ? (
+        <p className="text-body-sm text-muted-foreground py-10 text-center">
+          No products match “{query}”.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((p) => {
+            const selectable = p.variants.filter((v) => !lockedByOther.has(v.id));
+            const linkedCount = p.variants.filter((v) => isLinked(v.id)).length;
+            const allSelected = selectable.length > 0 && selectable.every((v) => isLinked(v.id));
+            const someSelected = linkedCount > 0 && !allSelected;
+
+            return (
+              <div
+                key={p.id}
+                className={cn(
+                  "rounded-lg border transition-colors",
+                  linkedCount > 0 ? "border-primary/30 bg-primary/[0.03]" : "border-border",
+                )}
+              >
+                {/* Product header */}
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-border/60">
+                  <Checkbox
+                    checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                    disabled={selectable.length === 0}
+                    onCheckedChange={(val) => toggleProduct(p, !!val && !allSelected)}
+                    aria-label={`Toggle all variants of ${p.name}`}
+                  />
+                  <span
+                    className="size-2.5 rounded-full shrink-0 ring-1 ring-foreground/10"
+                    style={{ backgroundColor: p.themeColor ?? "oklch(0.875 0.032 75)" }}
+                  />
+                  <span className="font-medium">{p.name}</span>
+                  {p.category?.name && (
+                    <Badge variant="outline" className="text-[10px] font-normal">
+                      {p.category.name}
+                    </Badge>
+                  )}
+                  <span className="ml-auto text-body-sm text-muted-foreground tabular-nums">
+                    {linkedCount}/{p.variants.length}
+                  </span>
+                </div>
+
+                {/* Variant chips */}
+                <div className="flex flex-wrap gap-2 p-3">
+                  {p.variants.map((v) => {
+                    const linked = isLinked(v.id);
+                    const locked = !linked && lockedByOther.has(v.id);
+                    const lockedByName = lockedByOther.get(v.id);
+                    const label = `${p.name} · ${variantLabel(v)}`;
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        disabled={locked}
+                        title={locked ? `Already in “${lockedByName}”` : undefined}
+                        onClick={() => handleToggle(p.id, v.id, label, !linked)}
+                        className={cn(
+                          "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-body-sm transition-all select-none",
+                          linked
+                            ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                            : locked
+                              ? "border-border bg-muted/50 text-muted-foreground/50 cursor-not-allowed"
+                              : "border-border hover:border-foreground/40 hover:bg-muted/40 cursor-pointer",
+                        )}
+                      >
+                        {linked ? (
+                          <Check className="size-3.5 shrink-0" />
+                        ) : locked ? (
+                          <Lock className="size-3 shrink-0" />
+                        ) : null}
+                        <span className="font-medium">{variantLabel(v)}</span>
+                        <span className={cn("tabular-nums", linked ? "opacity-80" : "text-muted-foreground")}>
+                          {formatInr(Number(v.mrp))}
                         </span>
                         {locked && (
-                          <Badge variant="outline" className="text-[10px] ml-1">
-                            in {lockedByName}
-                          </Badge>
+                          <span className="text-[10px] opacity-70 max-w-24 truncate">in {lockedByName}</span>
                         )}
-                      </span>
-                    ) : (
-                      <span className="pl-5 text-body-sm text-muted-foreground">
-                        {variantLabel(v)}
-                        {locked && (
-                          <Badge variant="outline" className="text-[10px] ml-2">
-                            in {lockedByName}
-                          </Badge>
-                        )}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-body-sm text-muted-foreground">
-                    {v.sizeMl ? `${v.sizeMl} ml` : "—"}
-                  </TableCell>
-                  <TableCell className="text-body-sm text-muted-foreground">
-                    {vi === 0 ? (p.category?.name ?? "—") : ""}
-                  </TableCell>
-                  <TableCell className="text-body-sm tabular-nums">
-                    {formatInr(Number(v.mrp))}
-                  </TableCell>
-                </TableRow>
-              );
-            });
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
           })}
-        </TableBody>
-      </Table>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { adminProcedure } from "../middleware/auth.middleware";
 import { router } from "../trpc";
 import { orderQueue } from "../lib/order-queue";
 
-const JOB_TYPES = ["book_shipment", "cancel_shipment", "initiate_refund", "return_shipment", "exchange_shipment"] as const;
+const JOB_TYPES = ["book_shipment", "cancel_shipment", "initiate_refund"] as const;
 const JOB_STATUSES = ["pending", "running", "completed", "failed"] as const;
 
 export const jobRouter = router({
@@ -86,7 +86,7 @@ export const jobRouter = router({
       }
 
       const payload = job.payload as Record<string, unknown>;
-      const jobName = (job.type === "exchange_shipment" ? "return_shipment" : job.type) as string;
+      const jobName = job.type as string;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const bullJob = await (orderQueue as any).add(jobName, { ...payload, dbJobId: job.id });

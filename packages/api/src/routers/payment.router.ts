@@ -41,6 +41,21 @@ export const paymentRouter = router({
       const amountPaise = Math.round(Number(order.total) * 100);
 
       const svc = getRazorpay();
+
+      // Retry-safe: reuse the Razorpay order already attached to this order.
+      // Creating a fresh one would overwrite razorpayOrderId, and a payment made
+      // against the earlier checkout modal (stale tab) would no longer match any
+      // order in the payment.captured webhook — money captured, order failed.
+      if (order.razorpayOrderId) {
+        return {
+          razorpayOrderId: order.razorpayOrderId,
+          amount: amountPaise,
+          currency: "INR",
+          keyId: svc.getKeyId(),
+          orderNumber: order.orderNumber,
+        };
+      }
+
       const rzpOrder = await svc.createOrder({
         amountPaise,
         currency: "INR",
@@ -134,14 +149,29 @@ export const paymentRouter = router({
 
       // Cart is only cleared once payment is actually verified — not at order
       // creation — so a cancelled/failed/interrupted payment leaves the cart intact.
-      await ctx.db
-        .delete(schema.cartItems)
-        .where(
-          and(
-            eq(schema.cartItems.userId, ctx.session.user.id),
-            eq(schema.cartItems.isSaved, false),
-          ),
-        );
+      // Only the ordered variants are removed: items added after checkout survive.
+      // The payment.captured worker also runs this as a safety net for customers
+      // who never return to the page (e.g. mobile UPI app-switch).
+      const orderedVariantIds = (
+        await ctx.db.query.orderItems.findMany({
+          where: eq(schema.orderItems.orderId, input.orderId),
+          columns: { variantId: true },
+        })
+      )
+        .map((i) => i.variantId)
+        .filter((v): v is string => v != null);
+
+      if (orderedVariantIds.length > 0) {
+        await ctx.db
+          .delete(schema.cartItems)
+          .where(
+            and(
+              eq(schema.cartItems.userId, ctx.session.user.id),
+              inArray(schema.cartItems.variantId, orderedVariantIds),
+              eq(schema.cartItems.isSaved, false),
+            ),
+          );
+      }
 
       return { success: true };
     }),

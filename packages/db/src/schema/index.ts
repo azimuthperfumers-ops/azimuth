@@ -10,3 +10,4 @@ export * from "./settings";
 export * from "./site-content";
 export * from "./jobs";
 export * from "./ratings";
+export * from "./wallet";

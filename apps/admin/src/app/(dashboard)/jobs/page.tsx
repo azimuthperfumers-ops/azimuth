@@ -43,8 +43,6 @@ const TYPE_LABEL: Record<string, string> = {
   book_shipment: "Book Shipment",
   cancel_shipment: "Cancel Shipment",
   initiate_refund: "Initiate Refund",
-  return_shipment: "Return",
-  exchange_shipment: "Exchange",
 };
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -65,8 +63,6 @@ const JOB_TYPES = [
   "book_shipment",
   "cancel_shipment",
   "initiate_refund",
-  "return_shipment",
-  "exchange_shipment",
 ] as const;
 
 const JOB_STATUSES = ["pending", "running", "completed", "failed"] as const;

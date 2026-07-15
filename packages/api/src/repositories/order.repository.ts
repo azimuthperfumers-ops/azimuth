@@ -50,6 +50,7 @@ export type CreateOrderInput = {
   total: number;
   couponId?: string | null;
   couponCode?: string | null;
+  paymentMethod?: "razorpay" | "wallet";
 };
 
 function isUniqueViolation(err: unknown): boolean {
@@ -89,6 +90,7 @@ async function createOrderOnce(db: Database, input: CreateOrderInput) {
         total: String(input.total),
         couponId: input.couponId ?? null,
         couponCode: input.couponCode ?? null,
+        paymentMethod: input.paymentMethod ?? "razorpay",
         status: "pending_payment",
       })
       .returning();
@@ -147,7 +149,7 @@ async function createOrderOnce(db: Database, input: CreateOrderInput) {
 
 import { createInventoryRepository } from "./inventory.repository";
 
-export type OrderStockMovement = "sale" | "return" | "replacement_in" | "replacement_out";
+export type OrderStockMovement = "sale" | "return";
 
 export async function applyOrderStockMovement(
   db: Database,
@@ -160,7 +162,7 @@ export async function applyOrderStockMovement(
   });
 
   const inventory = createInventoryRepository(db);
-  const outbound = movement === "sale" || movement === "replacement_out";
+  const outbound = movement === "sale";
 
   for (const item of items) {
     if (!item.variantId) continue; // variant deleted — snapshot order, nothing to move
@@ -199,23 +201,6 @@ export async function applyOrderStockMovement(
       );
     }
   }
-}
-
-// True if a ticket on this order has an exchange scheduled — used to decide whether a
-// received return restocks for refund or is held for a replacement dispatch.
-export async function orderHasScheduledExchange(db: Database, orderId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: schema.ticketActions.id })
-    .from(schema.ticketActions)
-    .innerJoin(schema.tickets, eq(schema.ticketActions.ticketId, schema.tickets.id))
-    .where(
-      and(
-        eq(schema.ticketActions.actionType, "exchange_scheduled"),
-        eq(schema.tickets.orderId, orderId),
-      ),
-    )
-    .limit(1);
-  return !!row;
 }
 
 // ── Advance order status ──────────────────────────────────────────────────────

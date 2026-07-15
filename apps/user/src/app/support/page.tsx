@@ -15,8 +15,6 @@ import { useTicketUpload } from "@/hooks/use-ticket-upload";
 
 const TYPE_LABEL: Record<string, string> = {
   general: "General",
-  return: "Return",
-  exchange: "Exchange",
   refund: "Refund",
   damaged: "Damaged item",
   other: "Other",
@@ -40,7 +38,9 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ── New ticket form ───────────────────────────────────────────────────────────
 
-const PHOTO_REQUIRED_TYPES = new Set(["return", "exchange", "damaged"]);
+// Refund policy: proof required — parcel photos (compared against the courier's
+// delivery image) or an unpacking video. No returns/exchanges.
+const PROOF_REQUIRED_TYPES = new Set(["refund", "damaged"]);
 
 function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => void; prefilledOrderId?: string }) {
   const router = useRouter();
@@ -52,9 +52,9 @@ function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => v
 
   const { data: orders } = trpc.order.list.useQuery();
   const utils = trpc.useUtils();
-  const { uploads, uploading, addFiles, remove, urls } = useTicketUpload();
+  const { uploads, uploading, rejected, addFiles, remove, urls } = useTicketUpload();
 
-  const photoRequired = PHOTO_REQUIRED_TYPES.has(type);
+  const proofRequired = PROOF_REQUIRED_TYPES.has(type);
 
   const create = trpc.ticket.create.useMutation({
     onSuccess: async (ticket) => {
@@ -69,6 +69,17 @@ function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => v
       <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/50">
         New support request
       </p>
+
+      <div className="border border-border/60 bg-muted/40 px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-1">
+          Refund policy
+        </p>
+        <p className="text-[12.5px] text-muted-foreground leading-relaxed">
+          We don&apos;t offer returns or exchanges. We issue a refund only if you raise a
+          request within <span className="font-semibold text-foreground">3 days of delivery</span> for a
+          genuine concern such as a damaged or wrong item, backed by photos or an unpacking video.
+        </p>
+      </div>
 
       <div className="space-y-1.5">
         <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -130,8 +141,8 @@ function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => v
       {/* Attachments */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${photoRequired ? "text-foreground" : "text-muted-foreground"}`}>
-            Photos{photoRequired ? <span className="text-red-500 ml-0.5">*</span> : " (optional)"}
+          <label className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${proofRequired ? "text-foreground" : "text-muted-foreground"}`}>
+            Photos / video{proofRequired ? <span className="text-red-500 ml-0.5">*</span> : " (optional)"}
             <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground/60">max 5</span>
           </label>
           {uploads.length < 5 && (
@@ -142,21 +153,25 @@ function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => v
               className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold tracking-[0.12em] uppercase text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
             >
               <ImagePlus className="size-3.5" />
-              {uploading ? "Uploading…" : "Add image"}
+              {uploading ? "Uploading…" : "Add file"}
             </button>
           )}
         </div>
 
-        {photoRequired && uploads.length === 0 && (
+        {proofRequired && uploads.length === 0 && (
           <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2">
-            Photos are required for {TYPE_LABEL[type]?.toLowerCase()} requests. Please attach at least one image showing the item.
+            Proof is required for {TYPE_LABEL[type]?.toLowerCase()} requests — attach photos of the parcel as received, or a continuous unpacking video.
           </p>
+        )}
+
+        {rejected && (
+          <p className="text-[11px] text-red-600 bg-red-50 border border-red-200 px-3 py-2">{rejected}</p>
         )}
 
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           multiple
           className="hidden"
           onChange={(e) => addFiles(e.target.files)}
@@ -165,12 +180,16 @@ function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => v
           <div className="flex flex-wrap gap-2">
             {uploads.map((u) => (
               <div key={u.url} className="relative group">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={u.url}
-                  alt={u.name}
-                  className="size-16 object-cover border border-border"
-                />
+                {u.kind === "video" ? (
+                  <video src={u.url} className="size-16 object-cover border border-border" muted />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={u.url}
+                    alt={u.name}
+                    className="size-16 object-cover border border-border"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => remove(u.url)}
@@ -197,7 +216,7 @@ function NewTicketForm({ onDone, prefilledOrderId }: { onDone: (id: string) => v
         disabled={
           !subject.trim() ||
           !message.trim() ||
-          (photoRequired && urls.length === 0) ||
+          (proofRequired && urls.length === 0) ||
           create.isPending ||
           uploading
         }

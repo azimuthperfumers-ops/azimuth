@@ -20,7 +20,6 @@ import {
 import {
   TrendingDown,
   RefreshCw,
-  ArrowLeftRight,
   IndianRupee,
   Truck,
   ShoppingBag,
@@ -297,7 +296,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Summary KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard label="Revenue" value={s ? formatInr(s.totalRevenue) : "—"} icon={IndianRupee} />
         <StatCard label="Orders" value={s ? String(s.totalOrders) : "—"} icon={ShoppingBag} />
         <StatCard
@@ -319,12 +318,6 @@ export default function AnalyticsPage() {
           sub={s ? `${s.returnCount} RTO orders` : undefined}
           icon={TrendingDown}
           warn={(s?.returnRate ?? 0) > 0.1}
-        />
-        <StatCard
-          label="Exchange rate"
-          value={s ? pct(s.exchangeRate) : "—"}
-          sub={s ? `${s.exchangeCount} exchanges` : undefined}
-          icon={ArrowLeftRight}
         />
       </div>
 
@@ -484,8 +477,8 @@ export default function AnalyticsPage() {
         </CardContent>
       </Card>
 
-      {/* Returns + Exchanges + Refunds */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Returns + Refunds */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Returns (RTO) */}
         <Card>
@@ -525,59 +518,6 @@ export default function AnalyticsPage() {
                       <span className="text-sm font-semibold tabular-nums">{formatInr(Number(o.total))}</span>
                       <Badge variant="destructive" className="text-[10px]">
                         {o.status === "rto_delivered" ? "RTO delivered" : "RTO initiated"}
-                      </Badge>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Exchanges */}
-        <Card>
-          <CardHeader className="px-5 pt-5 pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <ArrowLeftRight className="size-4 text-muted-foreground" />
-                Exchanges
-              </CardTitle>
-              {data && (
-                <Badge variant={data.exchanges.length > 0 ? "secondary" : "outline"}>
-                  {data.exchanges.length}
-                </Badge>
-              )}
-            </div>
-            {s && s.exchangeCount > 0 && (
-              <p className="text-xs text-muted-foreground">{pct(s.exchangeRate)} exchange rate</p>
-            )}
-          </CardHeader>
-          <CardContent className="px-5 pb-3">
-            {(!data || data.exchanges.length === 0) ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No exchanges in this period.</p>
-            ) : (
-              <div className="divide-y divide-border/50">
-                {data.exchanges.map((t) => (
-                  <button
-                    key={t.id}
-                    className="w-full flex items-start justify-between py-2.5 text-left hover:text-primary transition-colors gap-2"
-                    onClick={() => router.push(`/support/${t.id}`)}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{t.subject}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {t.user?.name ?? t.user?.email ?? "—"}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">{fmtDate(t.createdAt)}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      {t.order && (
-                        <span className="text-xs font-mono text-muted-foreground">{t.order.orderNumber}</span>
-                      )}
-                      <Badge variant="outline" className={`text-[10px] capitalize ${
-                        t.status === "open" || t.status === "awaiting_admin" ? "border-destructive/40 text-destructive" : ""
-                      }`}>
-                        {t.status.replace("_", " ")}
                       </Badge>
                     </div>
                   </button>

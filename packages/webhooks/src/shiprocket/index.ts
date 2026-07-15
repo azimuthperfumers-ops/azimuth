@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
 import { isAlreadyProcessed, recordEvent } from "../utils.js";
 import { processForwardShipment } from "./forward.js";
-import { processReturnShipment } from "./return.js";
 import type { ShiprocketBody } from "./forward.js";
 
 export async function shiprocketWebhookHandler(req: Request, res: Response) {
@@ -29,9 +28,15 @@ export async function shiprocketWebhookHandler(req: Request, res: Response) {
     const awb = String(body.awb ?? "").trim();
     if (!awb) continue;
 
-    const isReturn = body.is_return === 1;
+    // Refund-only policy: we never create reverse-pickup shipments, so is_return=1
+    // events can't match any order — skip them.
+    if (body.is_return === 1) {
+      console.log(`[webhook:shiprocket] ignoring return-leg event for AWB=${awb} (no returns policy)`);
+      continue;
+    }
+
     const status = (body.current_status ?? "").trim().toUpperCase();
-    const eventId = `shiprocket:${isReturn ? "return:" : ""}${awb}:${status}`;
+    const eventId = `shiprocket:${awb}:${status}`;
 
     if (await isAlreadyProcessed(eventId)) {
       console.log(`[webhook:shiprocket] already processed ${eventId}`);
@@ -39,11 +44,7 @@ export async function shiprocketWebhookHandler(req: Request, res: Response) {
     }
 
     try {
-      if (isReturn) {
-        await processReturnShipment(body);
-      } else {
-        await processForwardShipment(body);
-      }
+      await processForwardShipment(body);
       // Record only after successful processing — a failed handler must leave the
       // idempotency key unconsumed so Shiprocket's retry re-delivers the event.
       await recordEvent("shiprocket", eventId, status || "unknown", body as Record<string, unknown>);

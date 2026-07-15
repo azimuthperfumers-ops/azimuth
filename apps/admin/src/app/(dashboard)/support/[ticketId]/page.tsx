@@ -48,37 +48,31 @@ function ActionDialog({
   onOpenChange,
 }: {
   ticketId: string;
-  action: "refund" | "return" | "exchange" | "close";
+  action: "refund" | "close";
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
   const [note, setNote] = useState("");
-  const [returnReason, setReturnReason] = useState("Customer requested return");
-  const [pickupDate, setPickupDate] = useState("");
   const utils = trpc.useUtils();
-  const minDate = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
   const act = trpc.ticket.adminAction.useMutation({
     onSuccess: async (data) => {
       toast.success(data.detail);
       await utils.ticket.get.invalidate({ ticketId });
       onOpenChange(false);
-      setNote(""); setPickupDate("");
+      setNote("");
     },
     onError: (e) => toast.error(e.message),
   });
 
   const TITLE: Record<string, string> = {
     refund: "Process Refund",
-    return: "Schedule Return Pickup",
-    exchange: "Schedule Return + Exchange",
     close: "Close Ticket",
   };
 
   const DESC: Record<string, string> = {
-    refund: "Full refund via Razorpay. Order marked refunded. Cannot be undone.",
-    return: "Schedule Shiprocket reverse pickup from customer address.",
-    exchange: "Schedule reverse pickup. Ship replacement after receiving item.",
+    refund:
+      "Full refund via Razorpay. Verify proof first: compare the customer's photos with the courier's delivery image, or review the unpacking video. Cannot be undone.",
     close: "Mark ticket as closed. Customer can still email for help.",
   };
 
@@ -90,37 +84,6 @@ function ActionDialog({
         </DialogHeader>
 
         <p className="text-sm text-muted-foreground">{DESC[action]}</p>
-
-        {(action === "return" || action === "exchange") && (
-          <>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Preferred pickup date <span className="text-destructive">*</span>
-              </label>
-              <input
-                type="date"
-                value={pickupDate}
-                min={minDate}
-                onChange={(e) => setPickupDate(e.target.value)}
-                className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none"
-              />
-              <p className="text-[11px] text-muted-foreground/60">
-                Date when customer will be home for pickup. Sent to courier.
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Return reason (sent to courier)
-              </label>
-              <input
-                type="text"
-                value={returnReason}
-                onChange={(e) => setReturnReason(e.target.value)}
-                className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none"
-              />
-            </div>
-          </>
-        )}
 
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -138,11 +101,9 @@ function ActionDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
-            variant={action === "refund" || action === "return" || action === "exchange" ? "destructive" : "default"}
-            onClick={() =>
-              act.mutate({ ticketId, action, note: note || undefined, returnReason, pickupDate: pickupDate || undefined })
-            }
-            disabled={act.isPending || ((action === "return" || action === "exchange") && !pickupDate)}
+            variant={action === "refund" ? "destructive" : "default"}
+            onClick={() => act.mutate({ ticketId, action, note: note || undefined })}
+            disabled={act.isPending}
           >
             {act.isPending ? "Processing…" : TITLE[action]}
           </Button>
@@ -157,7 +118,7 @@ function ActionDialog({
 export default function AdminTicketPage({ params }: { params: Promise<{ ticketId: string }> }) {
   const { ticketId } = use(params);
   const [draft, setDraft] = useState("");
-  const [activeAction, setActiveAction] = useState<"refund" | "return" | "exchange" | "close" | "reopen" | null>(null);
+  const [activeAction, setActiveAction] = useState<"refund" | "close" | "reopen" | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
@@ -264,16 +225,25 @@ export default function AdminTicketPage({ params }: { params: Promise<{ ticketId
                     )}
                     {attachments.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
-                        {attachments.map((url) => (
-                          <a key={url} href={url} target="_blank" rel="noopener noreferrer">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                        {attachments.map((url) =>
+                          /\.(mp4|webm|mov|m4v|3gp|mkv|avi)$/i.test(url) ? (
+                            <video
+                              key={url}
                               src={url}
-                              alt="attachment"
-                              className="size-20 object-cover border border-border hover:opacity-80 transition-opacity"
+                              controls
+                              className="max-w-[240px] border border-border"
                             />
-                          </a>
-                        ))}
+                          ) : (
+                            <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={url}
+                                alt="attachment"
+                                className="size-20 object-cover border border-border hover:opacity-80 transition-opacity"
+                              />
+                            </a>
+                          ),
+                        )}
                       </div>
                     )}
                     <p className="text-[10px] text-muted-foreground/40 px-1">
@@ -377,6 +347,26 @@ export default function AdminTicketPage({ params }: { params: Promise<{ ticketId
             </div>
           )}
 
+          {/* Courier delivery proof — compare against customer's photos before refunding */}
+          {ticket.order?.podImageUrl && (
+            <div className="border border-border p-4 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">
+                Delivery proof (courier)
+              </p>
+              <a href={ticket.order.podImageUrl} target="_blank" rel="noopener noreferrer">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={ticket.order.podImageUrl}
+                  alt="Proof of delivery"
+                  className="w-full border border-border object-cover"
+                />
+              </a>
+              <p className="text-[11px] text-muted-foreground/60">
+                Compare with the customer&apos;s uploaded photos / unpacking video before approving a refund.
+              </p>
+            </div>
+          )}
+
           {/* Actions */}
           {!isClosed && (
             <div className="border border-border p-4 space-y-2">
@@ -385,32 +375,14 @@ export default function AdminTicketPage({ params }: { params: Promise<{ ticketId
               </p>
 
               {hasOrder && (
-                <>
-                  <Button
-                    className="w-full justify-start"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActiveAction("refund")}
-                  >
-                    Process refund
-                  </Button>
-                  <Button
-                    className="w-full justify-start"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActiveAction("return")}
-                  >
-                    Schedule return pickup
-                  </Button>
-                  <Button
-                    className="w-full justify-start"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActiveAction("exchange")}
-                  >
-                    Return + exchange
-                  </Button>
-                </>
+                <Button
+                  className="w-full justify-start"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveAction("refund")}
+                >
+                  Process refund
+                </Button>
               )}
 
               <Button

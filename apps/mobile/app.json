@@ -15,7 +15,13 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.azimuthperfumers"
+      "package": "com.azimuthperfumers.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.azimuthperfumers.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "web": {
       "output": "static",
@@ -38,6 +44,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5365ead2-7fe8-4fd8-8cdb-4f864af2e4f5"
+      }
     }
   }
 }

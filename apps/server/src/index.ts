@@ -1,5 +1,11 @@
 import "dotenv/config";
 
+import { assertCriticalEnv } from "@azimuth/api";
+
+// Payment + logistics envs must be complete before we accept a single request —
+// a misconfigured server must fail deploy, not quietly mis-serve checkout.
+assertCriticalEnv({ requireWebhookSecrets: true });
+
 import { app } from "./app";
 import { env } from "./lib/env";
 

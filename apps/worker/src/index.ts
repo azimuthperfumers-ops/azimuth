@@ -1,6 +1,10 @@
 import "dotenv/config";
 import http from "node:http";
+import { assertCriticalEnv } from "@azimuth/api";
 import { scheduleExpirePendingPayments, startOrderWorker } from "@azimuth/queue";
+
+// The worker books shipments and moves money — never start it half-configured.
+assertCriticalEnv();
 
 const worker = startOrderWorker();
 

@@ -40,11 +40,11 @@ export async function notifyOrderPlaced(
   if (mobile && env.MSG91_WA_TEMPLATE_ORDER_PLACED) {
     await fire(
       `wa:order_placed:${order.orderNumber}`,
-      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_ORDER_PLACED!, [
-        customer.name,
-        order.orderNumber,
-        order.totalInr,
-      ]),
+      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_ORDER_PLACED!, {
+        customer_name: customer.name,
+        order_number: order.orderNumber,
+        amount: order.totalInr,
+      }),
     );
   }
 }
@@ -57,55 +57,65 @@ export async function notifyRefundInitiated(
   if (mobile && env.MSG91_WA_TEMPLATE_REFUND) {
     await fire(
       `wa:refund:${order.orderNumber}`,
-      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_REFUND!, [
-        customer.name,
-        order.orderNumber,
-        order.totalInr,
-      ]),
+      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_REFUND!, {
+        customer_name: customer.name,
+        order_number: order.orderNumber,
+        amount: order.totalInr,
+      }),
     );
   }
 }
 
-// Delivery confirmation + rating nudge — {{3}} is a deep link straight to the
-// order page where the customer taps a star rating.
+// Delivery confirmation + rating nudge. The template carries a "Rate now" CTA
+// button with dynamic URL https://<user-app>/orders/{{1}} — we send the suffix
+// (order UUID + #rate), which deep-links to the rating section on the order page.
 export async function notifyOrderDelivered(
   customer: CustomerContact,
   order: OrderInfo,
 ): Promise<void> {
   const mobile = customer.phone ? toMobile(customer.phone) : null;
   if (mobile && env.MSG91_WA_TEMPLATE_ORDER_DELIVERED) {
-    const ratingUrl = order.orderId
-      ? `${env.USER_APP_URL}/orders/${order.orderId}`
-      : `${env.USER_APP_URL}/orders`;
     await fire(
       `wa:order_delivered:${order.orderNumber}`,
-      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_ORDER_DELIVERED!, [
-        customer.name,
-        order.orderNumber,
-        ratingUrl,
-      ]),
+      sendWhatsapp(
+        mobile,
+        env.MSG91_WA_TEMPLATE_ORDER_DELIVERED!,
+        {
+          customer_name: customer.name,
+          order_number: order.orderNumber,
+        },
+        { buttonUrlParam: order.orderId ? `${order.orderId}#rate` : "" },
+      ),
     );
   }
 }
 
-// Return/exchange pickup scheduled — courier will collect the item from the customer.
-export async function notifyReturnPickupScheduled(
-  customer: CustomerContact,
-  order: OrderInfo,
-): Promise<void> {
-  const mobile = customer.phone ? toMobile(customer.phone) : null;
-  if (mobile && env.MSG91_WA_TEMPLATE_RETURN_PICKUP) {
-    await fire(
-      `wa:return_pickup:${order.orderNumber}`,
-      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_RETURN_PICKUP!, [
-        customer.name,
-        order.orderNumber,
-      ]),
-    );
+// Email verification LINK — sent on signup. Customer clicks {{verify_url}} to
+// verify their email. better-auth awaits this in its background runner, so a
+// failure here never blocks the auth response; we swallow errors to be safe.
+export async function sendVerificationLink(email: string, name: string, url: string): Promise<void> {
+  const templateId = env.MSG91_EMAIL_TEMPLATE_VERIFY;
+  if (!templateId) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[comms] MSG91_EMAIL_TEMPLATE_VERIFY not set — verification email NOT sent");
+    } else {
+      console.warn(`[comms] MSG91_EMAIL_TEMPLATE_VERIFY not set — dev verify link for ${email}: ${url}`);
+    }
+    return;
   }
+  await fire(
+    `email:verify:${email}`,
+    sendEmail({
+      to: email,
+      name,
+      subject: "Verify your email — Azimuth Perfumers",
+      templateId,
+      vars: { customer_name: name, verify_url: url },
+    }),
+  );
 }
 
-// Auth OTP — email verification and password reset share one template ({{otp}}).
+// Auth OTP — password reset only ({{otp}}). Email verification uses the link above.
 // better-auth awaits this via its background runner, so failures here never
 // block the auth response; we still swallow errors to be safe.
 export async function sendEmailOtp(email: string, otp: string): Promise<void> {
@@ -123,7 +133,7 @@ export async function sendEmailOtp(email: string, otp: string): Promise<void> {
     sendEmail({
       to: email,
       name: email,
-      subject: "Your Azimuth Perfumers verification code",
+      subject: "Your Azimuth Perfumers password reset code",
       templateId,
       vars: { otp },
     }),
@@ -141,15 +151,24 @@ export async function sendNewProductCampaign(product: {
 
 // ── Admin alerts (WhatsApp) ───────────────────────────────────────────────────
 
+// Admin templates carry a "View order" / "View ticket" CTA button with dynamic URL
+// https://<admin-app>/orders/{{1}} (or /support/{{1}}) — we send the record UUID
+// as the button suffix.
+
 export async function alertAdminNewOrder(order: OrderInfo): Promise<void> {
   const adminWhatsapp = env.ADMIN_WHATSAPP;
   if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER) {
     await fire(
       `wa:admin:new_order:${order.orderNumber}`,
-      sendWhatsapp(adminWhatsapp, env.MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER!, [
-        order.orderNumber,
-        order.totalInr,
-      ]),
+      sendWhatsapp(
+        adminWhatsapp,
+        env.MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER!,
+        {
+          order_number: order.orderNumber,
+          amount: order.totalInr,
+        },
+        { buttonUrlParam: order.orderId ?? "" },
+      ),
     );
   }
 }
@@ -159,14 +178,20 @@ export async function alertAdminOrderDelivered(order: OrderInfo): Promise<void> 
   if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_ORDER_DELIVERED) {
     await fire(
       `wa:admin:order_delivered:${order.orderNumber}`,
-      sendWhatsapp(adminWhatsapp, env.MSG91_WA_TEMPLATE_ADMIN_ORDER_DELIVERED!, [
-        order.orderNumber,
-      ]),
+      sendWhatsapp(
+        adminWhatsapp,
+        env.MSG91_WA_TEMPLATE_ADMIN_ORDER_DELIVERED!,
+        {
+          order_number: order.orderNumber,
+        },
+        { buttonUrlParam: order.orderId ?? "" },
+      ),
     );
   }
 }
 
 export async function alertAdminNewTicket(ticket: {
+  ticketId: string;
   ticketNumber: string;
   type: string;
   subject: string;
@@ -175,11 +200,16 @@ export async function alertAdminNewTicket(ticket: {
   if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_NEW_TICKET) {
     await fire(
       `wa:admin:new_ticket:${ticket.ticketNumber}`,
-      sendWhatsapp(adminWhatsapp, env.MSG91_WA_TEMPLATE_ADMIN_NEW_TICKET!, [
-        ticket.ticketNumber,
-        ticket.type,
-        ticket.subject,
-      ]),
+      sendWhatsapp(
+        adminWhatsapp,
+        env.MSG91_WA_TEMPLATE_ADMIN_NEW_TICKET!,
+        {
+          ticket_id: ticket.ticketNumber,
+          ticket_type: ticket.type,
+          subject: ticket.subject,
+        },
+        { buttonUrlParam: ticket.ticketId },
+      ),
     );
   }
 }
@@ -205,18 +235,13 @@ export async function alertAdminDeliveryFailed(order: OrderInfo): Promise<void> 
   if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_DELIVERY_FAILED) {
     await fire(
       `wa:admin:delivery_failed:${order.orderNumber}`,
-      sendWhatsapp(adminWhatsapp, env.MSG91_WA_TEMPLATE_ADMIN_DELIVERY_FAILED!, [order.orderNumber]),
+      sendWhatsapp(
+        adminWhatsapp,
+        env.MSG91_WA_TEMPLATE_ADMIN_DELIVERY_FAILED!,
+        { order_number: order.orderNumber },
+        { buttonUrlParam: order.orderId ?? "" },
+      ),
     );
   }
 }
 
-export async function alertAdminExchangeReceived(order: OrderInfo): Promise<void> {
-  const adminWhatsapp = env.ADMIN_WHATSAPP;
-  const template = env.MSG91_WA_TEMPLATE_ADMIN_EXCHANGE_RECEIVED;
-  if (adminWhatsapp && template) {
-    await fire(
-      `wa:admin:exchange_received:${order.orderNumber}`,
-      sendWhatsapp(adminWhatsapp, template, [order.orderNumber]),
-    );
-  }
-}

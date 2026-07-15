@@ -9,7 +9,7 @@ const MENU = [
   { label: "Order History", sub: "Track and manage your orders", route: "/orders" as const },
   { label: "Wishlist", sub: "Fragrances you've saved", route: "/wishlist" as const },
   { label: "Addresses", sub: "Manage your delivery addresses", route: "/addresses" as const },
-  { label: "Support", sub: "Get help with returns, refunds & more", route: "/support/index" as const },
+  { label: "Support", sub: "Get help with refunds, orders & more", route: "/support/index" as const },
 ] as const;
 
 export default function AccountScreen() {

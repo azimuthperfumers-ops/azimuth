@@ -47,7 +47,14 @@ export const storageRouter = router({
     .input(
       z.object({
         filename: z.string().min(1),
-        contentType: z.string().min(1).refine((t) => t.startsWith("image/"), "Only image uploads allowed"),
+        // Images (parcel photos to compare against POD) or video (unpacking proof)
+        contentType: z
+          .string()
+          .min(1)
+          .refine(
+            (t) => t.startsWith("image/") || t.startsWith("video/"),
+            "Only image or video uploads allowed",
+          ),
       }),
     )
     .mutation(async ({ input }) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink, MapPin, Package } from "lucide-react";
@@ -75,10 +75,24 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
     onError: (e) => toast.error(e.message),
   });
 
+  // The rating section renders after order+ratings load, long after the browser's
+  // native #hash scroll on page load — scroll to it manually once it exists.
+  const rateSectionRef = useRef<HTMLElement | null>(null);
+  const showRating =
+    order?.status === "delivered" && !!ratings && ratings.products.length > 0;
+  useEffect(() => {
+    if (showRating && window.location.hash === "#rate") {
+      rateSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [showRating]);
+
   if (sessionLoading) return null;
 
   if (!session) {
-    router.replace("/account");
+    // Preserve the full destination (incl. #rate) so the WhatsApp rating link
+    // lands back here after sign-in.
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    router.replace(`/account?next=${encodeURIComponent(`/orders/${orderId}${hash}`)}`);
     return null;
   }
 
@@ -258,8 +272,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
           </section>
 
           {/* Rate your purchase — delivered orders only */}
-          {order.status === "delivered" && ratings && ratings.products.length > 0 && (
-            <section>
+          {showRating && (
+            <section id="rate" ref={rateSectionRef} className="scroll-mt-24">
               <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-muted-foreground/50 mb-4">
                 Rate your purchase
               </p>
@@ -357,7 +371,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
                 Need help with this order?
               </p>
               <p className="text-[13px] text-muted-foreground mt-0.5">
-                Returns, refunds, exchanges — raise a support request.
+                Damaged or wrong item? Raise a refund request with photos or an unpacking video.
               </p>
             </div>
             <Link

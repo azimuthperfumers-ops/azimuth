@@ -1,11 +1,20 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { authClient } from "@/lib/auth-client";
+import { authErrorMessage } from "@/lib/auth-errors";
 import { emailSignInSchema, emailSignUpSchema } from "@/lib/validation";
 import { cn } from "@/lib/utils";
+
+// Only allow same-site relative paths as post-login destinations — anything
+// else (absolute URLs, protocol-relative //host) would be an open redirect.
+function safeNextPath(next: string | undefined | null): string | undefined {
+  if (next && next.startsWith("/") && !next.startsWith("//")) return next;
+  return undefined;
+}
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
@@ -64,9 +73,10 @@ function SubmitBtn({ pending, label }: { pending: boolean; label: string }) {
 
 // ─── Email form ───────────────────────────────────────────────────────────────
 
-type View = "credentials" | "verify-email" | "forgot" | "reset";
+type View = "credentials" | "check-email" | "forgot" | "reset";
 
-function EmailAuthForm() {
+function EmailAuthForm({ next }: { next?: string }) {
+  const router = useRouter();
   const [view, setView] = useState<View>("credentials");
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [name, setName] = useState("");
@@ -101,44 +111,39 @@ function EmailAuthForm() {
     }
     setErrors({});
     setPending(true);
+    // Post-verify redirect: where the user was headed (rating link) or the account page
+    const callbackURL = next ?? "/account";
     const { error } =
       mode === "sign-up"
-        ? await authClient.signUp.email({ email, password, name })
+        ? await authClient.signUp.email({ email, password, name, callbackURL })
         : await authClient.signIn.email({ email, password });
     setPending(false);
     if (!error) {
       if (mode === "sign-up") {
-        // Account created but locked until the email is verified — OTP already sent
-        toView("verify-email");
-        toast.success("We've emailed you a verification code");
+        // Account created but locked until the email is verified — link emailed
+        toView("check-email");
+        toast.success("Check your email for a verification link");
+      } else if (next) {
+        // Signed in — return to where the user was headed (e.g. /orders/<id>#rate)
+        router.push(next);
       }
       return;
     }
-    // Unverified account — the server auto-sends a fresh OTP with this response
+    // Unverified account — the sign-in attempt above already made the SERVER
+    // re-send the verification link (it's gated behind a valid password). The
+    // client never asks the server to send mail directly, so this can't be used
+    // to blast verification emails at arbitrary addresses.
     if (error.status === 403 || error.code === "EMAIL_NOT_VERIFIED") {
-      toView("verify-email");
-      toast.info("Verify your email to continue — code sent");
+      toView("check-email");
+      toast.info("Please verify your email — we've re-sent the link.");
       return;
     }
-    toast.error(error.message ?? "Something went wrong");
+    toast.error(authErrorMessage(error));
   }
 
-  async function onVerify(e: FormEvent) {
-    e.preventDefault();
-    if (otp.trim().length !== 6) { setErrors({ otp: "Enter the 6-digit code" }); return; }
-    setPending(true);
-    const { error } = await authClient.emailOtp.verifyEmail({ email, otp: otp.trim() });
-    setPending(false);
-    if (error) { toast.error(error.message ?? "Invalid code"); return; }
-    toast.success("Email verified — welcome!");
-  }
-
-  async function resendOtp(type: "email-verification" | "forget-password") {
-    const { error } =
-      type === "email-verification"
-        ? await authClient.emailOtp.sendVerificationOtp({ email, type })
-        : await authClient.forgetPassword.emailOtp({ email });
-    if (error) toast.error(error.message ?? "Could not send code");
+  async function resendOtp() {
+    const { error } = await authClient.forgetPassword.emailOtp({ email });
+    if (error) toast.error(authErrorMessage(error, "Could not send code"));
     else toast.success("Code sent");
   }
 
@@ -148,7 +153,7 @@ function EmailAuthForm() {
     setPending(true);
     const { error } = await authClient.forgetPassword.emailOtp({ email });
     setPending(false);
-    if (error) { toast.error(error.message ?? "Could not send code"); return; }
+    if (error) { toast.error(authErrorMessage(error, "Could not send code")); return; }
     toView("reset");
     toast.success("Reset code sent to your email");
   }
@@ -162,30 +167,27 @@ function EmailAuthForm() {
     setPending(true);
     const { error } = await authClient.emailOtp.resetPassword({ email, otp: otp.trim(), password });
     setPending(false);
-    if (error) { toast.error(error.message ?? "Could not reset password"); return; }
+    if (error) { toast.error(authErrorMessage(error, "Could not reset password")); return; }
     setPassword("");
     setMode("sign-in");
     toView("credentials");
     toast.success("Password updated — sign in with your new password");
   }
 
-  if (view === "verify-email") {
+  if (view === "check-email") {
     return (
-      <form onSubmit={onVerify} className="space-y-4">
+      <div className="space-y-4">
         <p className="text-[13px] text-muted-foreground/70 leading-relaxed">
-          Enter the 6-digit code we sent to <span className="text-foreground font-medium">{email}</span>
+          We&apos;ve sent a verification link to <span className="text-foreground font-medium">{email}</span>.
+          Open it to activate your account, then come back and sign in.
         </p>
-        <Field label="Verification code" id="otp" value={otp} onChange={(v) => { setOtp(v); clearErr("otp"); }} placeholder="000000" error={errors.otp} />
-        <SubmitBtn pending={pending} label="Verify email" />
-        <div className="flex items-center justify-between text-[11px]">
-          <button type="button" onClick={() => resendOtp("email-verification")} className="text-muted-foreground/60 hover:text-foreground transition-colors">
-            Resend code
-          </button>
-          <button type="button" onClick={() => toView("credentials")} className="text-muted-foreground/60 hover:text-foreground transition-colors">
-            Back
-          </button>
-        </div>
-      </form>
+        <p className="text-[12px] text-muted-foreground/50 leading-relaxed">
+          Didn&apos;t get it? Sign in again with your password — we&apos;ll re-send the link.
+        </p>
+        <button type="button" onClick={() => toView("credentials")} className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors">
+          Back to sign in
+        </button>
+      </div>
     );
   }
 
@@ -214,7 +216,7 @@ function EmailAuthForm() {
         <Field label="New password" id="new-password" type="password" value={password} onChange={(v) => { setPassword(v); clearErr("password"); }} error={errors.password} />
         <SubmitBtn pending={pending} label="Reset password" />
         <div className="flex items-center justify-between text-[11px]">
-          <button type="button" onClick={() => resendOtp("forget-password")} className="text-muted-foreground/60 hover:text-foreground transition-colors">
+          <button type="button" onClick={resendOtp} className="text-muted-foreground/60 hover:text-foreground transition-colors">
             Resend code
           </button>
           <button type="button" onClick={() => toView("credentials")} className="text-muted-foreground/60 hover:text-foreground transition-colors">
@@ -251,7 +253,8 @@ function EmailAuthForm() {
 
 // ─── Auth card ────────────────────────────────────────────────────────────────
 
-export function AuthCard() {
+export function AuthCard({ next }: { next?: string }) {
+  const safeNext = safeNextPath(next);
   return (
     <div className="w-full max-w-[400px] border border-border bg-background px-8 py-10">
       {/* Header */}
@@ -270,7 +273,7 @@ export function AuthCard() {
       {/* Google */}
       <button
         type="button"
-        onClick={() => authClient.signIn.social({ provider: "google", callbackURL: window.location.origin + "/" })}
+        onClick={() => authClient.signIn.social({ provider: "google", callbackURL: window.location.origin + (safeNext ?? "/") })}
         className="flex w-full items-center justify-center gap-3 border border-border py-3 text-[11px] font-semibold tracking-[0.14em] uppercase text-foreground transition-colors hover:bg-muted"
       >
         <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
@@ -290,7 +293,7 @@ export function AuthCard() {
       </div>
 
       {/* Email form */}
-      <EmailAuthForm />
+      <EmailAuthForm next={safeNext} />
     </div>
   );
 }

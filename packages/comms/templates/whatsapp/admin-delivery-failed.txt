@@ -1,9 +1,18 @@
 Template name: azimuth_admin_delivery_failed
 Language: English
-Category: TRANSACTIONAL
+Category: Utility
+
+Header (Text):
+Azimuth Admin
 
 Body:
-[Azimuth Admin] Delivery failed for order *{{1}}*. Customer was unavailable. Delhivery will retry. No action needed unless it fails again.
+Delivery attempt failed for order {{order_number}} because the customer was unavailable at the address. The courier will automatically retry on the next working day. No action is needed unless the delivery fails again.
+
+Button (Call to Action):
+Type of Action: Visit website
+Button Text:    View order
+URL (dynamic):  https://admin.azimuth.net.in/orders/{{1}}
 
 Variables:
-{{1}} = order number
+{{order_number}} = order number (body)
+{{1}}            = button URL suffix — code sends the order UUID

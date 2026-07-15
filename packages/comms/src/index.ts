@@ -5,7 +5,7 @@ export {
   notifyOrderPlaced,
   notifyOrderDelivered,
   notifyRefundInitiated,
-  notifyReturnPickupScheduled,
+  sendVerificationLink,
   sendEmailOtp,
   sendNewProductCampaign,
   alertAdminNewOrder,
@@ -13,6 +13,5 @@ export {
   alertAdminNewTicket,
   alertAdminRefund,
   alertAdminDeliveryFailed,
-  alertAdminExchangeReceived,
 } from "./notify.js";
 export type { CustomerContact, OrderInfo } from "./notify.js";

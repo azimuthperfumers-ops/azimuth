@@ -80,6 +80,16 @@ export function createCouponService(db: Database) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "coupon has expired" });
       }
 
+      // Payment-method lock — coupon may be restricted to wallet or bank/card.
+      if (
+        input.paymentMethod &&
+        coupon.paymentMethod !== "any" &&
+        coupon.paymentMethod !== input.paymentMethod
+      ) {
+        const label = coupon.paymentMethod === "wallet" ? "wallet payments" : "card/bank payments";
+        throw new TRPCError({ code: "BAD_REQUEST", message: `This coupon is only valid for ${label}.` });
+      }
+
       const minCart = Number(coupon.minCartValue);
       if (input.cartTotal < minCart) {
         throw new TRPCError({

@@ -100,26 +100,6 @@ export const analyticsRouter = router({
         orderBy: desc(schema.orders.createdAt),
       });
 
-      // ── Exchanges (support tickets type=exchange) ──────────────────────────────
-      const exchanges = await db.query.tickets.findMany({
-        where: and(
-          gte(schema.tickets.createdAt, startDate),
-          lt(schema.tickets.createdAt, endDate),
-          eq(schema.tickets.type, "exchange"),
-        ),
-        columns: {
-          id: true,
-          subject: true,
-          status: true,
-          createdAt: true,
-        },
-        with: {
-          user: { columns: { name: true, email: true } },
-          order: { columns: { id: true, orderNumber: true, total: true } },
-        },
-        orderBy: desc(schema.tickets.createdAt),
-      });
-
       // ── Refunds ───────────────────────────────────────────────────────────────
       const refunds = await db.query.orders.findMany({
         where: and(
@@ -156,7 +136,6 @@ export const analyticsRouter = router({
       return {
         timeSeries,
         returns,
-        exchanges,
         refunds,
         periodDateFrom: startDate.toISOString().split("T")[0],
         periodDateTo: new Date(endDate.getTime() - 1).toISOString().split("T")[0],
@@ -167,10 +146,8 @@ export const analyticsRouter = router({
           totalShippingActual,
           totalShippingAbsorbed,
           returnCount: returns.length,
-          exchangeCount: exchanges.length,
           refundCount: refunds.length,
           returnRate: totalOrders > 0 ? returns.length / totalOrders : 0,
-          exchangeRate: totalOrders > 0 ? exchanges.length / totalOrders : 0,
           refundRate: totalOrders > 0 ? refunds.length / totalOrders : 0,
         },
       };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,14 @@ export default function FragranceNotesPage() {
     onSuccess: (n) => {
       toast.success(`"${n.name}" added`);
       setName("");
+      utils.catalog.listNotes.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteNote = trpc.catalog.deleteNote.useMutation({
+    onSuccess: () => {
+      toast.success("Note removed");
       utils.catalog.listNotes.invalidate();
     },
     onError: (e) => toast.error(e.message),
@@ -163,6 +171,7 @@ export default function FragranceNotesPage() {
                 <TableRow>
                   <TableHead className="pl-6">Name</TableHead>
                   <TableHead>Family</TableHead>
+                  <TableHead className="w-16 text-right pr-6" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -170,12 +179,27 @@ export default function FragranceNotesPage() {
                   .sort(([a], [b]) => a.localeCompare(b))
                   .flatMap(([family, familyNotes]) =>
                     (familyNotes ?? []).map((n, idx) => (
-                      <TableRow key={n.id}>
+                      <TableRow key={n.id} className="group">
                         <TableCell className="pl-6 font-medium">{n.name}</TableCell>
                         <TableCell>
                           {idx === 0 && (
                             <Badge variant="outline" className="text-[11px]">{family}</Badge>
                           )}
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Remove "${n.name}" from the note library?`)) {
+                                deleteNote.mutate({ id: n.id });
+                              }
+                            }}
+                            disabled={deleteNote.isPending}
+                            className="rounded p-1.5 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all focus-visible:opacity-100"
+                            aria-label={`Remove ${n.name}`}
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
                         </TableCell>
                       </TableRow>
                     ))

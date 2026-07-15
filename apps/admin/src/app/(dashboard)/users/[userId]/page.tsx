@@ -71,8 +71,6 @@ const TICKET_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructi
 
 const TICKET_TYPE_LABEL: Record<string, string> = {
   general: "General",
-  return: "Return",
-  exchange: "Exchange",
   damaged: "Damaged",
   refund: "Refund",
   other: "Other",

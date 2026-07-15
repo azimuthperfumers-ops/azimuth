@@ -767,7 +767,9 @@ function AccountPageInner() {
       <>
         <SiteHeader />
         <main className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-6">
-          <AuthCard />
+          {/* next = where to land after sign-in (e.g. /orders/<id>#rate from the
+              WhatsApp rating link). AuthCard validates it against open redirects. */}
+          <AuthCard next={searchParams.get("next") ?? undefined} />
         </main>
         <SiteFooter />
       </>
@@ -829,7 +831,7 @@ function AccountPageInner() {
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold">Support</h2>
                 <p className="text-sm text-muted-foreground">
-                  Raise a request for returns, refunds, exchanges, or any other issue.
+                  Raise a refund request (with photos or an unpacking video) or ask any question.
                 </p>
                 <Link
                   href="/support"

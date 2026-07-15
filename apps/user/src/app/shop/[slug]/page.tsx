@@ -124,8 +124,8 @@ export default function ProductDetailPage() {
   }
 
   const images = (product.images ?? []) as { url?: string; isPrimary: boolean; isSecondary: boolean }[];
-  // Order: primary first, then the secondary (hover) image, then the rest.
-  const rank = (i: { isPrimary: boolean; isSecondary: boolean }) => (i.isPrimary ? 0 : i.isSecondary ? 1 : 2);
+  // Gallery order: secondary (hover) image first, then the primary, then the rest.
+  const rank = (i: { isPrimary: boolean; isSecondary: boolean }) => (i.isSecondary ? 0 : i.isPrimary ? 1 : 2);
   const orderedImages = images.map((img, i) => ({ img, i })).sort((a, b) => rank(a.img) - rank(b.img) || a.i - b.i).map((x) => x.img);
 
   const activeVariant =
@@ -385,7 +385,8 @@ export default function ProductDetailPage() {
                   disabled={!activeVariant || activeVariant.stockCached === 0}
                   onClick={() => {
                     if (!activeVariant || activeVariant.stockCached === 0) return;
-                    const primaryImg = orderedImages[0];
+                    // Cart thumbnail uses the true primary image, not the gallery's first slide.
+                    const primaryImg = images.find((im) => im.isPrimary) ?? orderedImages[0];
                     cart.add({
                       productId: product.id,
                       variantId: activeVariant.id,

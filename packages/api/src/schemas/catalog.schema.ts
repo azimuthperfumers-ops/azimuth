@@ -32,6 +32,9 @@ export const createFragranceNoteSchema = z.object({
 });
 export type CreateFragranceNoteInput = z.infer<typeof createFragranceNoteSchema>;
 
+export const deleteFragranceNoteSchema = z.object({ id: z.guid() });
+export type DeleteFragranceNoteInput = z.infer<typeof deleteFragranceNoteSchema>;
+
 const productNoteInputSchema = z.object({
   // z.guid (not strict z.uuid): some seed note ids have 0000 version/variant
   // groups — valid Postgres uuids but not RFC-4122, which strict z.uuid rejects.

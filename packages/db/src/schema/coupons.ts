@@ -1,7 +1,11 @@
-import { boolean, index, integer, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 import { discountTypeEnum } from "./discounts";
+
+// Which payment method a coupon is valid for. "any" = works with either;
+// "razorpay" = bank/card only; "wallet" = wallet-paid orders only.
+export const couponPaymentMethodEnum = pgEnum("coupon_payment_method", ["any", "razorpay", "wallet"]);
 
 export const coupons = pgTable("coupons", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -9,6 +13,7 @@ export const coupons = pgTable("coupons", {
   description: text("description"),
   type: discountTypeEnum("type").notNull(),
   value: numeric("value", { precision: 10, scale: 2 }).notNull(),
+  paymentMethod: couponPaymentMethodEnum("payment_method").notNull().default("any"),
   minCartValue: numeric("min_cart_value", { precision: 10, scale: 2 }).notNull().default("0"),
   maxDiscount: numeric("max_discount", { precision: 10, scale: 2 }),
   usageLimit: integer("usage_limit"),

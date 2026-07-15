@@ -29,8 +29,6 @@ type Ticket = RouterOutputs["ticket"]["adminList"][number];
 
 const TYPE_LABEL: Record<string, string> = {
   general: "General",
-  return: "Return",
-  exchange: "Exchange",
   refund: "Refund",
   damaged: "Damaged",
   other: "Other",

@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@azimuth/api": "workspace:*",
     "@azimuth/queue": "workspace:*",
     "dotenv": "^17.4.2",
     "tsx": "^4.19.0"

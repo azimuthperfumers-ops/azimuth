@@ -1,11 +1,11 @@
 Template name: azimuth_refund_initiated
 Language: English
-Category: TRANSACTIONAL
+Category: Utility
 
 Body:
-Hi {{1}}, your refund of *{{3}}* for order *{{2}}* has been initiated. It will reflect in your account within 5–7 business days.
+Hi {{customer_name}}, your refund of *{{amount}}* for order *{{order_number}}* has been initiated. It will reflect in your account within 5–7 business days.
 
 Variables:
-{{1}} = customer name
-{{2}} = order number
-{{3}} = amount (e.g. ₹1,234)
+{{customer_name}} = customer name
+{{order_number}}      = order number
+{{amount}}        = amount (e.g. ₹1,234)

@@ -138,16 +138,25 @@ export default function TicketPage({ params }: { params: Promise<{ ticketId: str
                   )}
                   {attachments.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
-                      {attachments.map((url) => (
-                        <a key={url} href={url} target="_blank" rel="noopener noreferrer">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
+                      {attachments.map((url) =>
+                        /\.(mp4|webm|mov|m4v|3gp|mkv|avi)$/i.test(url) ? (
+                          <video
+                            key={url}
                             src={url}
-                            alt="attachment"
-                            className="size-20 object-cover border border-border hover:opacity-80 transition-opacity"
+                            controls
+                            className="max-w-[240px] border border-border"
                           />
-                        </a>
-                      ))}
+                        ) : (
+                          <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={url}
+                              alt="attachment"
+                              className="size-20 object-cover border border-border hover:opacity-80 transition-opacity"
+                            />
+                          </a>
+                        ),
+                      )}
                     </div>
                   )}
                   <p className="text-[10px] text-muted-foreground/40 px-1">

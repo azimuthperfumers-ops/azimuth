@@ -61,6 +61,11 @@ export function createCatalogRepository(db: Database) {
       return db.query.fragranceNotes.findMany({ with: { family: true } });
     },
 
+    async deleteFragranceNote(id: string) {
+      await db.delete(schema.fragranceNotes).where(eq(schema.fragranceNotes.id, id));
+      return { id };
+    },
+
     async createProduct(input: CreateProductInput) {
       const { notes, ...productFields } = input;
 

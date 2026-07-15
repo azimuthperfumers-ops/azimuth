@@ -6,9 +6,13 @@ import cors from "cors";
 import express from "express";
 
 import { loginRateLimitMiddleware } from "./middleware/rate-limit";
+import { requestLogger } from "./middleware/request-logger";
 import { razorpayWebhookHandler, shiprocketWebhookHandler } from "@azimuth/webhooks";
 
 export const app = express();
+
+// Log every incoming request (first middleware, so it sees auth/webhooks/trpc alike)
+app.use(requestLogger);
 
 const allowedOrigins = new Set(
   [

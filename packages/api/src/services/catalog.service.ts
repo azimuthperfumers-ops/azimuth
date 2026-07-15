@@ -9,6 +9,7 @@ import type {
   AddProductNoteInput,
   CreateCategoryInput,
   CreateFragranceNoteInput,
+  DeleteFragranceNoteInput,
   CreateProductInput,
   CreateVariantInput,
   DeleteCategoryInput,
@@ -117,6 +118,13 @@ export function createCatalogService(db: Database) {
 
     listFragranceNotes() {
       return catalogRepository.listFragranceNotes();
+    },
+
+    deleteFragranceNote(input: DeleteFragranceNoteInput) {
+      return guardReferenced(
+        () => catalogRepository.deleteFragranceNote(input.id),
+        "This note is used by one or more products — remove it from them first.",
+      );
     },
 
     async createProduct(input: CreateProductInput) {

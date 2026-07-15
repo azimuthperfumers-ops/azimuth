@@ -1,11 +1,80 @@
 Template name: azimuth_order_placed
 Language: English
-Category: TRANSACTIONAL
+Category: Utility
 
 Body:
-Hi {{1}}, your order *{{2}}* has been confirmed at Azimuth Perfumers. Total paid: *{{3}}*. We'll notify you once it ships. For queries reply to this message or email azimuthperfumers@gmail.com
+Hi {{customer_name}}, your order *{{order_number}}* has been confirmed at Azimuth Perfumers. Total paid: *{{amount}}*. We'll notify you once it ships. For queries reply to this message or email azimuthperfumers@gmail.com
 
 Variables:
-{{1}} = customer name
-{{2}} = order number
-{{3}} = amount (e.g. ₹1,234)
+{{customer_name}} = customer name
+{{order_number}}      = order number
+{{amount}}        = amount (e.g. ₹1,234)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

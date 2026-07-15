@@ -9,6 +9,7 @@ import {
   createProductSchema,
   createVariantSchema,
   deleteCategorySchema,
+  deleteFragranceNoteSchema,
   deleteImageSchema,
   getProductSchema,
   listProductsSchema,
@@ -46,6 +47,10 @@ export const catalogRouter = router({
   createNote: adminProcedure
     .input(createFragranceNoteSchema)
     .mutation(({ ctx, input }) => createCatalogService(ctx.db).createFragranceNote(input)),
+
+  deleteNote: adminProcedure
+    .input(deleteFragranceNoteSchema)
+    .mutation(({ ctx, input }) => createCatalogService(ctx.db).deleteFragranceNote(input)),
 
   listProducts: publicProcedure
     .input(listProductsSchema)

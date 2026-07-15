@@ -9,7 +9,8 @@ export interface IRazorpayService {
     amountPaise: number;
     currency: string;
     receipt: string;
-    orderId: string;
+    orderId?: string;
+    notes?: Record<string, string>;
   }): Promise<{ id: string; amount: number; currency: string }>;
   verifyPaymentSignature(
     razorpayOrderId: string,
@@ -50,13 +51,14 @@ class RazorpayService implements IRazorpayService {
     amountPaise: number;
     currency: string;
     receipt: string;
-    orderId: string;
+    orderId?: string;
+    notes?: Record<string, string>;
   }) {
     const order = await this.rzp.orders.create({
       amount: params.amountPaise,
       currency: params.currency,
       receipt: params.receipt,
-      notes: { orderId: params.orderId },
+      notes: params.notes ?? (params.orderId ? { orderId: params.orderId } : {}),
     });
     return { id: order.id, amount: Number(order.amount), currency: order.currency };
   }

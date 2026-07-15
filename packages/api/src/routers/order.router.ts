@@ -24,8 +24,8 @@ import {
   getOrderById,
   getOrderByNumber,
   getUserOrders,
-  orderHasScheduledExchange,
 } from "../repositories/order.repository";
+import { createWalletRepository } from "../repositories/wallet.repository";
 import { router } from "../trpc";
 
 // ── Notification helpers ──────────────────────────────────────────────────────
@@ -48,6 +48,7 @@ async function getOrderContact(db: Parameters<typeof advanceOrderStatus>[0], ord
 
 function toOrderInfo(order: OrderRow): OrderInfo {
   return {
+    orderId: order.id,
     orderNumber: order.orderNumber,
     totalInr: new Intl.NumberFormat("en-IN", {
       style: "currency", currency: "INR", maximumFractionDigits: 0,
@@ -123,9 +124,6 @@ const ORDER_STATUS_VALUES = [
   "refunded",
   "rto_initiated",
   "rto_delivered",
-  "return_requested",
-  "return_approved",
-  "exchange_requested",
 ] as const;
 
 export const orderRouter = router({
@@ -143,6 +141,7 @@ export const orderRouter = router({
         total: z.number().positive(),
         couponId: z.string().uuid().optional().nullable(),
         couponCode: z.string().optional().nullable(),
+        paymentMethod: z.enum(["razorpay", "wallet"]).default("razorpay"),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -187,6 +186,7 @@ export const orderRouter = router({
           code: input.couponCode,
           cartTotal: serverSubtotal,
           userId: ctx.session.user.id,
+          paymentMethod: input.paymentMethod,
         });
         serverDiscountAmount = validation.discountAmount;
       }
@@ -216,7 +216,19 @@ export const orderRouter = router({
       // Prices are GST-inclusive; tax is never a separate client-supplied add-on
       const serverTotal = Math.max(0, serverSubtotal - serverDiscountAmount) + serverShipping;
 
-      return createOrder(ctx.db, {
+      // Wallet payment must have the funds BEFORE we create the order.
+      const wallet = createWalletRepository(ctx.db);
+      if (input.paymentMethod === "wallet") {
+        const balance = await wallet.getBalance(ctx.session.user.id);
+        if (balance < serverTotal) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `Insufficient wallet balance (₹${balance.toFixed(0)} available, ₹${serverTotal.toFixed(0)} needed).`,
+          });
+        }
+      }
+
+      const order = await createOrder(ctx.db, {
         ...input,
         items: serverItems,
         subtotal: serverSubtotal,
@@ -226,6 +238,52 @@ export const orderRouter = router({
         total: serverTotal,
         userId: ctx.session.user.id,
       });
+
+      // Bank/card orders stay pending_payment — the client opens Razorpay next.
+      if (input.paymentMethod !== "wallet") return order;
+
+      // ── Wallet order: debit + fulfil immediately (no gateway) ───────────────
+      // Debit first — if this throws (race drained the balance), the order stays
+      // pending_payment and the 30-min sweep fails it. Idempotent per order id.
+      await wallet.record({
+        userId: ctx.session.user.id,
+        amount: -serverTotal,
+        type: "order_payment",
+        refType: "order",
+        refId: order.id,
+        note: `Order ${order.orderNumber}`,
+        idempotent: true,
+      });
+
+      await advanceOrderStatus(ctx.db, order.id, "paid", ctx.session.user.id, "Paid from wallet balance");
+      await advanceOrderStatus(ctx.db, order.id, "processing", ctx.session.user.id, "Shipment booking queued");
+      await applyOrderStockMovement(ctx.db, order.id, "sale", `Order ${order.orderNumber} paid from wallet`);
+
+      // Clear ordered items from the cart
+      await ctx.db
+        .delete(schema.cartItems)
+        .where(and(eq(schema.cartItems.userId, ctx.session.user.id), eq(schema.cartItems.isSaved, false)));
+
+      // Notify + queue shipment booking (same as the razorpay paid path)
+      const paidOrder = await ctx.db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) });
+      if (paidOrder) {
+        const contact = await getOrderContact(ctx.db, paidOrder);
+        const info = toOrderInfo(paidOrder);
+        Promise.all([notifyOrderPlaced(contact, info), alertAdminNewOrder(info)]).catch((e: unknown) =>
+          console.error("[order] wallet order notify:", e),
+        );
+      }
+      const bookPayload = { type: "book_shipment" as const, orderId: order.id };
+      const [bookJob] = await ctx.db
+        .insert(schema.backgroundJobs)
+        .values({ type: "book_shipment", status: "pending", payload: bookPayload, orderId: order.id })
+        .returning({ id: schema.backgroundJobs.id });
+      const bullJob = await orderQueue.add("book_shipment", { ...bookPayload, dbJobId: bookJob?.id });
+      if (bookJob) {
+        await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: bullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, bookJob.id)).catch(() => {});
+      }
+
+      return order;
     }),
 
   // ── User: list own orders ────────────────────────────────────────────────────
@@ -375,7 +433,7 @@ export const orderRouter = router({
       });
       if (!currentOrder) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
 
-      const PAID_STATUSES = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted", "return_requested", "return_approved"];
+      const PAID_STATUSES = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted"];
 
       if (
         input.status === "cancelled" &&
@@ -461,13 +519,8 @@ export const orderRouter = router({
         await applyOrderStockMovement(ctx.db, input.orderId, "return", "Order cancelled before dispatch");
       }
       if (input.status === "rto_delivered") {
-        if (await orderHasScheduledExchange(ctx.db, input.orderId)) {
-          // Exchange: returned unit in, replacement unit out — net zero, both on ledger
-          await applyOrderStockMovement(ctx.db, input.orderId, "replacement_in", "Exchange item received at warehouse");
-          await applyOrderStockMovement(ctx.db, input.orderId, "replacement_out", "Replacement dispatched for exchange");
-        } else {
-          await applyOrderStockMovement(ctx.db, input.orderId, "return", "Return received at warehouse");
-        }
+        // RTO parcel (undelivered order) physically back at warehouse — restock
+        await applyOrderStockMovement(ctx.db, input.orderId, "return", "RTO parcel received at warehouse");
       }
 
       // Fire-and-forget notifications for status changes that originate from admin
@@ -571,23 +624,56 @@ export const orderRouter = router({
       return { ok: true };
     }),
 
-  // ── Admin: direct refund (no return — e.g. damaged product) ─────────────────
+  // ── Admin: direct refund — to the bank (Razorpay) OR the in-app wallet ──────
+  // Admin talks to the customer, then picks a destination. Wallet-paid orders can
+  // only be refunded to the wallet (money never reached a bank).
 
   issueRefund: adminProcedure
-    .input(z.object({ orderId: z.string().uuid(), note: z.string().optional() }))
+    .input(
+      z.object({
+        orderId: z.string().uuid(),
+        destination: z.enum(["razorpay", "wallet"]).default("razorpay"),
+        note: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const order = await ctx.db.query.orders.findFirst({
         where: eq(schema.orders.id, input.orderId),
       });
       if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
-      if (!order.razorpayPaymentId) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "No Razorpay payment on this order — refund manually via dashboard" });
-      }
+
       const BLOCKED = ["refund_processing", "refunded", "cancelled"];
       if (BLOCKED.includes(order.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `Cannot refund: order is already ${order.status}` });
       }
 
+      // A wallet-paid order has no bank payment to reverse — force wallet.
+      const destination = order.paymentMethod === "wallet" ? "wallet" : input.destination;
+
+      // ── Refund to wallet (store credit) — instant, no gateway ──────────────
+      if (destination === "wallet") {
+        await createWalletRepository(ctx.db).record({
+          userId: order.userId,
+          amount: Number(order.total),
+          type: "refund_credit",
+          refType: "order",
+          refId: order.id,
+          note: input.note ?? `Refund for order ${order.orderNumber}`,
+          actorId: ctx.session.user.id,
+          idempotent: true,
+        });
+        await ctx.db.update(schema.orders).set({ refundMethod: "wallet" }).where(eq(schema.orders.id, order.id));
+        await advanceOrderStatus(ctx.db, order.id, "refunded", ctx.session.user.id, `Refunded ₹${Number(order.total)} to wallet. ${input.note ?? ""}`.trim());
+
+        const contact = await getOrderContact(ctx.db, order);
+        notifyRefundInitiated(contact, toOrderInfo(order)).catch((e: unknown) => console.error("[order] wallet refund notify:", e));
+        return { ok: true, destination: "wallet" as const };
+      }
+
+      // ── Refund to bank (Razorpay) — existing async flow ────────────────────
+      if (!order.razorpayPaymentId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No Razorpay payment on this order — refund to wallet instead, or handle manually." });
+      }
       const refundPayload = {
         type: "initiate_refund" as const,
         orderId: input.orderId,
@@ -603,9 +689,9 @@ export const orderRouter = router({
       if (refundJob) {
         await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
       }
-
-      await advanceOrderStatus(ctx.db, input.orderId, "refund_processing", ctx.session.user.id, input.note ?? "Direct refund initiated by admin");
-      return { ok: true };
+      await ctx.db.update(schema.orders).set({ refundMethod: "razorpay" }).where(eq(schema.orders.id, order.id));
+      await advanceOrderStatus(ctx.db, input.orderId, "refund_processing", ctx.session.user.id, input.note ?? "Direct refund to bank initiated by admin");
+      return { ok: true, destination: "razorpay" as const };
     }),
 
 });

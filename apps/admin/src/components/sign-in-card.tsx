@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
+import { authErrorMessage } from "@/lib/auth-errors";
 import { trpc } from "@/lib/trpc";
 import { emailSignInSchema } from "@/lib/validation";
 
@@ -47,7 +48,7 @@ export function SignInCard() {
     setPending(false);
 
     if (error) {
-      toast.error(error.message ?? "Something went wrong");
+      toast.error(authErrorMessage(error));
     }
   }
 

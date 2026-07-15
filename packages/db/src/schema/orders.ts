@@ -29,6 +29,11 @@ export const orderStatusEnum = pgEnum("order_status", [
 
 export const paymentGatewayEnum = pgEnum("payment_gateway", ["razorpay", "manual"]);
 
+// How the customer paid for the order, and (if refunded) where the money went.
+// "razorpay" = bank/card via Razorpay; "wallet" = in-app store credit.
+export const paymentMethodEnum = pgEnum("payment_method", ["razorpay", "wallet"]);
+export const refundMethodEnum = pgEnum("refund_method", ["razorpay", "wallet"]);
+
 export const paymentAttemptStatusEnum = pgEnum("payment_attempt_status", [
   "created",
   "authorized",
@@ -64,7 +69,12 @@ export const orders = pgTable(
     couponId: uuid("coupon_id").references(() => coupons.id, { onDelete: "set null" }),
     couponCode: text("coupon_code"),
 
-    // Payment gateway
+    // How this order is paid: "razorpay" (bank/card) or "wallet" (store credit).
+    paymentMethod: paymentMethodEnum("payment_method").notNull().default("razorpay"),
+    // Set when refunded, records where the money went (bank vs wallet).
+    refundMethod: refundMethodEnum("refund_method"),
+
+    // Payment gateway (null for wallet-paid orders)
     razorpayOrderId: text("razorpay_order_id"),
     razorpayPaymentId: text("razorpay_payment_id"),
 

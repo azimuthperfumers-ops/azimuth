@@ -2,8 +2,8 @@ import { UnrecoverableError, Worker } from "bullmq";
 import { and, eq, inArray, lt } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
-import { advanceOrderStatus, applyOrderStockMovement } from "@azimuth/api";
-import { alertAdminNewOrder, alertAdminRefund, notifyOrderPlaced, notifyRefundInitiated, notifyReturnPickupScheduled } from "@azimuth/comms";
+import { advanceOrderStatus, applyOrderStockMovement, createWalletRepository } from "@azimuth/api";
+import { alertAdminNewOrder, notifyOrderPlaced, notifyRefundInitiated } from "@azimuth/comms";
 import { createLogisticsService, createRazorpayService } from "@azimuth/api";
 
 import { redisOpts } from "./connection.js";
@@ -16,7 +16,6 @@ import type {
   BookShipmentJob,
   InitiateRefundJob,
   CancelShipmentJob,
-  ReturnShipmentJob,
 } from "./order.queue.js";
 
 // ── DB job tracking helpers ───────────────────────────────────────────────────
@@ -75,6 +74,34 @@ async function markOrderPaidAndBookShipment(
   // Stock committed the moment payment lands — idempotent per order+variant
   await applyOrderStockMovement(db, order.id, "sale", `Order ${order.orderNumber} paid`);
 
+  // Clear the ordered items from the customer's cart. verifyAndConfirmPayment does
+  // this too, but on mobile UPI the customer often never returns to the page — this
+  // path is the reliable one. Never let a cart hiccup fail payment processing.
+  try {
+    const orderedVariantIds = (
+      await db.query.orderItems.findMany({
+        where: eq(schema.orderItems.orderId, order.id),
+        columns: { variantId: true },
+      })
+    )
+      .map((i) => i.variantId)
+      .filter((v): v is string => v != null);
+
+    if (orderedVariantIds.length > 0) {
+      await db
+        .delete(schema.cartItems)
+        .where(
+          and(
+            eq(schema.cartItems.userId, order.userId),
+            inArray(schema.cartItems.variantId, orderedVariantIds),
+            eq(schema.cartItems.isSaved, false),
+          ),
+        );
+    }
+  } catch (e) {
+    console.error(`[order-worker] cart clear failed for order ${order.orderNumber}:`, e);
+  }
+
   console.log(`[order-worker] Order ${order.orderNumber} marked paid → processing`);
 
   const updatedOrder = await db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) });
@@ -91,6 +118,31 @@ async function markOrderPaidAndBookShipment(
   console.log(`[order-worker] Enqueued book_shipment for order=${order.id}`);
 }
 
+// Credit a wallet top-up when its Razorpay payment captures. Idempotent per
+// topupId, so the webhook and the client-side verifyTopup can't double-credit.
+async function creditWalletTopupIfAny(razorpayOrderId: string, razorpayPaymentId: string): Promise<boolean> {
+  const topup = await db.query.walletTopups.findFirst({
+    where: eq(schema.walletTopups.razorpayOrderId, razorpayOrderId),
+  });
+  if (!topup) return false;
+
+  const wallet = createWalletRepository(db);
+  if (topup.status !== "paid") {
+    await db.update(schema.walletTopups).set({ status: "paid", razorpayPaymentId }).where(eq(schema.walletTopups.id, topup.id));
+  }
+  await wallet.record({
+    userId: topup.userId,
+    amount: Number(topup.amount),
+    type: "topup",
+    refType: "topup",
+    refId: topup.id,
+    note: `Wallet top-up ₹${Number(topup.amount)}`,
+    idempotent: true,
+  });
+  console.log(`[order-worker] Wallet credited ₹${Number(topup.amount)} for topup=${topup.id}`);
+  return true;
+}
+
 async function processPaymentCaptured(data: PaymentCapturedJob) {
   const { razorpayOrderId, razorpayPaymentId, amountPaise } = data;
 
@@ -99,7 +151,9 @@ async function processPaymentCaptured(data: PaymentCapturedJob) {
   });
 
   if (!order) {
-    console.warn(`[order-worker] No order for razorpay_order_id=${razorpayOrderId}`);
+    // Not an order payment — maybe a wallet top-up (same Razorpay webhook).
+    const credited = await creditWalletTopupIfAny(razorpayOrderId, razorpayPaymentId);
+    if (!credited) console.warn(`[order-worker] No order or top-up for razorpay_order_id=${razorpayOrderId}`);
     return {};
   }
 
@@ -327,7 +381,10 @@ async function processBookShipment(data: BookShipmentJob) {
 
   for (const item of order.items) {
     const v = item.variantId ? variantMap.get(item.variantId) : undefined;
-    const itemWeight = (v?.weightGrams ?? 200) * item.quantity;
+    // Same fallback as order.estimateShipping's getShippingQuote (sizeMl + 300g) —
+    // the customer was charged on that weight, so book on it too.
+    const unitWeight = v?.weightGrams != null ? Number(v.weightGrams) : item.sizeMl + 300;
+    const itemWeight = unitWeight * item.quantity;
     totalWeightGrams += itemWeight;
     if (itemWeight > maxWeight) {
       maxWeight = itemWeight;
@@ -501,142 +558,6 @@ async function processCancelShipment(data: CancelShipmentJob) {
   return { waybill };
 }
 
-async function processReturnShipment(data: ReturnShipmentJob) {
-  const {
-    orderId, ticketId, action,
-    originalOrderNumber, customerName, customerPhone,
-    pickupAddress, returnReason, adminId, pickupDate,
-  } = data;
-
-  const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, orderId) });
-  if (!order) {
-    throw new UnrecoverableError(`return_shipment: order ${orderId} not found`);
-  }
-
-  const RETURN_BLOCKED = ["rto_initiated", "rto_delivered", "refunded", "refund_processing", "cancelled", "payment_failed"];
-  if (RETURN_BLOCKED.includes(order.status)) {
-    console.log(`[order-worker] return_shipment: order ${order.orderNumber} is ${order.status} — skipping, nothing to do`);
-    return {};
-  }
-
-  const delvSvc = createLogisticsService();
-
-  if (action === "exchange") {
-    // ── Exchange: creates reverse pickup + new forward shipment in one call ───
-    const orderWithItems = await db.query.orders.findFirst({
-      where: eq(schema.orders.id, orderId),
-      with: { items: true },
-    });
-    if (!orderWithItems) throw new UnrecoverableError(`exchange_shipment: order ${orderId} missing items`);
-
-    const exchangeResult = await delvSvc.createExchangeShipment({
-      originalOrderNumber,
-      customerName,
-      customerPhone,
-      pickupAddress,
-      returnReason,
-      weightGrams: 500,
-      lengthCm: 15,
-      widthCm: 10,
-      heightCm: 10,
-      pickupDate,
-      items: orderWithItems.items.map((i) => ({
-        name: i.productName,
-        sku: i.variantSku,
-        units: i.quantity,
-        price: Number(i.unitPrice),
-      })),
-    });
-
-    if (exchangeResult.status === "failed") {
-      throw new Error(`Exchange shipment failed: ${exchangeResult.errorMessage}`);
-    }
-
-    // Store exchange return AWB in returnWaybill so the is_return=1 webhook can find this order
-    if (exchangeResult.returnAwb) {
-      await db
-        .update(schema.orders)
-        .set({ returnWaybill: exchangeResult.returnAwb })
-        .where(eq(schema.orders.id, orderId));
-    }
-
-    await advanceOrderStatus(db, orderId, "rto_initiated", "worker:order", "Exchange pickup scheduled");
-
-    await db.insert(schema.ticketActions).values({
-      ticketId,
-      adminId,
-      actionType: "exchange_scheduled",
-      metadata: {
-        returnOrderId: exchangeResult.returnOrderId,
-        forwardOrderId: exchangeResult.forwardOrderId,
-        returnShipmentId: exchangeResult.returnShipmentId,
-        forwardShipmentId: exchangeResult.forwardShipmentId,
-        returnAwb: exchangeResult.returnAwb,
-        forwardAwb: exchangeResult.forwardAwb,
-      },
-    });
-
-    await db.update(schema.tickets).set({ status: "awaiting_user", updatedAt: new Date() }).where(eq(schema.tickets.id, ticketId));
-    await db.insert(schema.ticketMessages).values({
-      ticketId, senderId: adminId, senderRole: "admin",
-      content: `We've scheduled a return pickup for your order. A replacement will be shipped once we receive the item back.`,
-    });
-
-    await notifyReturnPickupScheduled(await getCustomerContact(order), orderInfo(order)).catch((e) =>
-      console.error("[order-worker] exchange pickup notify:", e),
-    );
-
-    console.log(`[order-worker] Exchange scheduled for order ${orderId}: returnShipment=${exchangeResult.returnShipmentId}, forwardShipment=${exchangeResult.forwardShipmentId}`);
-    return { returnShipmentId: exchangeResult.returnShipmentId, forwardShipmentId: exchangeResult.forwardShipmentId };
-  }
-
-  // ── Return: reverse pickup only ─────────────────────────────────────────────
-  const returnResult = await delvSvc.createReturnShipment({
-    originalOrderNumber,
-    customerName,
-    customerPhone,
-    pickupAddress,
-    returnReason,
-    weightGrams: 500,
-    lengthCm: 15,
-    widthCm: 10,
-    heightCm: 10,
-    pickupDate,
-  });
-
-  if (returnResult.status === "failed") {
-    throw new Error(`Return shipment failed: ${returnResult.errorMessage}`);
-  }
-
-  await db
-    .update(schema.orders)
-    .set({ returnWaybill: returnResult.waybill })
-    .where(eq(schema.orders.id, orderId));
-
-  await advanceOrderStatus(
-    db, orderId, "rto_initiated", "worker:order",
-    `Return pickup scheduled. Reverse AWB: ${returnResult.waybill}`,
-  );
-
-  await db.insert(schema.ticketActions).values({
-    ticketId, adminId, actionType: "return_scheduled",
-    metadata: { reverseWaybill: returnResult.waybill, trackingUrl: returnResult.trackingUrl },
-  });
-
-  await db.update(schema.tickets).set({ status: "awaiting_user", updatedAt: new Date() }).where(eq(schema.tickets.id, ticketId));
-  await db.insert(schema.ticketMessages).values({
-    ticketId, senderId: adminId, senderRole: "admin",
-    content: `We've scheduled a return pickup for your order. Reverse AWB: ${returnResult.waybill}. Track at ${returnResult.trackingUrl}`,
-  });
-
-  await notifyReturnPickupScheduled(await getCustomerContact(order), orderInfo(order)).catch((e) =>
-    console.error("[order-worker] return pickup notify:", e),
-  );
-
-  console.log(`[order-worker] Return pickup scheduled for order ${orderId}: AWB=${returnResult.waybill}`);
-  return { waybill: returnResult.waybill, trackingUrl: returnResult.trackingUrl };
-}
-
 // ── Worker ────────────────────────────────────────────────────────────────────
 
 export function startOrderWorker() {
@@ -654,8 +575,6 @@ export function startOrderWorker() {
         return await processInitiateRefund(data);
       } else if (data.type === "cancel_shipment") {
         return await processCancelShipment(data);
-      } else if (data.type === "return_shipment") {
-        return await processReturnShipment(data);
       } else if (data.type === "expire_pending_payments") {
         return await processExpirePendingPayments();
       }

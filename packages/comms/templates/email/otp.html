@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#f9f7f4;font-family:'Georgia',serif;">
+  <!--
+    MSG91 email template for MSG91_EMAIL_TEMPLATE_OTP.
+    Shared by email verification AND OTP-based password reset (better-auth emailOTP).
+    Variable: {{otp}} — 6-digit code, valid 10 minutes (auth expiresIn: 600).
+  -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f7f4;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e8e2da;">
+
+        <tr><td style="background:#111;padding:32px 40px;text-align:center;">
+          <p style="margin:0;color:#c9a96e;letter-spacing:0.3em;font-size:11px;text-transform:uppercase;font-family:Arial,sans-serif;">Azimuth Perfumers</p>
+        </td></tr>
+
+        <tr><td style="padding:40px;">
+          <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#999;font-family:Arial,sans-serif;">Verification Code</p>
+          <h1 style="margin:0 0 24px;font-size:24px;color:#111;font-weight:normal;">Your one-time code.</h1>
+          <p style="margin:0 0 32px;color:#555;font-size:15px;line-height:1.7;">
+            Use the code below to continue. It is valid for 10 minutes. If you didn't request this, you can safely ignore this email.
+          </p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+            <tr><td align="center" style="background:#f9f7f4;border:1px solid #e8e2da;padding:24px;">
+              <span style="font-size:32px;letter-spacing:0.4em;color:#111;font-family:Arial,sans-serif;font-weight:bold;">{{otp}}</span>
+            </td></tr>
+          </table>
+
+          <p style="margin:0;color:#999;font-size:13px;line-height:1.7;">
+            Never share this code with anyone. Azimuth Perfumers will never ask for it.
+          </p>
+        </td></tr>
+
+        <tr><td style="border-top:1px solid #e8e2da;padding:24px 40px;text-align:center;">
+          <p style="margin:0;color:#999;font-size:12px;font-family:Arial,sans-serif;">Azimuth Perfumers · azimuthperfumers@gmail.com</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

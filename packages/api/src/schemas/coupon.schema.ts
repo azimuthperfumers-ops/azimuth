@@ -5,6 +5,8 @@ export const createCouponSchema = z.object({
   description: z.string().max(500).optional(),
   type: z.enum(["percentage", "flat"]),
   value: z.number().positive(),
+  // Which payment method the coupon works with: "any" | "razorpay" (bank/card) | "wallet".
+  paymentMethod: z.enum(["any", "razorpay", "wallet"]).default("any"),
   minCartValue: z.number().min(0).default(0),
   maxDiscount: z.number().positive().optional(),
   usageLimit: z.number().int().positive().optional(),
@@ -30,6 +32,8 @@ export const validateCouponSchema = z.object({
   code: z.string().min(1),
   cartTotal: z.number().positive(),
   userId: z.string().optional(),
+  // Selected checkout method — coupon is rejected if it's locked to the other one.
+  paymentMethod: z.enum(["razorpay", "wallet"]).optional(),
 });
 export type ValidateCouponInput = z.infer<typeof validateCouponSchema>;
 
