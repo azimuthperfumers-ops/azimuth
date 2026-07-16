@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Tabs, useRouter } from "expo-router";
-import { House, ShoppingBag, ShoppingCart, User } from "lucide-react-native";
+import { House, ShoppingBag, ShoppingCart, User, Wallet } from "lucide-react-native";
 
 import { useSession } from "@/hooks/use-session";
 import { useCartCount } from "@/hooks/use-cart-count";
@@ -61,11 +61,27 @@ export default function TabsLayout() {
           },
         }}
       >
+        {/* Order: Home · Wallet · Shop (centre) · Cart · Account */}
         <Tabs.Screen
           name="index"
           options={{
             title: "Home",
             tabBarIcon: ({ focused }) => <TabIcon Icon={House} active={focused} />,
+          }}
+        />
+        <Tabs.Screen
+          name="wallet"
+          options={{
+            title: "Wallet",
+            tabBarIcon: ({ focused }) => <TabIcon Icon={Wallet} active={focused} />,
+          }}
+          listeners={{
+            tabPress: (e) => {
+              if (!session) {
+                e.preventDefault();
+                router.push("/(auth)/sign-in");
+              }
+            },
           }}
         />
         <Tabs.Screen

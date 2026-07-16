@@ -49,9 +49,20 @@ export async function notifyOrderPlaced(
   }
 }
 
+// Where a refund was sent — spelled out for the customer so there's never a
+// "where is my money?" ticket. Wallet credit is instant; bank takes 5–7 days.
+export type RefundDestination = "wallet" | "razorpay";
+
+function refundDestinationText(destination: RefundDestination): string {
+  return destination === "wallet"
+    ? "your Azimuth Wallet (store credit, available right away)"
+    : "your original payment method — bank/card (5–7 business days)";
+}
+
 export async function notifyRefundInitiated(
   customer: CustomerContact,
   order: OrderInfo,
+  destination: RefundDestination = "razorpay",
 ): Promise<void> {
   const mobile = customer.phone ? toMobile(customer.phone) : null;
   if (mobile && env.MSG91_WA_TEMPLATE_REFUND) {
@@ -61,6 +72,7 @@ export async function notifyRefundInitiated(
         customer_name: customer.name,
         order_number: order.orderNumber,
         amount: order.totalInr,
+        refund_destination: refundDestinationText(destination),
       }),
     );
   }
@@ -214,8 +226,12 @@ export async function alertAdminNewTicket(ticket: {
   }
 }
 
-export async function alertAdminRefund(order: OrderInfo): Promise<void> {
+export async function alertAdminRefund(
+  order: OrderInfo,
+  destination: RefundDestination = "razorpay",
+): Promise<void> {
   const adminEmail = env.ADMIN_EMAIL;
+  const destinationText = destination === "wallet" ? "Wallet (store credit)" : "Bank / card (Razorpay)";
   if (adminEmail && env.MSG91_EMAIL_TEMPLATE_ADMIN_REFUND) {
     await fire(
       `email:admin:refund:${order.orderNumber}`,
@@ -224,7 +240,11 @@ export async function alertAdminRefund(order: OrderInfo): Promise<void> {
         name: "Azimuth Admin",
         subject: `Refund initiated — ${order.orderNumber} (${order.totalInr})`,
         templateId: env.MSG91_EMAIL_TEMPLATE_ADMIN_REFUND!,
-        vars: { order_number: order.orderNumber, amount: order.totalInr },
+        vars: {
+          order_number: order.orderNumber,
+          amount: order.totalInr,
+          refund_destination: destinationText,
+        },
       }),
     );
   }

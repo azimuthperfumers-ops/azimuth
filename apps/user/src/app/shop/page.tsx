@@ -35,7 +35,7 @@ function FilterButton({
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 text-left text-[15px] transition-colors group",
+        "flex items-center gap-2.5 text-left text-[17px] transition-colors group",
         active
           ? "text-foreground font-medium"
           : "text-muted-foreground/60 hover:text-foreground font-normal",
@@ -43,7 +43,7 @@ function FilterButton({
     >
       <span
         className={cn(
-          "inline-block size-1 rounded-full transition-colors shrink-0",
+          "inline-block size-[5px] rounded-full transition-colors shrink-0",
           active ? "bg-foreground" : "bg-transparent group-hover:bg-muted-foreground/40",
         )}
       />
@@ -98,7 +98,7 @@ function FilterContent({
           value={search}
           onChange={(e) => set("q", e.target.value)}
           placeholder="Rose, oud, amber…"
-          className="w-full border border-border bg-background py-2.5 pl-9 pr-8 text-[15px] placeholder:text-muted-foreground/35 focus:border-foreground/40 focus:outline-none transition-colors"
+          className="w-full border border-border bg-background py-3 pl-9 pr-8 text-[16px] placeholder:text-muted-foreground/35 focus:border-foreground/40 focus:outline-none transition-colors"
         />
         {search && (
           <button
@@ -112,10 +112,10 @@ function FilterContent({
 
       {/* Category */}
       <div>
-        <p className="mb-3.5 text-[12px] font-bold tracking-[0.22em] text-foreground/40 uppercase">
+        <p className="mb-4 text-[13px] font-bold tracking-[0.22em] text-foreground/45 uppercase">
           Category
         </p>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3.5">
           <FilterButton active={category === "all"} onClick={() => set("category", "all")}>
             All
           </FilterButton>
@@ -129,10 +129,10 @@ function FilterContent({
 
       {/* Type */}
       <div className="border-t border-border/60 pt-7">
-        <p className="mb-3.5 text-[12px] font-bold tracking-[0.22em] text-foreground/40 uppercase">
+        <p className="mb-4 text-[13px] font-bold tracking-[0.22em] text-foreground/45 uppercase">
           Type
         </p>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3.5">
           {CONCENTRATIONS.map((c) => (
             <FilterButton
               key={c.value}
@@ -148,7 +148,7 @@ function FilterContent({
       {hasFilters && (
         <button
           onClick={clear}
-          className="text-[12px] font-semibold tracking-[0.16em] text-primary uppercase underline underline-offset-3 hover:opacity-70 transition-opacity"
+          className="text-[13px] font-semibold tracking-[0.16em] text-primary uppercase underline underline-offset-3 hover:opacity-70 transition-opacity"
         >
           Clear all
         </button>
@@ -257,7 +257,7 @@ function ShopPageInner() {
           )}
         </div>
 
-        <div className="grid gap-10 lg:grid-cols-[200px_1fr] lg:gap-14">
+        <div className="grid gap-10 lg:grid-cols-[220px_1fr] lg:gap-14">
           {/* Sidebar — desktop only */}
           <aside className="hidden lg:block sticky top-24 self-start">
             <FilterContent

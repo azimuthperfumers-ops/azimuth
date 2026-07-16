@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 import { schema } from "@azimuth/db";
-import { alertAdminNewTicket } from "@azimuth/comms";
+import { alertAdminNewTicket, notifyRefundInitiated } from "@azimuth/comms";
 import { advanceOrderStatus } from "../repositories/order.repository";
 import { createWalletRepository } from "../repositories/wallet.repository";
 import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
@@ -284,6 +284,14 @@ export const ticketRouter = router({
       if (input.action === "refund") {
         if (!order) throw new TRPCError({ code: "BAD_REQUEST", message: "No order linked to ticket" });
 
+        // Never refund money that was never paid, and never refund twice.
+        if (order.status === "pending_payment" || order.status === "payment_failed") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot refund: this order was never paid." });
+        }
+        if (["refund_processing", "refunded", "cancelled"].includes(order.status)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Cannot refund: order is already ${order.status}` });
+        }
+
         const amountPaise = Math.round(Number(order.total) * 100);
         // Wallet-paid orders can only be refunded to the wallet.
         const destination = order.paymentMethod === "wallet" ? "wallet" : input.refundDestination;
@@ -311,6 +319,15 @@ export const ticketRouter = router({
             ticketId: ticket.id, senderId: adminId, senderRole: "admin",
             content: input.note ?? `We've refunded ₹${Number(order.total)} to your Azimuth wallet.`,
           });
+          notifyRefundInitiated(
+            { name: ticket.user?.name ?? "Customer", email: ticket.user?.email, phone: ticket.user?.phone },
+            {
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              totalInr: new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(order.total)),
+            },
+            "wallet",
+          ).catch((e: unknown) => console.error("[ticket] wallet refund notify:", e));
           return { ok: true, detail: `Refunded ₹${Number(order.total)} to wallet` };
         }
 

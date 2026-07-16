@@ -82,6 +82,7 @@ export function createCouponRepository(db: Database) {
           description: true,
           type: true,
           value: true,
+          paymentMethod: true,
           minCartValue: true,
           maxDiscount: true,
           endsAt: true,

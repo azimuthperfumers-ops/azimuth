@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   Mail,
@@ -14,10 +15,23 @@ import {
   MapPin,
   TrendingUp,
   AlertTriangle,
+  Wallet,
+  Plus,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -128,6 +142,125 @@ function SideCard({ title, icon: Icon, children }: {
   );
 }
 
+// ─── Wallet card ──────────────────────────────────────────────────────────────
+
+const WALLET_TXN_LABEL: Record<string, string> = {
+  topup: "Top-up",
+  order_payment: "Order payment",
+  refund_credit: "Refund credit",
+  reversal: "Reversal",
+  adjustment: "Adjustment",
+};
+
+function WalletCard({ userId, userName }: { userId: string; userName: string }) {
+  const utils = trpc.useUtils();
+  const wallet = trpc.adminUser.wallet.useQuery({ userId });
+
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+
+  const credit = trpc.adminUser.walletCredit.useMutation({
+    onSuccess: (res) => {
+      toast.success(`₹${amount} added — new balance ${formatInr(res.balance)}`);
+      setOpen(false);
+      setAmount("");
+      setReason("");
+      utils.adminUser.wallet.invalidate({ userId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const amountNum = Number(amount);
+  const canSubmit =
+    Number.isFinite(amountNum) && amountNum > 0 && amountNum <= 100000 && reason.trim().length >= 3 && !credit.isPending;
+
+  return (
+    <SideCard title="Wallet" icon={Wallet}>
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="text-2xl font-bold tabular-nums">{formatInr(wallet.data?.balance ?? 0)}</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">Store credit balance</div>
+        </div>
+        <Button size="sm" variant="outline" className="gap-1" onClick={() => setOpen(true)}>
+          <Plus className="size-3.5" />
+          Add money
+        </Button>
+      </div>
+
+      {(wallet.data?.transactions.length ?? 0) > 0 && (
+        <>
+          <div className="h-px bg-border" />
+          <div className="space-y-1.5">
+            {wallet.data!.transactions.slice(0, 5).map((t) => {
+              const amt = Number(t.amount);
+              return (
+                <div key={t.id} className="flex items-center justify-between text-xs">
+                  <div className="min-w-0 pr-2">
+                    <span className="text-muted-foreground">{WALLET_TXN_LABEL[t.type] ?? t.type}</span>
+                    <span className="text-[10px] text-muted-foreground/70 ml-1.5">{fmtDate(t.createdAt)}</span>
+                  </div>
+                  <span className={`font-semibold tabular-nums shrink-0 ${amt >= 0 ? "text-green-600" : "text-foreground"}`}>
+                    {amt >= 0 ? "+" : "−"}{formatInr(Math.abs(amt))}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add money to wallet</DialogTitle>
+            <DialogDescription>
+              Credits {userName}&apos;s wallet as store credit. This is recorded as an adjustment in
+              their transaction history with your name on it — a reason is required.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="wallet-amount">Amount (₹)</Label>
+              <Input
+                id="wallet-amount"
+                type="number"
+                min={1}
+                max={100000}
+                placeholder="e.g. 250"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wallet-reason">Reason</Label>
+              <Textarea
+                id="wallet-reason"
+                placeholder="e.g. Goodwill credit for delayed delivery of AZ-1042"
+                rows={3}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">The customer sees this note on the transaction.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={credit.isPending}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!canSubmit}
+              onClick={() => credit.mutate({ userId, amountInr: amountNum, note: reason.trim() })}
+            >
+              {credit.isPending ? "Adding…" : `Add ${amount ? `₹${amount}` : "money"}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </SideCard>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function UserDetailPage({ params }: { params: Promise<{ userId: string }> }) {
@@ -196,6 +329,12 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-semibold">{user.name}</h1>
+              <span
+                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+                title="Short customer ID — searchable in Users and Wallets"
+              >
+                #{user.id.slice(0, 8).toUpperCase()}
+              </span>
               {user.role === "admin" && <Badge variant="default">Admin</Badge>}
             </div>
             <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
@@ -378,6 +517,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
 
         {/* RIGHT — intelligence sidebar */}
         <div className="space-y-4">
+
+          {/* Wallet */}
+          <WalletCard userId={userId} userName={user.name || user.email} />
 
           {/* Order health */}
           <SideCard title="Order health" icon={TrendingUp}>

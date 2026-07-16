@@ -88,23 +88,23 @@ export function ProductCard({ product }: { product: Product }) {
       </div>
 
       {/* Info */}
-      <div className="pt-3.5 pb-1">
-        <h3 className="font-heading text-[1.25rem] font-medium leading-snug tracking-tight text-foreground">
+      <div className="pt-4 pb-1">
+        <h3 className="font-heading text-[1.45rem] font-medium leading-snug tracking-tight text-foreground">
           {product.name}
         </h3>
         <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="text-[12px] tracking-[0.1em] text-muted-foreground/60 uppercase">
+          <p className="text-[13px] tracking-[0.1em] text-muted-foreground/70 uppercase">
             {displayVariant
               ? (CONCENTRATION_LABEL[displayVariant.concentration] ?? displayVariant.concentration)
               : null}
           </p>
           {fromPrice !== null && (
             <div className="flex items-baseline gap-1.5 shrink-0">
-              <span className="text-[15px] font-semibold tabular-nums text-foreground">
+              <span className="text-[17px] font-semibold tabular-nums text-foreground">
                 ₹{fromPrice.toLocaleString("en-IN")}
               </span>
               {hasDiscount && (
-                <span className="text-[11px] tabular-nums text-muted-foreground/45 line-through">
+                <span className="text-[13px] tabular-nums text-muted-foreground/50 line-through">
                   ₹{fromMrp!.toLocaleString("en-IN")}
                 </span>
               )}

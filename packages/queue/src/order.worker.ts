@@ -120,11 +120,21 @@ async function markOrderPaidAndBookShipment(
 
 // Credit a wallet top-up when its Razorpay payment captures. Idempotent per
 // topupId, so the webhook and the client-side verifyTopup can't double-credit.
-async function creditWalletTopupIfAny(razorpayOrderId: string, razorpayPaymentId: string): Promise<boolean> {
+async function creditWalletTopupIfAny(razorpayOrderId: string, razorpayPaymentId: string, amountPaise?: number): Promise<boolean> {
   const topup = await db.query.walletTopups.findFirst({
     where: eq(schema.walletTopups.razorpayOrderId, razorpayOrderId),
   });
   if (!topup) return false;
+
+  // Captured amount must cover the top-up (rzp order is created server-side with
+  // the exact amount — a shortfall means partial capture or tampering).
+  const expectedPaise = Math.round(Number(topup.amount) * 100);
+  if (typeof amountPaise === "number" && amountPaise < expectedPaise) {
+    console.error(
+      `[order-worker] TOPUP AMOUNT MISMATCH topup=${topup.id}: captured ₹${amountPaise / 100} < expected ₹${expectedPaise / 100} — NOT crediting, needs manual review`,
+    );
+    return true;
+  }
 
   const wallet = createWalletRepository(db);
   if (topup.status !== "paid") {
@@ -152,7 +162,7 @@ async function processPaymentCaptured(data: PaymentCapturedJob) {
 
   if (!order) {
     // Not an order payment — maybe a wallet top-up (same Razorpay webhook).
-    const credited = await creditWalletTopupIfAny(razorpayOrderId, razorpayPaymentId);
+    const credited = await creditWalletTopupIfAny(razorpayOrderId, razorpayPaymentId, amountPaise);
     if (!credited) console.warn(`[order-worker] No order or top-up for razorpay_order_id=${razorpayOrderId}`);
     return {};
   }
@@ -253,6 +263,16 @@ async function processPaymentFailed(data: PaymentFailedJob) {
 
 async function failStaleOrder(order: typeof schema.orders.$inferSelect, note: string) {
   await advanceOrderStatus(db, order.id, "payment_failed", "worker:order", note);
+
+  // Wallet-paid order that died mid-flight: the debit already landed, so give
+  // the money back (idempotent reversal — safe on repeated sweeps).
+  if (order.paymentMethod === "wallet") {
+    const res = await createWalletRepository(db).reverseWalletDebitIfAny(
+      order.id,
+      `Wallet payment reversed — order ${order.orderNumber} failed`,
+    );
+    if (res.reversed) console.log(`[order-worker] Reversed wallet debit for failed order ${order.orderNumber}`);
+  }
 
   await db
     .update(schema.paymentAttempts)
@@ -526,7 +546,7 @@ async function processInitiateRefund(data: InitiateRefundJob) {
   // Notify customer now (they care that refund was submitted; money arrives in 5-7 days)
   const contact = await getCustomerContact(order);
   const info = orderInfo(order);
-  await notifyRefundInitiated(contact, info)
+  await notifyRefundInitiated(contact, info, "razorpay")
     .catch((e: unknown) => console.error("[order-worker] refund notify:", e));
 
   console.log(`[order-worker] Refund initiated for order ${order.orderNumber}: ${refund.id}`);

@@ -241,11 +241,15 @@ export async function advanceOrderStatus(
 // ── Queries ───────────────────────────────────────────────────────────────────
 
 export async function getUserOrders(db: Database, userId: string) {
-  return db.query.orders.findMany({
+  const orders = await db.query.orders.findMany({
     where: eq(schema.orders.userId, userId),
     with: { items: true },
     orderBy: desc(schema.orders.createdAt),
   });
+  // RTO legs are internal — the customer's list shows those orders as cancelled.
+  return orders.map((o) =>
+    o.status === "rto_initiated" || o.status === "rto_delivered" ? { ...o, status: "cancelled" as typeof o.status } : o,
+  );
 }
 
 function resolveImageKey(key: string) {
@@ -287,6 +291,55 @@ async function enrichItemImages<T extends { items: { variantId: string | null; i
   };
 }
 
+// ── Customer-facing view of an order ─────────────────────────────────────────
+// Admin sees everything; the customer gets a curated view:
+//  - RTO legs (parcel travelling back to the warehouse after a cancellation or
+//    failed delivery) are internal logistics — masked as "cancelled".
+//  - History notes carry internal detail (payment ids, courier chatter, admin
+//    remarks) — stripped entirely.
+//  - History entries for internal-only statuses, no-op annotations
+//    (from == to) and anything after the cancellation are dropped.
+
+const USER_VISIBLE_STATUSES = new Set([
+  "pending_payment",
+  "payment_failed",
+  "paid",
+  "processing",
+  "picked_up",
+  "shipped",
+  "out_for_delivery",
+  "delivery_attempted",
+  "delivered",
+  "cancelled",
+  "refund_processing",
+  "refunded",
+]);
+
+const RTO_STATUSES = new Set(["rto_initiated", "rto_delivered"]);
+
+type OrderWithHistory = {
+  status: string;
+  statusHistory?: { fromStatus: string | null; toStatus: string; note: string | null; actorId: string | null }[];
+} & Record<string, unknown>;
+
+function toCustomerView<T extends OrderWithHistory | undefined>(order: T): T {
+  if (!order) return order;
+  const masked = {
+    ...order,
+    status: RTO_STATUSES.has(order.status) ? "cancelled" : order.status,
+  };
+  if (order.statusHistory) {
+    masked.statusHistory = order.statusHistory
+      .filter(
+        (h) =>
+          USER_VISIBLE_STATUSES.has(h.toStatus) &&
+          h.fromStatus !== h.toStatus, // internal annotations write from == to
+      )
+      .map((h) => ({ ...h, note: null, actorId: null }));
+  }
+  return masked as T;
+}
+
 export async function getOrderById(db: Database, orderId: string, userId?: string) {
   const where = userId
     ? and(eq(schema.orders.id, orderId), eq(schema.orders.userId, userId))
@@ -300,7 +353,9 @@ export async function getOrderById(db: Database, orderId: string, userId?: strin
       paymentAttempts: { orderBy: desc(schema.paymentAttempts.createdAt) },
     },
   });
-  return enrichItemImages(db, order);
+  const enriched = await enrichItemImages(db, order);
+  // userId present = customer-scoped call → curated view. Admin passes no userId.
+  return userId ? toCustomerView(enriched) : enriched;
 }
 
 export async function getOrderByNumber(db: Database, orderNumber: string, userId?: string) {
@@ -316,7 +371,8 @@ export async function getOrderByNumber(db: Database, orderNumber: string, userId
       paymentAttempts: { orderBy: desc(schema.paymentAttempts.createdAt) },
     },
   });
-  return enrichItemImages(db, order);
+  const enriched = await enrichItemImages(db, order);
+  return userId ? toCustomerView(enriched) : enriched;
 }
 
 export async function getAllOrders(

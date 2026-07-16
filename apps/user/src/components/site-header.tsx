@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronRight, Menu, ShoppingBag, X } from "lucide-react";
+import { ChevronRight, Menu, ShoppingBag, Wallet, X } from "lucide-react";
 
 import { useCartCount } from "@/hooks/use-cart";
 import { authClient } from "@/lib/auth-client";
@@ -102,6 +102,16 @@ export function SiteHeader() {
           >
             {isLoggedIn ? "Account" : "Sign in"}
           </Link>
+          {isLoggedIn && (
+            <Link
+              href="/wallet"
+              aria-label="Wallet"
+              className="hidden items-center gap-2 text-foreground transition-colors hover:text-primary sm:inline-flex"
+            >
+              <Wallet className="size-3.5" />
+              <span className="hidden md:inline">Wallet</span>
+            </Link>
+          )}
           <Link
             href="/cart"
             className="relative flex items-center gap-2 border border-foreground px-4 py-2.5 text-foreground transition-colors hover:bg-foreground hover:text-background"
@@ -125,6 +135,7 @@ export function SiteHeader() {
               { href: "/shop", label: "Shop" },
               { href: "/our-story", label: "Our Story" },
               { href: isLoggedIn ? "/account" : "/account?tab=info", label: isLoggedIn ? "Account" : "Sign in" },
+              ...(isLoggedIn ? [{ href: "/wallet", label: "Wallet" }] : []),
             ].map(({ href, label }) => (
               <Link
                 key={label}

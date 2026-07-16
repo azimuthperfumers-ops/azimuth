@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "wallet_transactions_idem_uq" ON "wallet_transactions" USING btree ("user_id","type","ref_id");

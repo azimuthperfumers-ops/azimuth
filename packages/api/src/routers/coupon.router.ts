@@ -32,6 +32,10 @@ export const couponRouter = router({
   listActive: protectedProcedure
     .query(({ ctx }) => createCouponService(ctx.db).listActive(ctx.session.user.id)),
 
+  // Public — offers shown on product pages (no per-user filtering; signed-out
+  // visitors see them too). Only live, non-exhausted coupons.
+  listPublic: publicProcedure.query(({ ctx }) => createCouponService(ctx.db).listActive()),
+
   // Public — called from user checkout (pass userId for per-user check)
   validate: publicProcedure
     .input(validateCouponSchema)

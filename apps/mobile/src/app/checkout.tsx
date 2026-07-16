@@ -261,6 +261,9 @@ export default function CheckoutScreen() {
   const [couponModalOpen, setCouponModalOpen] = useState(false);
 
   const [paying, setPaying] = useState(false);
+  const [payMethod, setPayMethod] = useState<"razorpay" | "wallet">("razorpay");
+  const walletQuery = trpc.wallet.get.useQuery();
+  const walletBalance = walletQuery.data?.balance ?? 0;
   const payingRef = useRef(false);
 
   const addAddressMut = trpc.userData.addAddress.useMutation();
@@ -347,10 +350,12 @@ export default function CheckoutScreen() {
       return;
     }
 
-    // Fail before creating an order/Razorpay-order server-side if the native
-    // module can't open a checkout sheet anyway — avoids stray pending_payment
-    // orders with no way to ever complete them.
-    if (!isRazorpayLinked()) {
+    // Wallet only if chosen AND balance covers the order.
+    const method: "razorpay" | "wallet" = payMethod === "wallet" && walletBalance >= total ? "wallet" : "razorpay";
+
+    // For card/UPI, fail early if the native module can't open a checkout sheet —
+    // avoids stray pending_payment orders. Wallet needs no gateway.
+    if (method === "razorpay" && !isRazorpayLinked()) {
       Alert.alert("Payments unavailable", razorpayMissingMessage());
       return;
     }
@@ -405,9 +410,20 @@ export default function CheckoutScreen() {
         total,
         couponId,
         couponCode,
+        paymentMethod: method,
       });
 
       createdOrderId = order.id;
+
+      // Wallet order is already paid + booked server-side — no gateway step.
+      if (method === "wallet") {
+        await Promise.all([utils.order.list.invalidate(), utils.cart.list.invalidate(), utils.wallet.get.invalidate(), utils.wallet.transactions.invalidate()]);
+        Alert.alert("Paid from wallet", "Redirecting to your orders…", [
+          { text: "OK", onPress: () => router.replace("/orders") },
+        ]);
+        return;
+      }
+
       const rzpData = await createRazorpayOrder.mutateAsync({ orderId: order.id });
 
       const rzpResult = await RazorpayCheckout.open({
@@ -618,11 +634,32 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
+        {/* Payment method */}
+        <Text className="text-[10px] font-bold tracking-[0.18em] uppercase mt-6 mb-2" style={{ color: Colors.inkMuted }}>Pay with</Text>
+        <View className="flex-row gap-2">
+          <Pressable
+            onPress={() => setPayMethod("razorpay")}
+            className={`flex-1 border px-3 py-3 ${payMethod === "razorpay" ? "border-[#1B1611] bg-[#EFE7D8]" : "border-[#E3DDD1]"}`}
+          >
+            <Text className="text-[13px] font-semibold text-[#1B1611]">Card / UPI</Text>
+            <Text className="text-[10px] text-[#57493A]">Razorpay</Text>
+          </Pressable>
+          <Pressable
+            disabled={walletBalance < total}
+            onPress={() => walletBalance >= total && setPayMethod("wallet")}
+            className={`flex-1 border px-3 py-3 ${payMethod === "wallet" && walletBalance >= total ? "border-[#1B1611] bg-[#EFE7D8]" : "border-[#E3DDD1]"}`}
+            style={{ opacity: walletBalance < total ? 0.5 : 1 }}
+          >
+            <Text className="text-[13px] font-semibold text-[#1B1611]">Wallet</Text>
+            <Text className="text-[10px] text-[#57493A]">{formatInr(walletBalance)}{walletBalance < total ? " · low" : ""}</Text>
+          </Pressable>
+        </View>
+
         {/* Pay button */}
         <Pressable
           onPress={handlePay}
           disabled={blocked}
-          className="h-14 items-center justify-center mt-6"
+          className="h-14 items-center justify-center mt-4"
           style={{ backgroundColor: blocked ? "#E3DDD1" : Colors.ink }}
         >
           {paying ? (

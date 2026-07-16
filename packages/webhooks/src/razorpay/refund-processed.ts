@@ -41,7 +41,7 @@ export async function handleRefundProcessed(refundEntity: Record<string, unknown
       ),
     );
 
-  await alertAdminRefund(orderInfo(order)).catch(() => {});
+  await alertAdminRefund(orderInfo(order), "razorpay").catch(() => {});
 
   console.log(`[webhook:razorpay] order ${order.orderNumber} → refunded (${refundId})`);
 }

@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Heart, Minus, Plus, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ProductOffers } from "@/components/product-offers";
 import { RatingDisplay } from "@/components/rating-stars";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -270,6 +271,13 @@ export default function ProductDetailPage() {
                 </div>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">Incl. of all taxes</p>
               </div>
+            )}
+
+            {/* Offers & coupons */}
+            {activeVariant && (
+              <ProductOffers
+                price={(activeVariant as any).effectivePrice ?? Number(activeVariant.mrp)}
+              />
             )}
 
             {/* Concentration selector */}

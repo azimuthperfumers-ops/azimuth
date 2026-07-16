@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { index, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
 
@@ -57,7 +57,12 @@ export const walletTransactions = pgTable(
     actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (t) => [index("wallet_transactions_user_idx").on(t.userId, t.createdAt)],
+  (t) => [
+    index("wallet_transactions_user_idx").on(t.userId, t.createdAt),
+    // DB-level idempotency backstop: at most one ledger row per (user, type, ref).
+    // NULL refIds (manual adjustments) are distinct, so they're unaffected.
+    uniqueIndex("wallet_transactions_idem_uq").on(t.userId, t.type, t.refId),
+  ],
 );
 
 // Pending Razorpay top-up orders. On payment.captured the wallet is credited and

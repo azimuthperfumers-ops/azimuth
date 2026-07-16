@@ -388,6 +388,9 @@ function CheckoutSummary({
   freeShippingAbove,
   paying,
   onPay,
+  walletBalance,
+  payMethod,
+  onPayMethodChange,
 }: {
   subtotal: number;
   couponCode: string | null;
@@ -399,6 +402,9 @@ function CheckoutSummary({
   freeShippingAbove: number;
   paying: boolean;
   onPay: () => void;
+  walletBalance: number;
+  payMethod: "razorpay" | "wallet";
+  onPayMethodChange: (m: "razorpay" | "wallet") => void;
 }) {
   const discount = couponDiscount ?? 0;
   const shipping = shippingRate ?? 0;
@@ -471,7 +477,48 @@ function CheckoutSummary({
         </div>
       </div>
 
-      <div className="px-6 pb-6 space-y-3">
+      {/* Payment method */}
+      <div className="px-6 pb-1">
+        <p className="mb-2 text-[10px] font-bold tracking-[0.18em] uppercase text-muted-foreground/60">Pay with</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => onPayMethodChange("razorpay")}
+            className={cn(
+              "border px-3 py-2.5 text-left transition-colors",
+              payMethod === "razorpay" ? "border-foreground bg-muted/40" : "border-border hover:border-foreground/40",
+            )}
+          >
+            <span className="block text-[12px] font-semibold">Card / UPI</span>
+            <span className="block text-[10px] text-muted-foreground">Razorpay</span>
+          </button>
+          {(() => {
+            const enough = walletBalance >= total;
+            return (
+              <button
+                type="button"
+                disabled={!enough}
+                onClick={() => enough && onPayMethodChange("wallet")}
+                className={cn(
+                  "border px-3 py-2.5 text-left transition-colors",
+                  payMethod === "wallet" && enough ? "border-foreground bg-muted/40" : "border-border hover:border-foreground/40",
+                  !enough && "opacity-50 cursor-not-allowed",
+                )}
+              >
+                <span className="block text-[12px] font-semibold">Wallet</span>
+                <span className="block text-[10px] tabular-nums text-muted-foreground">
+                  {formatInr(walletBalance)}{!enough && " · low"}
+                </span>
+              </button>
+            );
+          })()}
+        </div>
+        {payMethod === "wallet" && walletBalance >= total && (
+          <p className="mt-2 text-[11px] text-muted-foreground">Paid instantly from your wallet balance.</p>
+        )}
+      </div>
+
+      <div className="px-6 pb-6 pt-4 space-y-3">
         <button
           type="button"
           disabled={blocked}
@@ -487,7 +534,7 @@ function CheckoutSummary({
         </button>
         <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/40">
           <Lock className="size-3" />
-          <span>Secured by Razorpay · GST invoice included</span>
+          <span>{payMethod === "wallet" ? "Paid from Azimuth wallet" : "Secured by Razorpay"} · GST invoice included</span>
         </div>
       </div>
     </div>
@@ -515,6 +562,9 @@ export default function CheckoutPage() {
   const [newFormErrors, setNewFormErrors] = useState<Partial<Record<keyof AddressForm, string>>>({});
   const [saveToAccount, setSaveToAccount] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [payMethod, setPayMethod] = useState<"razorpay" | "wallet">("razorpay");
+  const walletQuery = trpc.wallet.get.useQuery();
+  const walletBalance = walletQuery.data?.balance ?? 0;
   const newFormRef = useRef<HTMLDivElement>(null);
 
   const utils = trpc.useUtils();
@@ -607,6 +657,9 @@ export default function CheckoutPage() {
   }
 
   async function handlePay() {
+    // Wallet only if the customer chose it AND the balance covers the order.
+    const method: "razorpay" | "wallet" = payMethod === "wallet" && walletBalance >= total ? "wallet" : "razorpay";
+
     const addr = resolveShippingAddress();
 
     if (!addr) {
@@ -669,15 +722,18 @@ export default function CheckoutPage() {
         await utils.userData.listAddresses.invalidate();
       }
 
-      // 1. Load Razorpay script
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded) {
-        toast.error("Could not load payment gateway. Check your connection.");
-        return;
+      // 1. Load Razorpay script (bank/card only — wallet needs no gateway)
+      if (method === "razorpay") {
+        const scriptLoaded = await loadRazorpayScript();
+        if (!scriptLoaded) {
+          toast.error("Could not load payment gateway. Check your connection.");
+          return;
+        }
       }
 
       // 2. Create order in DB
       const order = await createOrder.mutateAsync({
+        paymentMethod: method,
         shippingAddress: {
           fullName: addr.fullName.trim(),
           phone: addr.phone.trim(),
@@ -708,6 +764,14 @@ export default function CheckoutPage() {
         couponCode: cart.couponCode ?? null,
       });
       createdOrderId = order.id;
+
+      // Wallet order is already paid + booked server-side — no gateway step.
+      if (method === "wallet") {
+        await Promise.all([utils.order.list.invalidate(), utils.wallet.get.invalidate(), utils.wallet.transactions.invalidate()]);
+        toast.success("Paid from wallet! Redirecting to your orders…");
+        router.push("/account?tab=orders");
+        return;
+      }
 
       // 3. Create Razorpay order on server
       const rzpData = await createRazorpayOrder.mutateAsync({ orderId: order.id });
@@ -911,6 +975,9 @@ export default function CheckoutPage() {
             freeShippingAbove={freeShippingAbove}
             paying={paying}
             onPay={handlePay}
+            walletBalance={walletBalance}
+            payMethod={payMethod}
+            onPayMethodChange={setPayMethod}
           />
         </div>
       </main>

@@ -53,6 +53,7 @@ function ActionDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const [note, setNote] = useState("");
+  const [refundDest, setRefundDest] = useState<"razorpay" | "wallet">("wallet");
   const utils = trpc.useUtils();
 
   const act = trpc.ticket.adminAction.useMutation({
@@ -72,7 +73,7 @@ function ActionDialog({
 
   const DESC: Record<string, string> = {
     refund:
-      "Full refund via Razorpay. Verify proof first: compare the customer's photos with the courier's delivery image, or review the unpacking video. Cannot be undone.",
+      "Verify proof first: compare the customer's photos with the courier's delivery image, or review the unpacking video. Cannot be undone.",
     close: "Mark ticket as closed. Customer can still email for help.",
   };
 
@@ -84,6 +85,30 @@ function ActionDialog({
         </DialogHeader>
 
         <p className="text-sm text-muted-foreground">{DESC[action]}</p>
+
+        {action === "refund" && (
+          <div className="grid gap-2.5">
+            {([
+              ["wallet", "To customer's wallet", "Instant store credit — our standard refund method."],
+              ["razorpay", "To bank / card (Razorpay)", "Reverses the original payment · 5–7 days."],
+            ] as const).map(([val, title, sub]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setRefundDest(val)}
+                className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${refundDest === val ? "border-foreground bg-muted/50" : "border-border hover:border-foreground/40"}`}
+              >
+                <span className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border ${refundDest === val ? "border-foreground" : "border-muted-foreground/40"}`}>
+                  {refundDest === val && <span className="size-2 rounded-full bg-foreground" />}
+                </span>
+                <span>
+                  <span className="block text-sm font-medium text-foreground">{title}</span>
+                  <span className="block text-[12px] text-muted-foreground">{sub}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -102,10 +127,10 @@ function ActionDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
             variant={action === "refund" ? "destructive" : "default"}
-            onClick={() => act.mutate({ ticketId, action, note: note || undefined })}
+            onClick={() => act.mutate({ ticketId, action, note: note || undefined, ...(action === "refund" ? { refundDestination: refundDest } : {}) })}
             disabled={act.isPending}
           >
-            {act.isPending ? "Processing…" : TITLE[action]}
+            {act.isPending ? "Processing…" : action === "refund" ? (refundDest === "wallet" ? "Refund to wallet" : "Refund to bank") : TITLE[action]}
           </Button>
         </DialogFooter>
       </DialogContent>

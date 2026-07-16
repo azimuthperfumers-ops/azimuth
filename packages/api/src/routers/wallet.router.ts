@@ -27,12 +27,26 @@ export const walletRouter = router({
   }),
 
   // Full statement — top-ups, order payments, refunds-to-wallet, adjustments.
+  // Filterable by date range, direction (credit/debit) and type; paginated.
   transactions: protectedProcedure
-    .input(z.object({ limit: z.number().int().min(1).max(100).default(50), offset: z.number().int().min(0).default(0) }).optional())
+    .input(
+      z.object({
+        limit: z.number().int().min(1).max(100).default(20),
+        offset: z.number().int().min(0).default(0),
+        dateFrom: z.coerce.date().optional(),
+        dateTo: z.coerce.date().optional(),
+        direction: z.enum(["credit", "debit"]).optional(),
+        types: z.array(z.enum(["topup", "order_payment", "refund_credit", "reversal", "adjustment"])).optional(),
+      }).optional(),
+    )
     .query(({ ctx, input }) =>
       createWalletRepository(ctx.db).listTransactions(ctx.session.user.id, {
         limit: input?.limit,
         offset: input?.offset,
+        dateFrom: input?.dateFrom,
+        dateTo: input?.dateTo,
+        direction: input?.direction,
+        types: input?.types,
       }),
     ),
 

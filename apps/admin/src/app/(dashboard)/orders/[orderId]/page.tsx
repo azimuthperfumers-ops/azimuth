@@ -254,6 +254,7 @@ export default function AdminOrderDetailPage({
   const [statusDialog, setStatusDialog] = useState(false);
   const [refundDialog, setRefundDialog] = useState(false);
   const [refundNote, setRefundNote] = useState("");
+  const [refundDest, setRefundDest] = useState<"razorpay" | "wallet">("wallet");
   const utils = trpc.useUtils();
 
   const retryBooking = trpc.order.retryShipmentBooking.useMutation({
@@ -265,9 +266,9 @@ export default function AdminOrderDetailPage({
   });
 
   const issueRefund = trpc.order.issueRefund.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (res) => {
       await utils.order.adminGet.invalidate({ orderId });
-      toast.success("Refund queued — processing via Razorpay");
+      toast.success(res.destination === "wallet" ? "Refunded to customer's wallet" : "Bank refund queued via Razorpay");
       setRefundDialog(false);
       setRefundNote("");
     },
@@ -378,13 +379,17 @@ export default function AdminOrderDetailPage({
                 {markPaid.isPending ? "Processing…" : "Mark as paid"}
               </Button>
             )}
-            {order.razorpayPaymentId &&
-              !["refund_processing", "refunded", "cancelled", "pending_payment"].includes(order.status) && (
+            {/* Wallet-paid orders have no razorpayPaymentId but are still refundable (to wallet). */}
+            {(order.razorpayPaymentId || (order as { paymentMethod?: string }).paymentMethod === "wallet") &&
+              !["refund_processing", "refunded", "cancelled", "pending_payment", "payment_failed"].includes(order.status) && (
               <Button
                 size="sm"
                 variant="outline"
                 className="border-red-400 text-red-700 hover:bg-red-50"
-                onClick={() => setRefundDialog(true)}
+                onClick={() => {
+                  setRefundDest((order as { paymentMethod?: string }).paymentMethod === "wallet" ? "wallet" : "wallet");
+                  setRefundDialog(true);
+                }}
               >
                 Issue refund
               </Button>
@@ -523,6 +528,23 @@ export default function AdminOrderDetailPage({
           <section>
             <SectionLabel>Payment</SectionLabel>
             <div className="border border-border p-4 space-y-1.5 text-[12px]">
+              {/* Plain-language proof for the admin: how it was paid, and if refunded, where it went. */}
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Paid via</span>
+                <span className="font-medium">
+                  {(order as { paymentMethod?: string }).paymentMethod === "wallet" ? "Wallet (store credit)" : "Bank / card"}
+                </span>
+              </div>
+              {(order as { refundMethod?: string | null }).refundMethod && (
+                <div className="flex items-center justify-between gap-2 rounded bg-emerald-50 px-2 py-1.5 dark:bg-emerald-950/30">
+                  <span className="text-emerald-800 dark:text-emerald-300 shrink-0 font-medium">Refunded to</span>
+                  <span className="font-medium text-emerald-800 dark:text-emerald-300">
+                    {(order as { refundMethod?: string }).refundMethod === "wallet"
+                      ? `Wallet · ${order.status === "refunded" ? "credited ✓" : "processing"}`
+                      : `Bank / card · ${order.status === "refunded" ? "sent ✓" : "processing"}`}
+                  </span>
+                </div>
+              )}
               {order.razorpayOrderId && (
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground shrink-0">Rzp order</span>
@@ -621,44 +643,84 @@ export default function AdminOrderDetailPage({
         onOpenChange={setStatusDialog}
       />
 
-      <Dialog open={refundDialog} onOpenChange={setRefundDialog}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Issue direct refund</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              Full refund of <strong className="text-foreground">{formatInr(Number(order.total))}</strong> via Razorpay.
-              Use for damaged / incorrect product — no return required.
-            </p>
-            <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-300">
-              Cannot be undone once queued.
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Reason (internal note)
-              </label>
-              <textarea
-                value={refundNote}
-                onChange={(e) => setRefundNote(e.target.value)}
-                rows={2}
-                placeholder="e.g. Bottle arrived damaged"
-                className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none resize-none"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRefundDialog(false)}>Cancel</Button>
-            <Button
-              variant="destructive"
-              disabled={issueRefund.isPending}
-              onClick={() => issueRefund.mutate({ orderId: order.id, note: refundNote || undefined })}
-            >
-              {issueRefund.isPending ? "Queuing…" : "Issue refund"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {(() => {
+        const walletPaid = (order as { paymentMethod?: string }).paymentMethod === "wallet";
+        const canBank = !!order.razorpayPaymentId && !walletPaid;
+        const dest = walletPaid ? "wallet" : refundDest;
+        return (
+          <Dialog open={refundDialog} onOpenChange={setRefundDialog}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Refund {formatInr(Number(order.total))}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 text-sm">
+                <p className="text-muted-foreground">
+                  Choose where the full order amount goes. For damaged / incorrect items — no return required.
+                </p>
+
+                {/* Destination choice */}
+                <div className="grid gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setRefundDest("wallet")}
+                    className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${dest === "wallet" ? "border-foreground bg-muted/50" : "border-border hover:border-foreground/40"}`}
+                  >
+                    <span className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border ${dest === "wallet" ? "border-foreground" : "border-muted-foreground/40"}`}>
+                      {dest === "wallet" && <span className="size-2 rounded-full bg-foreground" />}
+                    </span>
+                    <span>
+                      <span className="block font-medium text-foreground">To customer&apos;s wallet</span>
+                      <span className="block text-[12px] text-muted-foreground">Instant store credit. Recommended — this is our standard refund method.</span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!canBank}
+                    onClick={() => canBank && setRefundDest("razorpay")}
+                    className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${dest === "razorpay" ? "border-foreground bg-muted/50" : "border-border hover:border-foreground/40"} ${!canBank ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    <span className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border ${dest === "razorpay" ? "border-foreground" : "border-muted-foreground/40"}`}>
+                      {dest === "razorpay" && <span className="size-2 rounded-full bg-foreground" />}
+                    </span>
+                    <span>
+                      <span className="block font-medium text-foreground">To bank / card (Razorpay)</span>
+                      <span className="block text-[12px] text-muted-foreground">
+                        {canBank ? "Reverses the original payment. Reaches the customer in 5–7 days." : "Unavailable — this order was paid from wallet, so there is no bank payment to reverse."}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+
+                <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-300">
+                  Cannot be undone once confirmed.
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reason (internal note)</label>
+                  <textarea
+                    value={refundNote}
+                    onChange={(e) => setRefundNote(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Bottle arrived damaged"
+                    className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none resize-none"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRefundDialog(false)}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  disabled={issueRefund.isPending}
+                  onClick={() => issueRefund.mutate({ orderId: order.id, destination: dest, note: refundNote || undefined })}
+                >
+                  {issueRefund.isPending ? "Processing…" : dest === "wallet" ? "Refund to wallet" : "Refund to bank"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </div>
   );
 }

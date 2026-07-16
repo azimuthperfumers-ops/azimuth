@@ -5,6 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { schema } from "@azimuth/db";
 import { protectedProcedure } from "../middleware/auth.middleware";
 import { advanceOrderStatus } from "../repositories/order.repository";
+import { createWalletRepository } from "../repositories/wallet.repository";
 import { createLogisticsService } from "../services/logistics.service";
 import { createRazorpayService } from "../services/razorpay.service";
 import { publicProcedure, router } from "../trpc";
@@ -211,6 +212,14 @@ export const paymentRouter = router({
         ctx.db, order.id, "payment_failed", ctx.session.user.id,
         "Checkout abandoned — Razorpay window dismissed by customer",
       );
+
+      // A wallet-paid order abandoned after its debit landed must return the money.
+      if (order.paymentMethod === "wallet") {
+        await createWalletRepository(ctx.db).reverseWalletDebitIfAny(
+          order.id,
+          `Wallet payment reversed — order ${order.orderNumber} abandoned`,
+        );
+      }
 
       await ctx.db
         .update(schema.paymentAttempts)

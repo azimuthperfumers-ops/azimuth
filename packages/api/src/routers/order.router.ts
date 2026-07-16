@@ -435,41 +435,59 @@ export const orderRouter = router({
 
       const PAID_STATUSES = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted"];
 
-      if (
-        input.status === "cancelled" &&
-        currentOrder.razorpayPaymentId &&
-        PAID_STATUSES.includes(currentOrder.status)
-      ) {
-        const refundPayload = {
-          type: "initiate_refund" as const,
-          orderId: input.orderId,
-          razorpayPaymentId: currentOrder.razorpayPaymentId,
-          amountPaise: Math.round(Number(currentOrder.total) * 100),
-          reason: input.note ?? "Admin cancelled order",
-        };
-        const [refundJob] = await ctx.db
-          .insert(schema.backgroundJobs)
-          .values({ type: "initiate_refund", status: "pending", payload: refundPayload, orderId: input.orderId })
-          .returning({ id: schema.backgroundJobs.id });
-        const refundBullJob = await orderQueue.add("initiate_refund", { ...refundPayload, dbJobId: refundJob?.id });
-        if (refundJob) {
-          await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
-        }
-
-        if (currentOrder.waybill) {
-          const cancelPayload = {
-            type: "cancel_shipment" as const,
+      if (input.status === "cancelled" && PAID_STATUSES.includes(currentOrder.status)) {
+        // Money back — path depends on how the customer paid.
+        if (currentOrder.paymentMethod === "wallet") {
+          // Wallet-paid: instant store-credit refund, idempotent per order (same
+          // ledger key as issueRefund, so it can never double-credit).
+          await createWalletRepository(ctx.db).record({
+            userId: currentOrder.userId,
+            amount: Number(currentOrder.total),
+            type: "refund_credit",
+            refType: "order",
+            refId: currentOrder.id,
+            note: input.note ?? `Refund for cancelled order ${currentOrder.orderNumber}`,
+            actorId: ctx.session.user.id,
+            idempotent: true,
+          });
+          await ctx.db.update(schema.orders).set({ refundMethod: "wallet" }).where(eq(schema.orders.id, currentOrder.id));
+          const contact = await getOrderContact(ctx.db, currentOrder);
+          notifyRefundInitiated(contact, toOrderInfo(currentOrder), "wallet")
+            .catch((e: unknown) => console.error("[order] cancel wallet refund notify:", e));
+        } else if (currentOrder.razorpayPaymentId) {
+          const refundPayload = {
+            type: "initiate_refund" as const,
             orderId: input.orderId,
-            waybill: currentOrder.waybill,
+            razorpayPaymentId: currentOrder.razorpayPaymentId,
+            amountPaise: Math.round(Number(currentOrder.total) * 100),
+            reason: input.note ?? "Admin cancelled order",
           };
-          const [cancelJob] = await ctx.db
+          const [refundJob] = await ctx.db
             .insert(schema.backgroundJobs)
-            .values({ type: "cancel_shipment", status: "pending", payload: cancelPayload, orderId: input.orderId })
+            .values({ type: "initiate_refund", status: "pending", payload: refundPayload, orderId: input.orderId })
             .returning({ id: schema.backgroundJobs.id });
-          const cancelBullJob = await orderQueue.add("cancel_shipment", { ...cancelPayload, dbJobId: cancelJob?.id });
-          if (cancelJob) {
-            await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: cancelBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, cancelJob.id));
+          const refundBullJob = await orderQueue.add("initiate_refund", { ...refundPayload, dbJobId: refundJob?.id });
+          if (refundJob) {
+            await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
           }
+        }
+      }
+
+      // Recall the parcel regardless of payment method — Shiprocket cancels the
+      // shipment; if already picked up the courier RTOs it back to the warehouse.
+      if (input.status === "cancelled" && currentOrder.waybill) {
+        const cancelPayload = {
+          type: "cancel_shipment" as const,
+          orderId: input.orderId,
+          waybill: currentOrder.waybill,
+        };
+        const [cancelJob] = await ctx.db
+          .insert(schema.backgroundJobs)
+          .values({ type: "cancel_shipment", status: "pending", payload: cancelPayload, orderId: input.orderId })
+          .returning({ id: schema.backgroundJobs.id });
+        const cancelBullJob = await orderQueue.add("cancel_shipment", { ...cancelPayload, dbJobId: cancelJob?.id });
+        if (cancelJob) {
+          await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: cancelBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, cancelJob.id));
         }
       }
 
@@ -529,7 +547,7 @@ export const orderRouter = router({
         const contact = await getOrderContact(ctx.db, order);
         const info = toOrderInfo(order);
         if (input.status === "refunded") {
-          notifyRefundInitiated(contact, info)
+          notifyRefundInitiated(contact, info, order.refundMethod === "wallet" ? "wallet" : "razorpay")
             .catch((e: unknown) => console.error("[comms] refund notify:", e));
         }
       }
@@ -642,6 +660,10 @@ export const orderRouter = router({
       });
       if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
 
+      // Never refund money that was never paid.
+      if (order.status === "pending_payment" || order.status === "payment_failed") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot refund: this order was never paid." });
+      }
       const BLOCKED = ["refund_processing", "refunded", "cancelled"];
       if (BLOCKED.includes(order.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `Cannot refund: order is already ${order.status}` });
@@ -666,7 +688,7 @@ export const orderRouter = router({
         await advanceOrderStatus(ctx.db, order.id, "refunded", ctx.session.user.id, `Refunded ₹${Number(order.total)} to wallet. ${input.note ?? ""}`.trim());
 
         const contact = await getOrderContact(ctx.db, order);
-        notifyRefundInitiated(contact, toOrderInfo(order)).catch((e: unknown) => console.error("[order] wallet refund notify:", e));
+        notifyRefundInitiated(contact, toOrderInfo(order), "wallet").catch((e: unknown) => console.error("[order] wallet refund notify:", e));
         return { ok: true, destination: "wallet" as const };
       }
 

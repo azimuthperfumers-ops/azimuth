@@ -58,6 +58,7 @@ type CouponForm = {
   code: string;
   description: string;
   type: "percentage" | "flat";
+  paymentMethod: "any" | "razorpay" | "wallet";
   value: string;
   minCartValue: string;
   maxDiscount: string;
@@ -72,6 +73,7 @@ const EMPTY_FORM: CouponForm = {
   code: "",
   description: "",
   type: "flat",
+  paymentMethod: "any",
   value: "",
   minCartValue: "0",
   maxDiscount: "",
@@ -152,6 +154,23 @@ function CouponDialog({ open, onOpenChange, initial, title, onSubmit, isPending 
               onChange={(e) => set("description", e.target.value)}
               placeholder="₹200 off on orders above ₹1,600"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-field-label font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Valid for payment method
+            </Label>
+            <Select value={form.paymentMethod} onValueChange={(v) => set("paymentMethod", v as CouponForm["paymentMethod"])}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">Any method</SelectItem>
+                <SelectItem value="razorpay">Bank / card only</SelectItem>
+                <SelectItem value="wallet">Wallet only</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground/60">
+              Restrict the coupon so it only applies when the customer pays this way.
+            </p>
           </div>
 
           {/* Value + min cart */}
@@ -294,6 +313,7 @@ export default function CouponsPage() {
       code: form.code.trim().toUpperCase(),
       description: form.description.trim() || undefined,
       type: form.type,
+      paymentMethod: form.paymentMethod,
       value: Number(form.value),
       minCartValue: Number(form.minCartValue || 0),
       maxDiscount: form.maxDiscount ? Number(form.maxDiscount) : undefined,
@@ -312,6 +332,7 @@ export default function CouponsPage() {
       code: c.code,
       description: c.description ?? "",
       type: c.type,
+      paymentMethod: (c as { paymentMethod?: "any" | "razorpay" | "wallet" }).paymentMethod ?? "any",
       value: String(c.value),
       minCartValue: String(c.minCartValue),
       maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "",

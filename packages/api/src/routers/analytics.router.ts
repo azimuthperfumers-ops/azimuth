@@ -363,4 +363,30 @@ export const analyticsRouter = router({
         };
       }),
     ),
+
+  // Pending-work counts for the sidebar badges. Deliberately cheap: one SQL
+  // statement (scalar subqueries, all hitting small indexed tables) behind a
+  // 30s Redis cache, so however many admin tabs poll, the DB sees ~2 queries/min.
+  sidebarBadges: adminProcedure.query(({ ctx }) =>
+    cacheGetOrSet("admin:sidebar-badges", 30, async () => {
+      const [row] = await ctx.db.execute<{
+        tickets: number;
+        orders: number;
+        jobs: number;
+        inventory: number;
+      }>(sql`
+        SELECT
+          (SELECT count(*)::int FROM support_tickets WHERE status IN ('open', 'awaiting_admin')) AS tickets,
+          (SELECT count(*)::int FROM orders WHERE status IN ('paid', 'processing')) AS orders,
+          (SELECT count(*)::int FROM background_jobs WHERE status = 'failed') AS jobs,
+          (SELECT count(*)::int FROM product_variants WHERE status = 'active' AND stock_cached <= 5) AS inventory
+      `);
+      return {
+        tickets: Number(row?.tickets ?? 0), // open / awaiting your reply
+        orders: Number(row?.orders ?? 0), // paid or processing — need fulfillment
+        jobs: Number(row?.jobs ?? 0), // failed background jobs
+        inventory: Number(row?.inventory ?? 0), // active variants at/below low-stock threshold (5)
+      };
+    }),
+  ),
 });

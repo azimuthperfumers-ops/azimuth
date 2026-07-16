@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart2, Boxes, FlaskConical, LayoutDashboard, LogOut, Package, Paintbrush, PercentCircle, Settings, ShoppingBag, Tag, Tags, TicketIcon, Users, Cpu } from "lucide-react";
+import { BarChart2, Boxes, FlaskConical, LayoutDashboard, LogOut, Package, Paintbrush, PercentCircle, Settings, ShoppingBag, Tag, Tags, TicketIcon, Users, Cpu, Wallet } from "lucide-react";
 
 import { ModeToggle } from "@/components/mode-toggle";
 import { Separator } from "@/components/ui/separator";
@@ -23,6 +23,29 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/lib/trpc";
+
+// Which nav item shows which pending-work count. `urgent` renders red (needs
+// action now); otherwise amber (worth a look).
+const BADGE_KEY: Record<string, { key: "tickets" | "orders" | "jobs" | "inventory"; urgent: boolean }> = {
+  "/support": { key: "tickets", urgent: true },
+  "/orders": { key: "orders", urgent: false },
+  "/jobs": { key: "jobs", urgent: true },
+  "/inventory": { key: "inventory", urgent: false },
+};
+
+function NavBadge({ count, urgent }: { count: number; urgent: boolean }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className={`ml-auto flex h-[17px] min-w-[17px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white tabular-nums ${
+        urgent ? "bg-red-600" : "bg-amber-500"
+      }`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
 
 const NAV_GROUPS = [
   {
@@ -59,6 +82,7 @@ const NAV_GROUPS = [
     label: "Customers",
     items: [
       { href: "/users", label: "Users", icon: Users },
+      { href: "/wallets", label: "Wallets", icon: Wallet },
     ],
   },
   {
@@ -97,6 +121,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session, isPending } = authClient.useSession();
   const [sidebarDefaultOpen] = useState(getSidebarDefaultOpen);
   const isAdmin = session?.user.role === "admin";
+
+  // Pending-work counts for the nav badges. Kept cheap: 2-min poll, 1-min
+  // staleTime (focus/nav inside that window reuses the cached result), and the
+  // server caches the query in Redis for 30s anyway.
+  const badges = trpc.analytics.sidebarBadges.useQuery(undefined, {
+    enabled: isAdmin,
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     if (!isPending && !isAdmin) {
@@ -146,6 +179,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           <span className="text-[12.5px] font-medium tracking-[0.02em]">
                             {item.label}
                           </span>
+                          {BADGE_KEY[item.href] && badges.data && (
+                            <NavBadge
+                              count={badges.data[BADGE_KEY[item.href].key]}
+                              urgent={BADGE_KEY[item.href].urgent}
+                            />
+                          )}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
