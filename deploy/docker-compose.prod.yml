@@ -61,6 +61,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env.production
+    # Override the shared PORT=4000 (that's the server's) so the worker's health
+    # server binds 3002 — the port Caddy's /worker-health route proxies to.
+    environment:
+      PORT: "3002"
     depends_on:
       migrate:
         condition: service_completed_successfully

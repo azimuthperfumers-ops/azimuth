@@ -4,8 +4,16 @@
 {$API_DOMAIN} {
 	encode gzip
 
-	# tRPC / express server
-	reverse_proxy server:4000
+	# Worker health endpoint — the worker has no public port, so expose its
+	# internal HTTP health server here for external uptime monitors (UptimeRobot).
+	handle /worker-health* {
+		reverse_proxy worker:3002
+	}
+
+	# Everything else → tRPC / express server
+	handle {
+		reverse_proxy server:4000
+	}
 
 	# Basic hardening headers
 	header {

@@ -22,8 +22,30 @@ server.listen(PORT, () => console.log(`[worker] health server on :${PORT}`));
 
 console.log("[worker] Order worker started");
 
+// Dead-man's-switch heartbeat — ping Healthchecks.io every 60s, but only while
+// the queue worker is actually running. If the process dies OR the worker stops
+// consuming, the pings stop and Healthchecks.io alerts after its grace period.
+// No-op unless HEALTHCHECK_URL is set.
+const HEALTHCHECK_URL = process.env.HEALTHCHECK_URL;
+let heartbeat: NodeJS.Timeout | undefined;
+if (HEALTHCHECK_URL) {
+  const ping = async () => {
+    if (!worker.isRunning()) return; // stuck/closed → skip ping → triggers alert
+    try {
+      await fetch(HEALTHCHECK_URL, { signal: AbortSignal.timeout(10_000) });
+    } catch (e: unknown) {
+      console.error("[worker] healthcheck ping failed:", e);
+    }
+  };
+  void ping();
+  heartbeat = setInterval(() => void ping(), 60_000);
+  heartbeat.unref();
+  console.log("[worker] heartbeat enabled");
+}
+
 async function shutdown(signal: string) {
   console.log(`[worker] ${signal} received — draining and closing`);
+  if (heartbeat) clearInterval(heartbeat);
   await worker.close();
   server.close();
   console.log("[worker] Shutdown complete");
