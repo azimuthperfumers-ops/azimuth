@@ -16,6 +16,7 @@ build/
 .env
 .env.*
 !.env.example
+!deploy/.env.production.example
 
 # logs
 *.log

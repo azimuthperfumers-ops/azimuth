@@ -1,0 +1,109 @@
+# Production stack for the Azimuth VPS.
+#
+# Only server + worker (+ their datastores + a TLS proxy) run here. The user /
+# admin Next.js apps are hosted elsewhere (Vercel) and reach this box over
+# https://${API_DOMAIN}.
+#
+# Images are built in GitHub Actions and pulled from GHCR — the VPS never builds.
+# All values come from ./.env.production (see .env.production.example).
+#
+# Usage on the VPS:
+#   cd /opt/azimuth/deploy
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Postgres and Redis publish NO host ports — they are reachable only on the
+# internal compose network, never from the public internet.
+
+name: azimuth
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - azimuth_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - azimuth_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: applies pending Drizzle migrations, then exits 0. Server/worker
+  # wait for this to complete successfully before they start.
+  migrate:
+    image: ${REGISTRY}/azimuth-migrate:${IMAGE_TAG:-latest}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+
+  server:
+    image: ${REGISTRY}/azimuth-server:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    expose:
+      - "4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    image: ${REGISTRY}/azimuth-worker:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # TLS termination + reverse proxy. Caddy fetches/renews Let's Encrypt certs
+  # automatically for ${API_DOMAIN}.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - server
+
+volumes:
+  azimuth_postgres_data:
+  azimuth_redis_data:
+  caddy_data:
+  caddy_config:
