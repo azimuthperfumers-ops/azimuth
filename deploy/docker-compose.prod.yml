@@ -1,9 +1,10 @@
 # Production stack for the Azimuth VPS.
 #
-# ONLY server + worker run here (plus a one-shot migrator and a TLS proxy).
-# Postgres is managed by Neon, Redis by Upstash — both reached over their URLs
-# in .env.production. The user / admin Next.js apps are hosted on Vercel and
-# reach this box over https://${API_DOMAIN}.
+# server + worker + a self-hosted Redis (for the BullMQ queue) run here, plus a
+# one-shot migrator and a TLS proxy. Postgres is managed by Neon (external URL in
+# .env.production). Redis is local — a job queue burns commands fast, so a metered
+# managed tier isn't worth it; redis:7-alpine is tiny (job state only). The user /
+# admin Next.js apps are hosted on Vercel and reach this box over https://${API_DOMAIN}.
 #
 # Images are built in GitHub Actions and pulled from GHCR — the VPS never builds.
 #
@@ -15,6 +16,20 @@
 name: azimuth
 
 services:
+  # BullMQ queue store. Local, unmetered. appendonly persistence to a volume so
+  # queued jobs survive a restart.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - azimuth_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # One-shot: applies pending Drizzle migrations to Neon, then exits 0.
   # server/worker wait for this to finish before starting.
   migrate:
@@ -31,6 +46,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     expose:
       - "4000"
     healthcheck:
@@ -47,6 +64,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
   # TLS termination + reverse proxy. Caddy auto-provisions/renews a Let's
   # Encrypt cert for ${API_DOMAIN}.
@@ -66,5 +85,6 @@ services:
       - server
 
 volumes:
+  azimuth_redis_data:
   caddy_data:
   caddy_config:

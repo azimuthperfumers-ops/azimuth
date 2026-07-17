@@ -1,9 +1,10 @@
 # Azimuth VPS deployment
 
-Backend (`server` + `worker`) runs on the Hostinger VPS via Docker Compose.
-Postgres is managed by **Neon**, Redis by **Upstash** — nothing stateful runs on
-the box. The `user` / `admin` Next.js apps are hosted on Vercel and talk to
-`https://api.<domain>`.
+Backend (`server` + `worker` + a local `redis`) runs on the Hostinger VPS via
+Docker Compose. Postgres is managed by **Neon** (external). Redis runs on the box
+— a BullMQ queue burns commands too fast for a metered managed tier, and
+`redis:7-alpine` is tiny. The `user` / `admin` Next.js apps are hosted on Vercel
+and talk to `https://api.<domain>`.
 
 Images are **built in GitHub Actions and pulled from GHCR** — the VPS never
 builds, keeping CPU/disk light.
