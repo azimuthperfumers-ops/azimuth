@@ -1,8 +1,8 @@
 # Azimuth VPS deployment
 
 Backend (`server` + `worker`) runs on the Hostinger VPS via Docker Compose.
-Postgres + Redis live on the same box (internal network, no public ports). The
-`user` / `admin` Next.js apps are hosted separately (Vercel) and talk to
+Postgres is managed by **Neon**, Redis by **Upstash** — nothing stateful runs on
+the box. The `user` / `admin` Next.js apps are hosted on Vercel and talk to
 `https://api.<domain>`.
 
 Images are **built in GitHub Actions and pulled from GHCR** — the VPS never
@@ -16,8 +16,10 @@ GitHub Actions ──build──▶ GHCR (azimuth-server / -worker / -migrate)
       │
       └──ssh──▶ VPS: deploy.sh <sha>
                    ├─ compose pull
-                   ├─ migrate (one-shot, applies Drizzle migrations)
-                   └─ up -d  (server, worker, caddy, postgres, redis)
+                   ├─ migrate (one-shot → Neon)
+                   └─ up -d  (server, worker, caddy)
+
+Datastores: Neon (Postgres) + Upstash (Redis) — external, not on the VPS.
 ```
 
 ---
@@ -58,11 +60,11 @@ nano .env.production          # paste from deploy/.env.production.example, fill 
 chmod 600 .env.production
 ```
 
-Generate the secrets:
+Fill `DATABASE_URL` from Neon (pooled string, keep `?sslmode=require`) and
+`REDIS_URL` from Upstash (the `rediss://` URL). Generate the auth secret:
 
 ```bash
 openssl rand -hex 32     # BETTER_AUTH_SECRET
-openssl rand -base64 24  # POSTGRES_PASSWORD  (also update DATABASE_URL to match)
 ```
 
 ### 4. Let the VPS pull private GHCR images
@@ -150,12 +152,7 @@ Every `git push` to `master` that touches backend paths auto-deploys.
 
 Check usage anytime: `docker system df` and `df -h`.
 
-## Backups (recommended, not yet automated)
+## Backups
 
-```bash
-# postgres dump
-docker compose --env-file .env.production -f docker-compose.prod.yml \
-  exec postgres pg_dump -U azimuth azimuth_perfumers | gzip > ~/azimuth-$(date +%F).sql.gz
-```
-
-Wire this into a daily cron once you're live.
+Handled by the providers — Neon has point-in-time restore, Upstash persists +
+replicates. Nothing to run on the VPS.
