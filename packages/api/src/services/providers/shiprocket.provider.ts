@@ -18,19 +18,52 @@ import type {
   TrackingResult,
 } from "../logistics.service";
 import { env } from "../../env";
+import { cacheGet, cacheSet, cacheDel } from "@azimuth/redis";
 
 const BASE = "https://apiv2.shiprocket.in/v1/external";
 
 // ── Token cache ───────────────────────────────────────────────────────────────
-// Token valid 10 days. Cache in memory; re-login on 401 or near-expiry.
+// Token valid ~10 days. Cached in-process AND in Redis so a server restart
+// reuses the existing token instead of logging in again — a login storm across
+// restarts is what trips Shiprocket's "too many failed login attempts" lockout.
+
+const TOKEN_CACHE_KEY = "shiprocket:auth-token";
+const AUTH_COOLDOWN_MS = 15 * 60 * 1000;
 
 let _token: string | null = null;
 let _tokenExpiresAt = 0;
+// After an unrecoverable auth failure (bad creds / lockout) we stop attempting
+// login until this timestamp — retrying only renews Shiprocket's block.
+let _authBlockedUntil = 0;
 
 async function getToken(): Promise<string> {
   const nowMs = Date.now();
-  // Refresh 1 hour before expiry
+  // In-memory token still fresh? (refresh 1h before expiry)
   if (_token && nowMs < _tokenExpiresAt - 60 * 60 * 1000) return _token;
+
+  // Reuse a Redis-persisted token across restarts before logging in again.
+  if (!_token) {
+    const cached = await cacheGet(TOKEN_CACHE_KEY);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as { token: string; expiresAt: number };
+        if (parsed.token && nowMs < parsed.expiresAt - 60 * 60 * 1000) {
+          _token = parsed.token;
+          _tokenExpiresAt = parsed.expiresAt;
+          return _token;
+        }
+      } catch {
+        // corrupt entry — fall through to a fresh login
+      }
+    }
+  }
+
+  // Don't hammer the login endpoint during a known lockout cooldown.
+  if (nowMs < _authBlockedUntil) {
+    throw new ShiprocketUnrecoverableError(
+      `[shiprocket] auth in cooldown until ${new Date(_authBlockedUntil).toISOString()} — skipping login`,
+    );
+  }
 
   const res = await fetch(`${BASE}/auth/login`, {
     method: "POST",
@@ -43,8 +76,13 @@ async function getToken(): Promise<string> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    // 403 = account blocked / bad credentials — retrying login makes the block worse
-    if (res.status === 403 || res.status === 401) {
+    // Unrecoverable by retry: 401/403 (bad credentials) OR a 400 lockout
+    // ("User blocked due to too many failed login attempts"). Retrying login
+    // only deepens/renews the block, so back off for a cooldown window and let
+    // Shiprocket's block expire on its own.
+    const lockedOut = /blocked|too many failed login/i.test(text);
+    if (res.status === 401 || res.status === 403 || (res.status === 400 && lockedOut)) {
+      _authBlockedUntil = Date.now() + AUTH_COOLDOWN_MS;
       throw new ShiprocketUnrecoverableError(`[shiprocket] auth failed ${res.status}: ${text.slice(0, 200)}`);
     }
     throw new Error(`[shiprocket] auth failed ${res.status}: ${text.slice(0, 200)}`);
@@ -58,6 +96,11 @@ async function getToken(): Promise<string> {
   _tokenExpiresAt = data.expires_at
     ? new Date(data.expires_at).getTime()
     : nowMs + 10 * 24 * 60 * 60 * 1000;
+  _authBlockedUntil = 0; // successful login clears any prior cooldown
+
+  // Persist for other processes / restarts; TTL kept ~1h under real expiry.
+  const ttlSeconds = Math.max(60, Math.floor((_tokenExpiresAt - nowMs) / 1000) - 3600);
+  await cacheSet(TOKEN_CACHE_KEY, JSON.stringify({ token: _token, expiresAt: _tokenExpiresAt }), ttlSeconds);
 
   console.log("[shiprocket] token refreshed");
   return _token;
@@ -69,8 +112,10 @@ async function apiGet<T>(path: string): Promise<T> {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
   });
   if (res.status === 401) {
-    // Force token refresh on next call
+    // Force token refresh on next call — drop both in-memory and Redis copies
+    // so a stale persisted token can't 401 in a loop.
     _token = null;
+    await cacheDel(TOKEN_CACHE_KEY);
     throw new Error("[shiprocket] 401 — token expired, will retry");
   }
   if (!res.ok) {
@@ -89,6 +134,7 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   });
   if (res.status === 401) {
     _token = null;
+    await cacheDel(TOKEN_CACHE_KEY);
     throw new Error("[shiprocket] 401 — token expired, will retry");
   }
   if (!res.ok) {

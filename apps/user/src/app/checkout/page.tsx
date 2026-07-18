@@ -410,7 +410,11 @@ function CheckoutSummary({
   const shipping = shippingRate ?? 0;
   const total = Math.max(0, subtotal - discount) + shipping;
   const needsPincode = pincode.length < 6;
-  const blocked = paying || shippingLoading || needsPincode;
+  const isFreeShipping = subtotal >= freeShippingAbove;
+  // Pincode complete, not loading, but no rate came back → not serviceable.
+  // Free-shipping orders are always deliverable, so they're never "unavailable".
+  const shippingUnavailable = !isFreeShipping && !needsPincode && !shippingLoading && shippingRate === null;
+  const blocked = paying || shippingLoading || needsPincode || shippingUnavailable;
 
   return (
     <div className="border border-border lg:sticky lg:top-24">
@@ -530,7 +534,13 @@ function CheckoutSummary({
               : "bg-foreground text-background hover:opacity-85",
           )}
         >
-          {paying ? "Processing…" : shippingLoading ? "Calculating shipping…" : `Pay ${shippingLoading || needsPincode ? "—" : formatInr(total)}`}
+          {paying
+            ? "Processing…"
+            : shippingLoading
+            ? "Calculating shipping…"
+            : shippingUnavailable
+            ? "Delivery unavailable"
+            : `Pay ${needsPincode ? "—" : formatInr(total)}`}
         </button>
         <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/40">
           <Lock className="size-3" />
@@ -696,8 +706,14 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (addr.pincode.length === 6 && shippingQuery.isSuccess && !shippingQuery.data?.available) {
-      toast.error("Delivery not available to this pincode");
+    // Fail-closed: only proceed when delivery is positively confirmed available —
+    // free-shipping orders, or a successful quote marked available. A query error
+    // or an "unavailable" result blocks payment rather than silently charging.
+    const shippingConfirmed =
+      subtotal >= freeShippingAbove ||
+      (shippingQuery.isSuccess && shippingQuery.data?.available === true);
+    if (addr.pincode.length === 6 && !shippingConfirmed) {
+      toast.error("Delivery isn't available to this pincode right now. Please try a different address or check back shortly.");
       return;
     }
 
