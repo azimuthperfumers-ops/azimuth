@@ -622,6 +622,10 @@ export const orderRouter = router({
       // Send order notifications
       const updatedOrder = await ctx.db.query.orders.findFirst({ where: eq(schema.orders.id, input.orderId) });
       if (updatedOrder) {
+        // GST invoice — idempotent; never let a failure block the paid order.
+        await generateOrderInvoice(ctx.db, updatedOrder).catch((e: unknown) =>
+          console.error("[order] confirmPayment invoice gen:", e),
+        );
         const contact = await getOrderContact(ctx.db, updatedOrder);
         const info = toOrderInfo(updatedOrder);
         Promise.all([notifyOrderPlaced(contact, info), alertAdminNewOrder(info)])
@@ -643,6 +647,23 @@ export const orderRouter = router({
       }
 
       return { ok: true };
+    }),
+
+  // ── Admin: generate / regenerate the GST invoice ───────────────────────────
+  // Idempotent. Backfills paid orders that missed invoice generation (e.g. paid
+  // before the feature shipped), or re-renders if the PDF upload failed.
+  generateInvoice: adminProcedure
+    .input(z.object({ orderId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const order = await ctx.db.query.orders.findFirst({
+        where: eq(schema.orders.id, input.orderId),
+      });
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      if (order.status === "pending_payment" || order.status === "payment_failed") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Order is not paid yet" });
+      }
+      const { number, url } = await generateOrderInvoice(ctx.db, order);
+      return { gstInvoiceNumber: number, invoiceUrl: url };
     }),
 
   // ── Admin: direct refund — to the bank (Razorpay) OR the in-app wallet ──────

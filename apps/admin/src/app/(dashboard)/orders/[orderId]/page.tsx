@@ -283,6 +283,14 @@ export default function AdminOrderDetailPage({
     onError: (err) => toast.error(err.message),
   });
 
+  const generateInvoice = trpc.order.generateInvoice.useMutation({
+    onSuccess: async (res) => {
+      await utils.order.adminGet.invalidate({ orderId });
+      toast.success(`Invoice ${res.gstInvoiceNumber} generated`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const { data: order, isLoading } = trpc.order.adminGet.useQuery({ orderId });
 
   if (isLoading) {
@@ -560,11 +568,38 @@ export default function AdminOrderDetailPage({
               {order.gstInvoiceNumber && (
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground shrink-0">GST invoice</span>
-                  <span className="font-mono text-[11px]">{order.gstInvoiceNumber}</span>
+                  <span className="flex items-center gap-2 text-right">
+                    <span className="font-mono text-[11px]">{order.gstInvoiceNumber}</span>
+                    {order.invoiceUrl && (
+                      <a
+                        href={order.invoiceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-semibold uppercase tracking-wider text-primary hover:underline"
+                      >
+                        PDF ↓
+                      </a>
+                    )}
+                  </span>
                 </div>
               )}
               {!order.razorpayOrderId && !order.gstInvoiceNumber && (
                 <p className="text-muted-foreground/50">No payment data yet.</p>
+              )}
+              {order.status !== "pending_payment" && order.status !== "payment_failed" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-1 w-full"
+                  onClick={() => generateInvoice.mutate({ orderId })}
+                  disabled={generateInvoice.isPending}
+                >
+                  {generateInvoice.isPending
+                    ? "Generating…"
+                    : order.gstInvoiceNumber
+                      ? "Regenerate invoice"
+                      : "Generate invoice"}
+                </Button>
               )}
             </div>
           </section>

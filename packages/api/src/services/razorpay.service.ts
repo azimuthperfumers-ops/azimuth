@@ -119,8 +119,18 @@ class RazorpayService implements IRazorpayService {
       .digest("hex");
     const expBuf = Buffer.from(expected, "utf8");
     const sigBuf = Buffer.from(signature, "utf8");
-    if (expBuf.byteLength !== sigBuf.byteLength) return false;
-    return crypto.timingSafeEqual(expBuf, sigBuf);
+    const ok = expBuf.byteLength === sigBuf.byteLength && crypto.timingSafeEqual(expBuf, sigBuf);
+    if (!ok) {
+      // TEMP DIAGNOSTIC — reveals hidden chars/quotes in the secret without
+      // logging the secret itself. Remove once webhooks return 200.
+      const s = this.webhookSecret;
+      console.warn(
+        `[webhook:razorpay][debug] secretLen=${s.length} ` +
+          `firstCharCode=${s.charCodeAt(0)} lastCharCode=${s.charCodeAt(s.length - 1)} ` +
+          `expectedSig=${expected.slice(0, 12)}… receivedSig=${signature.slice(0, 12)}…`,
+      );
+    }
+    return ok;
   }
 }
 
