@@ -23,6 +23,7 @@ function extractEntities(payload: Record<string, unknown>) {
 export async function razorpayWebhookHandler(req: Request, res: Response) {
   const sig = req.headers["x-razorpay-signature"];
   if (typeof sig !== "string") {
+    console.warn("[webhook:razorpay] 400 — missing x-razorpay-signature header");
     res.status(400).json({ error: "Missing x-razorpay-signature header" });
     return;
   }
@@ -37,6 +38,10 @@ export async function razorpayWebhookHandler(req: Request, res: Response) {
 
   const rawBody = req.body as Buffer;
   if (!svc.verifyWebhookSignature(rawBody, sig)) {
+    console.warn(
+      `[webhook:razorpay] 400 — invalid signature. RAZORPAY_WEBHOOK_SECRET does not match this endpoint's dashboard secret. ` +
+        `rawBodyBytes=${Buffer.isBuffer(rawBody) ? rawBody.length : `NOT_BUFFER(${typeof rawBody})`}`,
+    );
     res.status(400).json({ error: "Invalid webhook signature" });
     return;
   }
