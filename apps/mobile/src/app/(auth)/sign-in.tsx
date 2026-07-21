@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Svg, { Path } from "react-native-svg";
@@ -73,7 +73,10 @@ export default function SignInScreen() {
         setNotice("We've emailed you a verification link. Tap it to activate your account.");
         return;
       }
-      router.back();
+      // Password verified + account active — confirm, then close the sheet.
+      Alert.alert("Signed in", "Welcome back to Azimuth Perfumers.", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
       return;
     }
     // Unverified account — the sign-in attempt above already made the SERVER
@@ -84,13 +87,13 @@ export default function SignInScreen() {
       setNotice("Please verify your email — we've re-sent the link.");
       return;
     }
-    setError(authErrorMessage(err));
+    Alert.alert("Couldn't sign in", authErrorMessage(err, "Check your email and password and try again."));
   }
 
   async function handleResendReset() {
     setError(null);
     const { error: err } = await authClient.forgetPassword.emailOtp({ email });
-    if (err) { setError(authErrorMessage(err, "Could not send code")); return; }
+    if (err) { Alert.alert("Could not send code", authErrorMessage(err, "Please try again.")); return; }
     setNotice("Code sent.");
   }
 
@@ -100,7 +103,7 @@ export default function SignInScreen() {
     setLoading(true);
     const { error: err } = await authClient.forgetPassword.emailOtp({ email });
     setLoading(false);
-    if (err) { setError(authErrorMessage(err, "Could not send code")); return; }
+    if (err) { Alert.alert("Could not send code", authErrorMessage(err, "Please try again.")); return; }
     toView("reset");
     setNotice("Reset code sent to your email.");
   }
@@ -112,11 +115,11 @@ export default function SignInScreen() {
     setLoading(true);
     const { error: err } = await authClient.emailOtp.resetPassword({ email, otp: otp.trim(), password });
     setLoading(false);
-    if (err) { setError(authErrorMessage(err, "Could not reset password")); return; }
+    if (err) { Alert.alert("Could not reset password", authErrorMessage(err, "Check the code and try again.")); return; }
     setPassword("");
     setMode("sign-in");
     toView("credentials");
-    setNotice("Password updated — sign in with your new password.");
+    Alert.alert("Password updated", "Sign in with your new password.");
   }
 
   async function handleGoogle() {
@@ -124,7 +127,7 @@ export default function SignInScreen() {
     setGoogleLoading(true);
     const { error: err } = await authClient.signIn.social({ provider: "google" });
     setGoogleLoading(false);
-    if (err) { setError(authErrorMessage(err, "Google sign-in failed")); return; }
+    if (err) { Alert.alert("Google sign-in failed", authErrorMessage(err, "Please try again.")); return; }
     router.back();
   }
 
