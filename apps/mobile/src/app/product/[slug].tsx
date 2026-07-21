@@ -9,6 +9,7 @@ import { Heart } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/hooks/use-session";
 import { Colors, Fonts } from "@/constants/theme";
+import { ProductOffers } from "@/components/product-offers";
 
 // Rating under the product name — hidden when real mode has zero ratings
 function ProductRatingLine({ productId }: { productId: string }) {
@@ -207,6 +208,27 @@ export default function ProductDetailScreen() {
     .sort((a, b) => imgRank(a) - imgRank(b))
     .filter((i): i is typeof i & { url: string } => !!i.url);
 
+  // Two-step variant selection — concentration first, then size (matches web).
+  const stockOf = (v: { stockCached?: number | null }) => v.stockCached ?? null;
+  const concentrations = [...new Set(activeVariants.map((v) => v.concentration))];
+  const sizesForConcentration = activeVariant
+    ? activeVariants.filter((v) => v.concentration === activeVariant.concentration)
+    : [];
+  const activeStock = activeVariant ? stockOf(activeVariant) : null;
+
+  function pickConcentration(concentration: string) {
+    const inConcentration = activeVariants.filter((v) => v.concentration === concentration);
+    const match =
+      inConcentration.find((v) => v.sizeMl === activeVariant?.sizeMl) ??
+      inConcentration.find((v) => v.isDefault) ??
+      inConcentration[0];
+    if (match) setSelectedVariantId(match.id);
+  }
+  function pickSize(sizeMl: number) {
+    const match = sizesForConcentration.find((v) => v.sizeMl === sizeMl);
+    if (match) setSelectedVariantId(match.id);
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-[#F5F0E7]" edges={["bottom"]}>
       <ScrollView bounces>
@@ -247,6 +269,9 @@ export default function ProductDetailScreen() {
             )}
           </View>
 
+          {/* Offers & coupons */}
+          {price !== null && <ProductOffers price={price} />}
+
           {/* Description */}
           {product.description && (
             <Text className="text-[14px] leading-[1.9] text-[#57493A] mb-8">
@@ -257,21 +282,24 @@ export default function ProductDetailScreen() {
           {/* Divider */}
           <View className="h-px bg-[#E3DDD1] mb-8" />
 
-          {/* Variant selector */}
-          {activeVariants.length > 1 && (
-            <View className="mb-8">
+          {/* Concentration selector */}
+          {concentrations.length > 1 && (
+            <View className="mb-6">
               <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#1B1611] uppercase mb-4">
-                Variant
+                Concentration
+                {activeVariant ? (
+                  <Text className="tracking-normal text-[#57493A]">
+                    {`   ${CONCENTRATION_LABEL[activeVariant.concentration] ?? activeVariant.concentration}`}
+                  </Text>
+                ) : null}
               </Text>
               <View className="flex-row flex-wrap gap-2">
-                {product.variants.filter((v) => v.status === "active").map((v) => {
-                  const selected = (selectedVariantId ?? activeVariant?.id) === v.id;
-                  const vPrice = v.effectivePrice ?? Number(v.mrp ?? 0);
-                  const concentration = CONCENTRATION_SHORT[v.concentration] ?? v.concentration;
+                {concentrations.map((c) => {
+                  const selected = activeVariant?.concentration === c;
                   return (
                     <Pressable
-                      key={v.id}
-                      onPress={() => setSelectedVariantId(v.id)}
+                      key={c}
+                      onPress={() => pickConcentration(c)}
                       className="border px-5 py-3"
                       style={{
                         borderColor: selected ? Colors.accent : "#E3DDD1",
@@ -282,19 +310,71 @@ export default function ProductDetailScreen() {
                         className="text-[12px] font-semibold tracking-[0.1em]"
                         style={{ color: selected ? "#ffffff" : "#1B1611" }}
                       >
-                        {concentration} · {v.sizeMl}ml
-                      </Text>
-                      <Text
-                        className="text-[11px] mt-0.5"
-                        style={{ color: selected ? "#ffffff" : "#57493A" }}
-                      >
-                        ₹{vPrice.toLocaleString("en-IN")}
+                        {CONCENTRATION_SHORT[c] ?? c}
                       </Text>
                     </Pressable>
                   );
                 })}
               </View>
             </View>
+          )}
+
+          {/* Size selector */}
+          {sizesForConcentration.length > 0 && (
+            <View className="mb-6">
+              <Text className="text-[10px] font-semibold tracking-[0.24em] text-[#1B1611] uppercase mb-4">
+                Size
+                {activeVariant ? (
+                  <Text className="tracking-normal text-[#57493A]">{`   ${activeVariant.sizeMl}ml`}</Text>
+                ) : null}
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {sizesForConcentration.map((v) => {
+                  const selected = (selectedVariantId ?? activeVariant?.id) === v.id;
+                  const outOfStock = stockOf(v) === 0;
+                  const vPrice = v.effectivePrice ?? Number(v.mrp ?? 0);
+                  return (
+                    <Pressable
+                      key={v.id}
+                      onPress={() => !outOfStock && pickSize(v.sizeMl)}
+                      disabled={outOfStock}
+                      className="border px-5 py-3"
+                      style={{
+                        borderColor: selected ? Colors.accent : "#E3DDD1",
+                        backgroundColor: selected ? Colors.accent : "transparent",
+                        opacity: outOfStock ? 0.4 : 1,
+                      }}
+                    >
+                      <Text
+                        className="text-[12px] font-semibold tracking-[0.1em]"
+                        style={{
+                          color: selected ? "#ffffff" : "#1B1611",
+                          textDecorationLine: outOfStock ? "line-through" : "none",
+                        }}
+                      >
+                        {v.sizeMl}ml
+                      </Text>
+                      <Text
+                        className="text-[11px] mt-0.5"
+                        style={{ color: selected ? "#ffffff" : "#57493A" }}
+                      >
+                        {outOfStock ? "Sold out" : `₹${vPrice.toLocaleString("en-IN")}`}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Stock notice */}
+          {activeStock !== null && activeStock > 0 && activeStock <= 5 && (
+            <Text
+              className="mb-8 text-[11px] font-semibold tracking-[0.1em] uppercase"
+              style={{ color: Colors.accent }}
+            >
+              Only {activeStock} left in stock
+            </Text>
           )}
 
           {/* Ratings */}

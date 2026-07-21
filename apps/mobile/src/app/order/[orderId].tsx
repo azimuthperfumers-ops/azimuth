@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
@@ -205,6 +205,28 @@ export default function OrderDetailScreen() {
             </View>
           ))}
         </View>
+
+        {/* ── GST invoice ── */}
+        {order.gstInvoiceNumber && (
+          <View className="px-6 pt-8">
+            <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#57493A] uppercase mb-3">
+              GST invoice
+            </Text>
+            <View className="flex-row items-center justify-between">
+              <Text className="font-mono text-[13px] text-[#1B1611]">{order.gstInvoiceNumber}</Text>
+              {order.invoiceUrl ? (
+                <Pressable
+                  className="h-10 px-4 border border-[#1B1611] items-center justify-center active:opacity-70"
+                  onPress={() => order.invoiceUrl && Linking.openURL(order.invoiceUrl)}
+                >
+                  <Text className="text-[10.5px] font-semibold tracking-[0.18em] text-[#1B1611] uppercase">
+                    Download ↓
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        )}
 
         {/* ── Rate your purchase (delivered only) ── */}
         {order.status === "delivered" && ratings && ratings.products.length > 0 && (
