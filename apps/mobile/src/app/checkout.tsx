@@ -49,8 +49,6 @@ type SavedAddress = {
   state: string;
   pincode: string;
   isDefault: boolean;
-  lat?: number | null;
-  lng?: number | null;
 };
 
 function addressToForm(a: SavedAddress): AddressForm {
@@ -64,8 +62,6 @@ function addressToForm(a: SavedAddress): AddressForm {
     state: a.state,
     pincode: a.pincode,
     isDefault: a.isDefault,
-    lat: a.lat ?? undefined,
-    lng: a.lng ?? undefined,
   };
 }
 
@@ -375,8 +371,6 @@ export default function CheckoutScreen() {
           state: addr.state.trim(),
           pincode: addr.pincode.trim(),
           isDefault: savedAddresses.length === 0,
-          lat: addr.lat,
-          lng: addr.lng,
         });
         await utils.userData.listAddresses.invalidate();
       }
@@ -390,8 +384,6 @@ export default function CheckoutScreen() {
           city: addr.city.trim(),
           state: addr.state.trim(),
           pincode: addr.pincode.trim(),
-          lat: addr.lat ?? null,
-          lng: addr.lng ?? null,
         },
         items: activeItems.map((item) => ({
           variantId: item.variantId,
@@ -546,7 +538,6 @@ export default function CheckoutScreen() {
                   form={newForm}
                   errors={newFormErrors}
                   onChange={changeNewForm}
-                  onLocated={(lat, lng) => setNewForm((prev) => ({ ...prev, lat, lng }))}
                 />
                 <Pressable
                   onPress={() => setSaveToAccount(!saveToAccount)}

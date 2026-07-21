@@ -4,7 +4,6 @@ export const dynamic = "force-dynamic";
 
 import { type FormEvent, useState, Suspense } from "react";
 import Link from "next/link";
-import dynamicImport from "next/dynamic";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ChevronRight, Heart, LogOut, MapPin, Package, TicketIcon, User } from "lucide-react";
 import { toast } from "sonner";
@@ -16,8 +15,6 @@ import { SiteHeader } from "@/components/site-header";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-
-const MapPicker = dynamicImport(() => import("@/components/map-picker"), { ssr: false });
 
 // ─── Shared primitives ──────────────────────────────────────────────────────
 
@@ -168,8 +165,6 @@ function AddressCard({
     city: address.city,
     state: address.state,
     pincode: address.pincode,
-    lat: address.lat ?? undefined as number | undefined,
-    lng: address.lng ?? undefined as number | undefined,
   });
 
   const update = (trpc as any).userData?.updateAddress?.useMutation({
@@ -262,8 +257,6 @@ function AddressCard({
           city: form.city.trim(),
           state: form.state.trim(),
           pincode: form.pincode.trim(),
-          lat: form.lat,
-          lng: form.lng,
         });
       }}
       className="border border-foreground/40 p-5 space-y-4 sm:col-span-2"
@@ -291,7 +284,7 @@ function AddressCard({
         { key: "line2", label: "Address line 2 (optional)", type: "text" },
         { key: "city", label: "City", type: "text" },
         { key: "state", label: "State", type: "text" },
-        { key: "pincode", label: "Pincode", type: "text", hint: "Enter to auto-locate on map" },
+        { key: "pincode", label: "Pincode", type: "text", hint: undefined },
       ].map(({ key, label, type, hint }) => (
         <div key={key} className="space-y-1">
           <label className="text-[10px] font-semibold tracking-[0.1em] uppercase text-muted-foreground flex items-baseline justify-between gap-2">
@@ -311,12 +304,6 @@ function AddressCard({
           {addrErrors[key] && <p className="mt-1 text-[11px] text-primary">{addrErrors[key]}</p>}
         </div>
       ))}
-      <MapPicker
-        lat={form.lat}
-        lng={form.lng}
-        pincode={form.pincode}
-        onChange={(lat: number, lng: number) => setForm((prev) => ({ ...prev, lat, lng }))}
-      />
       <div className="flex gap-3 pt-1">
         <button
           type="submit"
@@ -342,8 +329,6 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({
     label: "Home", fullName: "", phone: "", line1: "", line2: "",
     city: "", state: "", pincode: "", isDefault: false,
-    lat: undefined as number | undefined,
-    lng: undefined as number | undefined,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -412,7 +397,7 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
         { key: "line2", label: "Address line 2 (optional)", type: "text", hint: undefined },
         { key: "city", label: "City", type: "text", hint: undefined },
         { key: "state", label: "State", type: "text", hint: undefined },
-        { key: "pincode", label: "Pincode", type: "text", hint: "Enter to auto-locate on map" },
+        { key: "pincode", label: "Pincode", type: "text", hint: undefined },
       ].map(({ key, label, type, hint }) => (
         <div key={key} className="space-y-1.5">
           <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground flex items-baseline justify-between gap-2">
@@ -431,12 +416,6 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
           {errors[key] && <p className="mt-1 text-[11px] text-primary">{errors[key]}</p>}
         </div>
       ))}
-      <MapPicker
-        lat={form.lat}
-        lng={form.lng}
-        pincode={form.pincode}
-        onChange={(lat: number, lng: number) => setForm((prev) => ({ ...prev, lat, lng }))}
-      />
       <label className="flex items-center gap-2 text-[13px]">
         <input type="checkbox" checked={form.isDefault} onChange={(e) => f("isDefault", e.target.checked)} />
         Set as default address
@@ -768,7 +747,7 @@ function AccountPageInner() {
         <SiteHeader />
         <main className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-6">
           {/* next = where to land after sign-in (e.g. /orders/<id>#rate from the
-              WhatsApp rating link). AuthCard validates it against open redirects. */}
+              email rating link). AuthCard validates it against open redirects. */}
           <AuthCard next={searchParams.get("next") ?? undefined} />
         </main>
         <SiteFooter />

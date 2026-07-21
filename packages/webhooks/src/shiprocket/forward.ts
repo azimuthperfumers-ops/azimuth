@@ -122,7 +122,7 @@ export async function processForwardShipment(body: ShiprocketBody) {
     await alertAdminDeliveryFailed(info);
   }
 
-  // Delivered: customer WhatsApp with the "rate your purchase" nudge + admin ping
+  // Delivered: customer email with the "rate your purchase" nudge + admin ping
   if (targetStatus === "delivered") {
     const contact = await getCustomerContact(order);
     const info = orderInfo(order);

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
+  <!--
+    MSG91 email template for MSG91_EMAIL_TEMPLATE_ADMIN_NEW_ORDER.
+    Subject: New order — {{order_number}} ({{amount}})
+    Sent to ADMIN_EMAIL when a new order is placed.
+    Variables: {{order_number}}, {{amount}} (e.g. ₹1,234), {{order_url}}
+               (admin-panel order URL, e.g. https://admin.azimuth.net.in/orders/<uuid>).
+  -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #ddd;">
+
+        <tr><td style="background:#111;padding:20px 32px;">
+          <p style="margin:0;color:#c9a96e;letter-spacing:0.2em;font-size:11px;text-transform:uppercase;">Azimuth — Admin Alert</p>
+        </td></tr>
+
+        <tr><td style="padding:32px;">
+          <h2 style="margin:0 0 8px;font-size:18px;color:#111;">New Order</h2>
+          <p style="margin:0 0 24px;font-size:14px;color:#555;">Payment is confirmed and shipment booking is underway.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e0e0e0;margin-bottom:24px;">
+            <tr style="background:#f9f9f9;">
+              <td style="padding:12px 16px;font-size:12px;color:#666;text-transform:uppercase;letter-spacing:0.1em;">Order</td>
+              <td style="padding:12px 16px;font-size:14px;font-family:'Courier New',monospace;color:#111;">{{order_number}}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px 16px;font-size:12px;color:#666;text-transform:uppercase;letter-spacing:0.1em;">Amount</td>
+              <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#111;">{{amount}}</td>
+            </tr>
+          </table>
+          <a href="{{order_url}}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 24px;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">View order</a>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

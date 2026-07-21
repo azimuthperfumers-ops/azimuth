@@ -10,8 +10,6 @@ const addressFields = {
   state: z.string().min(1).max(100),
   pincode: z.string().min(4).max(10),
   isDefault: z.boolean().default(false),
-  lat: z.number().optional(),
-  lng: z.number().optional(),
 };
 
 export const addAddressSchema = z.object(addressFields);
@@ -28,8 +26,6 @@ export const updateAddressSchema = z.object({
   state: z.string().min(1).max(100).optional(),
   pincode: z.string().min(4).max(10).optional(),
   isDefault: z.boolean().optional(),
-  lat: z.number().optional(),
-  lng: z.number().optional(),
 });
 export type UpdateAddressInput = z.infer<typeof updateAddressSchema>;
 

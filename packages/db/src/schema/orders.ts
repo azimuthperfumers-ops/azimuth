@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { index, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
 import { productVariants } from "./catalog";
@@ -88,8 +88,11 @@ export const orders = pgTable(
     // shippingCharge (above) = what customer paid: 0 if cart >= free-shipping threshold, full rate otherwise.
     shippingCostActual: numeric("shipping_cost_actual", { precision: 10, scale: 2 }),
 
-    // GST
+    // GST invoice — number (FY series e.g. AZ/26-27/0001), date, and stored PDF URL.
+    // Generated once on payment success; taxAmount above holds the GST portion.
     gstInvoiceNumber: text("gst_invoice_number"),
+    gstInvoiceDate: timestamp("gst_invoice_date"),
+    invoiceUrl: text("invoice_url"),
 
     notes: text("notes"),
 
@@ -103,6 +106,7 @@ export const orders = pgTable(
     index("orders_user_idx").on(t.userId),
     index("orders_status_idx").on(t.status),
     index("orders_razorpay_order_idx").on(t.razorpayOrderId),
+    uniqueIndex("orders_gst_invoice_number_idx").on(t.gstInvoiceNumber),
   ],
 );
 

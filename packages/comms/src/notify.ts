@@ -1,5 +1,3 @@
-import { toMobile } from "./sms.js";
-import { sendWhatsapp } from "./whatsapp.js";
 import { sendEmail } from "./email.js";
 import { env } from "./env.js";
 
@@ -29,21 +27,25 @@ async function fire(label: string, p: Promise<void>): Promise<void> {
   }
 }
 
-// ── Customer notifications ────────────────────────────────────────────────────
+// ── Customer notifications (email) ────────────────────────────────────────────
 
-// WhatsApp only — primary channel in India; courier tracking handled by Shiprocket
 export async function notifyOrderPlaced(
   customer: CustomerContact,
   order: OrderInfo,
 ): Promise<void> {
-  const mobile = customer.phone ? toMobile(customer.phone) : null;
-  if (mobile && env.MSG91_WA_TEMPLATE_ORDER_PLACED) {
+  if (customer.email && env.MSG91_EMAIL_TEMPLATE_ORDER_PLACED) {
     await fire(
-      `wa:order_placed:${order.orderNumber}`,
-      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_ORDER_PLACED!, {
-        customer_name: customer.name,
-        order_number: order.orderNumber,
-        amount: order.totalInr,
+      `email:order_placed:${order.orderNumber}`,
+      sendEmail({
+        to: customer.email,
+        name: customer.name,
+        subject: `Order confirmed — ${order.orderNumber}`,
+        templateId: env.MSG91_EMAIL_TEMPLATE_ORDER_PLACED!,
+        vars: {
+          customer_name: customer.name,
+          order_number: order.orderNumber,
+          amount: order.totalInr,
+        },
       }),
     );
   }
@@ -64,40 +66,49 @@ export async function notifyRefundInitiated(
   order: OrderInfo,
   destination: RefundDestination = "razorpay",
 ): Promise<void> {
-  const mobile = customer.phone ? toMobile(customer.phone) : null;
-  if (mobile && env.MSG91_WA_TEMPLATE_REFUND) {
+  if (customer.email && env.MSG91_EMAIL_TEMPLATE_REFUND) {
     await fire(
-      `wa:refund:${order.orderNumber}`,
-      sendWhatsapp(mobile, env.MSG91_WA_TEMPLATE_REFUND!, {
-        customer_name: customer.name,
-        order_number: order.orderNumber,
-        amount: order.totalInr,
-        refund_destination: refundDestinationText(destination),
+      `email:refund:${order.orderNumber}`,
+      sendEmail({
+        to: customer.email,
+        name: customer.name,
+        subject: `Refund initiated — ${order.orderNumber}`,
+        templateId: env.MSG91_EMAIL_TEMPLATE_REFUND!,
+        vars: {
+          customer_name: customer.name,
+          order_number: order.orderNumber,
+          amount: order.totalInr,
+          refund_destination: refundDestinationText(destination),
+        },
       }),
     );
   }
 }
 
-// Delivery confirmation + rating nudge. The template carries a "Rate now" CTA
-// button with dynamic URL https://<user-app>/orders/{{1}} — we send the suffix
-// (order UUID + #rate), which deep-links to the rating section on the order page.
+// Delivery confirmation + rating nudge. The email carries a "Rate now" link to
+// {{rate_url}} = https://<user-app>/orders/<order UUID>#rate, which deep-links
+// to the rating section on the order page.
 export async function notifyOrderDelivered(
   customer: CustomerContact,
   order: OrderInfo,
 ): Promise<void> {
-  const mobile = customer.phone ? toMobile(customer.phone) : null;
-  if (mobile && env.MSG91_WA_TEMPLATE_ORDER_DELIVERED) {
+  if (customer.email && env.MSG91_EMAIL_TEMPLATE_ORDER_DELIVERED) {
+    const rateUrl = order.orderId
+      ? `${env.USER_APP_URL}/orders/${order.orderId}#rate`
+      : env.USER_APP_URL;
     await fire(
-      `wa:order_delivered:${order.orderNumber}`,
-      sendWhatsapp(
-        mobile,
-        env.MSG91_WA_TEMPLATE_ORDER_DELIVERED!,
-        {
+      `email:order_delivered:${order.orderNumber}`,
+      sendEmail({
+        to: customer.email,
+        name: customer.name,
+        subject: `Your Azimuth order has been delivered — ${order.orderNumber}`,
+        templateId: env.MSG91_EMAIL_TEMPLATE_ORDER_DELIVERED!,
+        vars: {
           customer_name: customer.name,
           order_number: order.orderNumber,
+          rate_url: rateUrl,
         },
-        { buttonUrlParam: order.orderId ? `${order.orderId}#rate` : "" },
-      ),
+      }),
     );
   }
 }
@@ -161,43 +172,48 @@ export async function sendNewProductCampaign(product: {
   console.warn(`[comms] sendNewProductCampaign not implemented — skipped campaign for "${product.name}" (${product.url})`);
 }
 
-// ── Admin alerts (WhatsApp) ───────────────────────────────────────────────────
+// ── Admin alerts (email) ──────────────────────────────────────────────────────
 
-// Admin templates carry a "View order" / "View ticket" CTA button with dynamic URL
-// https://<admin-app>/orders/{{1}} (or /support/{{1}}) — we send the record UUID
-// as the button suffix.
+// Admin templates carry a "View order" / "View ticket" link with the record's
+// admin-panel URL, passed as {{order_url}} / {{ticket_url}}.
+
+function adminOrderUrl(order: OrderInfo): string {
+  return order.orderId ? `${env.ADMIN_APP_URL}/orders/${order.orderId}` : env.ADMIN_APP_URL;
+}
 
 export async function alertAdminNewOrder(order: OrderInfo): Promise<void> {
-  const adminWhatsapp = env.ADMIN_WHATSAPP;
-  if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER) {
+  if (env.ADMIN_EMAIL && env.MSG91_EMAIL_TEMPLATE_ADMIN_NEW_ORDER) {
     await fire(
-      `wa:admin:new_order:${order.orderNumber}`,
-      sendWhatsapp(
-        adminWhatsapp,
-        env.MSG91_WA_TEMPLATE_ADMIN_NEW_ORDER!,
-        {
+      `email:admin:new_order:${order.orderNumber}`,
+      sendEmail({
+        to: env.ADMIN_EMAIL,
+        name: "Azimuth Admin",
+        subject: `New order — ${order.orderNumber} (${order.totalInr})`,
+        templateId: env.MSG91_EMAIL_TEMPLATE_ADMIN_NEW_ORDER!,
+        vars: {
           order_number: order.orderNumber,
           amount: order.totalInr,
+          order_url: adminOrderUrl(order),
         },
-        { buttonUrlParam: order.orderId ?? "" },
-      ),
+      }),
     );
   }
 }
 
 export async function alertAdminOrderDelivered(order: OrderInfo): Promise<void> {
-  const adminWhatsapp = env.ADMIN_WHATSAPP;
-  if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_ORDER_DELIVERED) {
+  if (env.ADMIN_EMAIL && env.MSG91_EMAIL_TEMPLATE_ADMIN_ORDER_DELIVERED) {
     await fire(
-      `wa:admin:order_delivered:${order.orderNumber}`,
-      sendWhatsapp(
-        adminWhatsapp,
-        env.MSG91_WA_TEMPLATE_ADMIN_ORDER_DELIVERED!,
-        {
+      `email:admin:order_delivered:${order.orderNumber}`,
+      sendEmail({
+        to: env.ADMIN_EMAIL,
+        name: "Azimuth Admin",
+        subject: `Order delivered — ${order.orderNumber}`,
+        templateId: env.MSG91_EMAIL_TEMPLATE_ADMIN_ORDER_DELIVERED!,
+        vars: {
           order_number: order.orderNumber,
+          order_url: adminOrderUrl(order),
         },
-        { buttonUrlParam: order.orderId ?? "" },
-      ),
+      }),
     );
   }
 }
@@ -208,20 +224,21 @@ export async function alertAdminNewTicket(ticket: {
   type: string;
   subject: string;
 }): Promise<void> {
-  const adminWhatsapp = env.ADMIN_WHATSAPP;
-  if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_NEW_TICKET) {
+  if (env.ADMIN_EMAIL && env.MSG91_EMAIL_TEMPLATE_ADMIN_NEW_TICKET) {
     await fire(
-      `wa:admin:new_ticket:${ticket.ticketNumber}`,
-      sendWhatsapp(
-        adminWhatsapp,
-        env.MSG91_WA_TEMPLATE_ADMIN_NEW_TICKET!,
-        {
+      `email:admin:new_ticket:${ticket.ticketNumber}`,
+      sendEmail({
+        to: env.ADMIN_EMAIL,
+        name: "Azimuth Admin",
+        subject: `New support ticket — ${ticket.ticketNumber}`,
+        templateId: env.MSG91_EMAIL_TEMPLATE_ADMIN_NEW_TICKET!,
+        vars: {
           ticket_id: ticket.ticketNumber,
           ticket_type: ticket.type,
           subject: ticket.subject,
+          ticket_url: `${env.ADMIN_APP_URL}/support/${ticket.ticketId}`,
         },
-        { buttonUrlParam: ticket.ticketId },
-      ),
+      }),
     );
   }
 }
@@ -230,13 +247,12 @@ export async function alertAdminRefund(
   order: OrderInfo,
   destination: RefundDestination = "razorpay",
 ): Promise<void> {
-  const adminEmail = env.ADMIN_EMAIL;
   const destinationText = destination === "wallet" ? "Wallet (store credit)" : "Bank / card (Razorpay)";
-  if (adminEmail && env.MSG91_EMAIL_TEMPLATE_ADMIN_REFUND) {
+  if (env.ADMIN_EMAIL && env.MSG91_EMAIL_TEMPLATE_ADMIN_REFUND) {
     await fire(
       `email:admin:refund:${order.orderNumber}`,
       sendEmail({
-        to: adminEmail,
+        to: env.ADMIN_EMAIL,
         name: "Azimuth Admin",
         subject: `Refund initiated — ${order.orderNumber} (${order.totalInr})`,
         templateId: env.MSG91_EMAIL_TEMPLATE_ADMIN_REFUND!,
@@ -251,17 +267,19 @@ export async function alertAdminRefund(
 }
 
 export async function alertAdminDeliveryFailed(order: OrderInfo): Promise<void> {
-  const adminWhatsapp = env.ADMIN_WHATSAPP;
-  if (adminWhatsapp && env.MSG91_WA_TEMPLATE_ADMIN_DELIVERY_FAILED) {
+  if (env.ADMIN_EMAIL && env.MSG91_EMAIL_TEMPLATE_ADMIN_DELIVERY_FAILED) {
     await fire(
-      `wa:admin:delivery_failed:${order.orderNumber}`,
-      sendWhatsapp(
-        adminWhatsapp,
-        env.MSG91_WA_TEMPLATE_ADMIN_DELIVERY_FAILED!,
-        { order_number: order.orderNumber },
-        { buttonUrlParam: order.orderId ?? "" },
-      ),
+      `email:admin:delivery_failed:${order.orderNumber}`,
+      sendEmail({
+        to: env.ADMIN_EMAIL,
+        name: "Azimuth Admin",
+        subject: `Delivery failed — ${order.orderNumber}`,
+        templateId: env.MSG91_EMAIL_TEMPLATE_ADMIN_DELIVERY_FAILED!,
+        vars: {
+          order_number: order.orderNumber,
+          order_url: adminOrderUrl(order),
+        },
+      }),
     );
   }
 }
-

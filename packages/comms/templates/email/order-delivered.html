@@ -6,10 +6,11 @@
 </head>
 <body style="margin:0;padding:0;background:#f9f7f4;font-family:'Georgia',serif;">
   <!--
-    MSG91 email template for MSG91_EMAIL_TEMPLATE_VERIFY.
-    Subject: Verify your email — Azimuth Perfumers
-    Sent on signup so the customer can verify their email by clicking the link.
-    Variables: {{customer_name}}, {{verify_url}} (full verification URL).
+    MSG91 email template for MSG91_EMAIL_TEMPLATE_ORDER_DELIVERED.
+    Subject: Your Azimuth order has been delivered — {{order_number}}
+    Sent to the customer when the order is delivered — confirmation + rating nudge.
+    Variables: {{customer_name}}, {{order_number}}, {{rate_url}} (full URL,
+               e.g. https://azimuth.net.in/orders/<uuid>#rate).
   -->
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f7f4;padding:40px 16px;">
     <tr><td align="center">
@@ -20,23 +21,23 @@
         </td></tr>
 
         <tr><td style="padding:40px;">
-          <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#999;font-family:Arial,sans-serif;">Verify Email</p>
-          <h1 style="margin:0 0 24px;font-size:24px;color:#111;font-weight:normal;">Welcome, {{customer_name}}.</h1>
+          <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#999;font-family:Arial,sans-serif;">Delivered</p>
+          <h1 style="margin:0 0 24px;font-size:24px;color:#111;font-weight:normal;">It's arrived, {{customer_name}}.</h1>
           <p style="margin:0 0 32px;color:#555;font-size:15px;line-height:1.7;">
-            Confirm your email address to activate your Azimuth Perfumers account. This link expires in a few hours. If you didn't create an account, you can safely ignore this email.
+            Your order <strong>{{order_number}}</strong> has been delivered. We hope it finds you well. If you have a moment, we'd love to hear how you like it.
           </p>
 
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
             <tr><td>
-              <a href="{{verify_url}}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 28px;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;font-family:Arial,sans-serif;">
-                Verify Email
+              <a href="{{rate_url}}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 28px;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;font-family:Arial,sans-serif;">
+                Rate your purchase
               </a>
             </td></tr>
           </table>
 
           <p style="margin:0;color:#999;font-size:12px;line-height:1.7;">
             If the button doesn't work, copy and paste this link into your browser:<br>
-            <a href="{{verify_url}}" style="color:#c9a96e;word-break:break-all;">{{verify_url}}</a>
+            <a href="{{rate_url}}" style="color:#c9a96e;word-break:break-all;">{{rate_url}}</a>
           </p>
         </td></tr>
 

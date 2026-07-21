@@ -2,7 +2,7 @@ import { UnrecoverableError, Worker } from "bullmq";
 import { and, eq, inArray, lt } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
-import { advanceOrderStatus, applyOrderStockMovement, createWalletRepository } from "@azimuth/api";
+import { advanceOrderStatus, applyOrderStockMovement, createWalletRepository, generateOrderInvoice } from "@azimuth/api";
 import { alertAdminNewOrder, notifyOrderPlaced, notifyRefundInitiated } from "@azimuth/comms";
 import { createLogisticsService, createRazorpayService } from "@azimuth/api";
 
@@ -106,6 +106,11 @@ async function markOrderPaidAndBookShipment(
 
   const updatedOrder = await db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) });
   if (updatedOrder) {
+    // GST invoice — idempotent; never let a failure block fulfilment.
+    await generateOrderInvoice(db, updatedOrder).catch((e: unknown) =>
+      console.error(`[order-worker] invoice gen failed for ${updatedOrder.orderNumber}:`, e),
+    );
+
     const contact = await getCustomerContact(updatedOrder);
     const info = orderInfo(updatedOrder);
     await Promise.all([

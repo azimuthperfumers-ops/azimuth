@@ -26,6 +26,7 @@ import {
   getUserOrders,
 } from "../repositories/order.repository";
 import { createWalletRepository } from "../repositories/wallet.repository";
+import { generateOrderInvoice } from "../services/invoice";
 import { router } from "../trpc";
 
 // ── Notification helpers ──────────────────────────────────────────────────────
@@ -67,8 +68,6 @@ const addressSchema = z.object({
   state: z.string().min(1),
   pincode: z.string().length(6),
   label: z.string().optional(),
-  lat: z.number().optional().nullable(),
-  lng: z.number().optional().nullable(),
 });
 
 const checkoutItemSchema = z.object({
@@ -267,6 +266,10 @@ export const orderRouter = router({
       // Notify + queue shipment booking (same as the razorpay paid path)
       const paidOrder = await ctx.db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) });
       if (paidOrder) {
+        // GST invoice — idempotent; never let a failure block the paid order.
+        await generateOrderInvoice(ctx.db, paidOrder).catch((e: unknown) =>
+          console.error("[order] wallet invoice gen:", e),
+        );
         const contact = await getOrderContact(ctx.db, paidOrder);
         const info = toOrderInfo(paidOrder);
         Promise.all([notifyOrderPlaced(contact, info), alertAdminNewOrder(info)]).catch((e: unknown) =>

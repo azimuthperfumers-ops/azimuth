@@ -89,7 +89,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
   if (sessionLoading) return null;
 
   if (!session) {
-    // Preserve the full destination (incl. #rate) so the WhatsApp rating link
+    // Preserve the full destination (incl. #rate) so the email rating link
     // lands back here after sign-in.
     const hash = typeof window !== "undefined" ? window.location.hash : "";
     router.replace(`/account?next=${encodeURIComponent(`/orders/${orderId}${hash}`)}`);
@@ -336,9 +336,21 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
                 <span className="text-base">{formatInr(order.total)}</span>
               </div>
               {order.gstInvoiceNumber && (
-                <p className="text-[11px] text-muted-foreground/50 font-mono pt-1">
-                  GST invoice: {order.gstInvoiceNumber}
-                </p>
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <span className="text-[11px] text-muted-foreground/50 font-mono">
+                    GST invoice: {order.gstInvoiceNumber}
+                  </span>
+                  {order.invoiceUrl && (
+                    <a
+                      href={order.invoiceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] font-semibold tracking-[0.08em] uppercase text-primary transition-opacity hover:opacity-70"
+                    >
+                      Download ↓
+                    </a>
+                  )}
+                </div>
               )}
             </div>
           </section>

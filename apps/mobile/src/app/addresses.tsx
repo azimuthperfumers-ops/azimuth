@@ -44,8 +44,6 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
       state: form.state.trim(),
       pincode: form.pincode.trim(),
       isDefault: form.isDefault,
-      lat: form.lat,
-      lng: form.lng,
     });
   }
 
@@ -58,7 +56,6 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
         form={form}
         errors={errors}
         onChange={change}
-        onLocated={(lat, lng) => setForm((prev) => ({ ...prev, lat, lng }))}
       />
       <Pressable
         onPress={() => change("isDefault", !form.isDefault)}
@@ -104,8 +101,6 @@ type Address = {
   state: string;
   pincode: string;
   isDefault: boolean;
-  lat?: number | null;
-  lng?: number | null;
 };
 
 function EditAddressForm({ address, onDone }: { address: Address; onDone: () => void }) {
@@ -120,8 +115,6 @@ function EditAddressForm({ address, onDone }: { address: Address; onDone: () => 
     state: address.state,
     pincode: address.pincode,
     isDefault: address.isDefault,
-    lat: address.lat ?? undefined,
-    lng: address.lng ?? undefined,
   });
   const [errors, setErrors] = useState<Partial<Record<keyof AddressForm, string>>>({});
 
@@ -151,8 +144,6 @@ function EditAddressForm({ address, onDone }: { address: Address; onDone: () => 
       city: form.city.trim(),
       state: form.state.trim(),
       pincode: form.pincode.trim(),
-      lat: form.lat,
-      lng: form.lng,
     });
   }
 
@@ -165,7 +156,6 @@ function EditAddressForm({ address, onDone }: { address: Address; onDone: () => 
         form={form}
         errors={errors}
         onChange={change}
-        onLocated={(lat, lng) => setForm((prev) => ({ ...prev, lat, lng }))}
       />
       <View className="flex-row gap-3">
         <Pressable

@@ -1,4 +1,4 @@
-// Notification service interface — implementations wire SMS/email/WhatsApp when creds arrive.
+// Notification service interface — implementations wire email when creds arrive.
 // Stub used until real provider (Twilio, MSG91, etc.) is configured.
 
 export type OrderNotificationPayload = {

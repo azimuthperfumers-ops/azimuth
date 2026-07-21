@@ -8,4 +8,5 @@ export { createRazorpayService } from "./services/razorpay.service";
 export type { IRazorpayService } from "./services/razorpay.service";
 export { createLogisticsService } from "./services/logistics.service";
 export type { CreateShipmentInput, ShipmentResult } from "./services/logistics.service";
+export { generateOrderInvoice } from "./services/invoice";
 export { assertCriticalEnv } from "./lib/assert-env";

@@ -1,7 +1,4 @@
-import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from "react-native";
-import { LocateFixed } from "lucide-react-native";
-import * as Location from "expo-location";
+import { Pressable, Text, TextInput, View } from "react-native";
 
 import { Colors } from "@/constants/theme";
 
@@ -15,13 +12,11 @@ export type AddressForm = {
   state: string;
   pincode: string;
   isDefault: boolean;
-  lat?: number;
-  lng?: number;
 };
 
 export const EMPTY_ADDRESS_FORM: AddressForm = {
   label: "Home", fullName: "", phone: "", line1: "", line2: "",
-  city: "", state: "", pincode: "", isDefault: false, lat: undefined, lng: undefined,
+  city: "", state: "", pincode: "", isDefault: false,
 };
 
 export const ADDRESS_LABELS = ["Home", "Work", "Other"];
@@ -75,51 +70,11 @@ function Field({
   );
 }
 
-export function GpsButton({ onLocated }: { onLocated: (lat: number, lng: number) => void }) {
-  const [locating, setLocating] = useState(false);
-
-  async function useGps() {
-    setLocating(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Location permission needed", "Enable location access to pin your exact delivery spot.");
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      onLocated(pos.coords.latitude, pos.coords.longitude);
-    } catch {
-      Alert.alert("Couldn't get your location", "Please try again.");
-    } finally {
-      setLocating(false);
-    }
-  }
-
-  return (
-    <Pressable
-      onPress={useGps}
-      disabled={locating}
-      className="flex-row items-center justify-center gap-2 h-12 border mb-1 active:opacity-70"
-      style={{ borderColor: Colors.border, opacity: locating ? 0.5 : 1 }}
-    >
-      {locating ? (
-        <ActivityIndicator size="small" color={Colors.ink} />
-      ) : (
-        <LocateFixed size={14} color={Colors.ink} strokeWidth={1.6} />
-      )}
-      <Text className="text-[10.5px] font-semibold tracking-[0.16em] uppercase" style={{ color: Colors.ink }}>
-        {locating ? "Locating…" : "Use GPS"}
-      </Text>
-    </Pressable>
-  );
-}
-
 export function AddressFormFields({
-  form, onChange, onLocated, errors,
+  form, onChange, errors,
 }: {
   form: AddressForm;
   onChange: <K extends keyof AddressForm>(key: K, value: AddressForm[K]) => void;
-  onLocated: (lat: number, lng: number) => void;
   errors: Partial<Record<keyof AddressForm, string>>;
 }) {
   return (
@@ -152,13 +107,6 @@ export function AddressFormFields({
       <Field label="City" value={form.city} onChangeText={(v) => onChange("city", v)} error={errors.city} />
       <Field label="State" value={form.state} onChangeText={(v) => onChange("state", v)} error={errors.state} />
       <Field label="Pincode" value={form.pincode} onChangeText={(v) => onChange("pincode", v)} error={errors.pincode} keyboardType="number-pad" maxLength={6} />
-
-      <GpsButton onLocated={(lat, lng) => onLocated(lat, lng)} />
-      {form.lat != null && form.lng != null && (
-        <Text className="mb-4 text-[10px]" style={{ color: "#8A7A63" }}>
-          Pinned: {form.lat.toFixed(6)}, {form.lng.toFixed(6)}
-        </Text>
-      )}
     </View>
   );
 }

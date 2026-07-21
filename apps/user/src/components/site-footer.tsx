@@ -1,10 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { LEGAL_LINKS } from "@/content/legal";
+
 export function SiteFooter() {
   return (
     <footer className="bg-foreground text-background">
-      <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-8 px-4 py-12 sm:grid-cols-2 md:gap-12 md:px-8 md:py-16 lg:grid-cols-[2fr_1fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-8 px-4 py-12 sm:grid-cols-2 md:gap-12 md:px-8 md:py-16 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
         {/* Brand */}
         <div>
           <div className="flex items-center gap-2.5">
@@ -43,11 +45,27 @@ export function SiteFooter() {
             <li><Link href="/support" className="transition-colors hover:text-primary">Support</Link></li>
           </ul>
         </div>
+
+        {/* Legal */}
+        <div>
+          <h5 className="mb-5 text-[10px] font-semibold tracking-[0.2em] text-background uppercase">Legal</h5>
+          <ul className="space-y-3 text-[13px] text-background/60">
+            {LEGAL_LINKS.map(({ href, label }) => (
+              <li key={href}>
+                <Link href={href} className="transition-colors hover:text-primary">{label}</Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
 
       <div className="mx-auto flex max-w-[1400px] flex-col gap-2 border-t border-background/15 px-4 py-5 sm:flex-row sm:items-center sm:justify-between md:px-8">
         <span className="text-[11px] text-background/50">© 2026 Azimuth Perfumers. All rights reserved.</span>
-        <span className="text-[11px] tracking-[0.06em] text-background/50">Privacy · Terms</span>
+        <nav className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] tracking-[0.06em] text-background/50">
+          {LEGAL_LINKS.map(({ href, label }) => (
+            <Link key={href} href={href} className="transition-colors hover:text-primary">{label}</Link>
+          ))}
+        </nav>
       </div>
     </footer>
   );
