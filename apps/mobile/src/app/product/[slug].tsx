@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import type { NativeSyntheticEvent, NativeScrollEvent } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -148,7 +148,16 @@ export default function ProductDetailScreen() {
       setJustAdded(true);
       setTimeout(() => setJustAdded(false), 1800);
     },
+    onError: (err) => Alert.alert("Couldn't add to cart", err.message),
   });
+
+  function handleAddToCart() {
+    if (!session) {
+      router.push("/(auth)/sign-in");
+      return;
+    }
+    if (activeVariant) addToCart.mutate({ variantId: activeVariant.id, quantity: 1 });
+  }
 
   const { data: wishlist } = trpc.userData.listWishlist.useQuery(undefined, { enabled: !!session });
   const wishlistItem = wishlist?.find((w) => w.productId === product?.id);
@@ -445,9 +454,7 @@ export default function ProductDetailScreen() {
           className="flex-1 h-14 items-center justify-center bg-[#1B1611] active:opacity-70"
           style={{ opacity: !activeVariant || addToCart.isPending ? 0.4 : 1 }}
           disabled={!activeVariant || addToCart.isPending}
-          onPress={() =>
-            activeVariant && addToCart.mutate({ variantId: activeVariant.id, quantity: 1 })
-          }
+          onPress={handleAddToCart}
         >
           <Text className="text-white text-[11px] font-semibold tracking-[0.3em] uppercase">
             {addToCart.isPending ? "Adding…" : justAdded ? "Added ✓" : "Add to Cart"}
