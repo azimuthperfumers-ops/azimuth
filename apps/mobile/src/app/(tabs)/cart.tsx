@@ -1,4 +1,4 @@
-import { FlatList, Pressable, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 
@@ -14,6 +14,7 @@ export default function CartScreen() {
 
   const updateQty = trpc.cart.updateQty.useMutation({
     onSuccess: () => utils.cart.list.invalidate(),
+    onError: (err) => Alert.alert("Cart limit reached", err.message),
   });
   const remove = trpc.cart.remove.useMutation({
     onSuccess: () => utils.cart.list.invalidate(),

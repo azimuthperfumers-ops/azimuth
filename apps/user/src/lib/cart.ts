@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+// Max total quantity across the active cart. Must match MAX_CART_QTY on the
+// server (packages/api/src/routers/cart.router.ts) and the mobile client.
+export const MAX_CART_QTY = 5;
+
 export type CartItem = {
   productId: string;
   variantId: string;

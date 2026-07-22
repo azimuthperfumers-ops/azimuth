@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { authClient } from "@/lib/auth-client";
 import type { CartItem } from "@/lib/cart";
-import { useCartStore } from "@/lib/cart";
+import { MAX_CART_QTY, useCartStore } from "@/lib/cart";
 import { trpc } from "@/lib/trpc";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -136,10 +136,21 @@ export function useCartProviderValue(): CartState {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverQuery.data]);
 
+  // Instant client-side guard for the total-quantity cap. Server enforces it too
+  // (packages/api cart.router) — this is UX so the block is immediate.
+  const capBlocked = (currentTotal: number, delta: number): boolean => {
+    if (delta > 0 && currentTotal + delta > MAX_CART_QTY) {
+      toast.warning(`Cart limit is ${MAX_CART_QTY} items. Remove something to add more.`);
+      return true;
+    }
+    return false;
+  };
+
   if (isAuth) {
     const rows = (serverQuery.data ?? []) as ServerRow[];
     const items = rows.filter((r) => !r.isSaved).map(toCartItem);
     const savedItems = rows.filter((r) => r.isSaved).map(toCartItem);
+    const activeTotal = items.reduce((n, i) => n + i.quantity, 0);
 
     return {
       isAuth: true,
@@ -149,17 +160,30 @@ export function useCartProviderValue(): CartState {
       couponCode,
       couponId,
       couponDiscount,
-      add: (item) => upsertMut.mutateAsync({ variantId: item.variantId, quantity: 1 }),
+      add: (item) => {
+        if (capBlocked(activeTotal, 1)) return;
+        return upsertMut.mutateAsync({ variantId: item.variantId, quantity: 1 });
+      },
       remove: (variantId) => removeMut.mutateAsync({ variantId }),
-      updateQty: (variantId, qty) => updateQtyMut.mutateAsync({ variantId, quantity: qty }),
+      updateQty: (variantId, qty) => {
+        const cur = items.find((i) => i.variantId === variantId)?.quantity ?? 0;
+        if (capBlocked(activeTotal, qty - cur)) return;
+        return updateQtyMut.mutateAsync({ variantId, quantity: qty });
+      },
       saveForLater: (variantId) => saveForLaterMut.mutateAsync({ variantId }),
-      moveToCart: (variantId) => moveToCartMut.mutateAsync({ variantId }),
+      moveToCart: (variantId) => {
+        const savedQty = savedItems.find((i) => i.variantId === variantId)?.quantity ?? 1;
+        if (capBlocked(activeTotal, savedQty)) return;
+        return moveToCartMut.mutateAsync({ variantId });
+      },
       removeSaved: (variantId) => removeSavedMut.mutateAsync({ variantId }),
       applyCoupon,
       clearCoupon,
       clear: () => clearMut.mutateAsync(),
     };
   }
+
+  const guestTotal = guestItems.reduce((n, i) => n + i.quantity, 0);
 
   return {
     isAuth: false,
@@ -169,11 +193,17 @@ export function useCartProviderValue(): CartState {
     couponCode,
     couponId,
     couponDiscount,
-    add: (item) => { guestAdd(item); },
+    add: (item) => { if (!capBlocked(guestTotal, 1)) guestAdd(item); },
     remove: (variantId) => { guestRemove(variantId); },
-    updateQty: (variantId, qty) => { guestUpdateQty(variantId, qty); },
+    updateQty: (variantId, qty) => {
+      const cur = guestItems.find((i) => i.variantId === variantId)?.quantity ?? 0;
+      if (!capBlocked(guestTotal, qty - cur)) guestUpdateQty(variantId, qty);
+    },
     saveForLater: (variantId) => { guestSaveForLater(variantId); },
-    moveToCart: (variantId) => { guestMoveToCart(variantId); },
+    moveToCart: (variantId) => {
+      const savedQty = guestSaved.find((i) => i.variantId === variantId)?.quantity ?? 1;
+      if (!capBlocked(guestTotal, savedQty)) guestMoveToCart(variantId);
+    },
     removeSaved: (variantId) => { guestRemoveSaved(variantId); },
     applyCoupon,
     clearCoupon,

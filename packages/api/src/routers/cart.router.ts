@@ -1,5 +1,6 @@
 import type { Database } from "@azimuth/db";
 import { schema } from "@azimuth/db";
+import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -8,7 +9,25 @@ import { router } from "../trpc";
 import { env } from "../env";
 import { computeEffectivePrice, fetchActiveDiscountMap } from "../utils/pricing";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+// Max total quantity across the active (non-saved) cart. Kept in sync with the
+// user/mobile clients. See MAX_CART_QTY in apps/user/src/lib/cart.ts.
+export const MAX_CART_QTY = 5;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Sum of quantities in the active cart, optionally ignoring one variant (the one
+// being upserted/updated, so its old qty doesn't double-count).
+async function activeCartQty(db: Database, userId: string, excludeVariantId?: string) {
+  const rows = await db
+    .select({ variantId: schema.cartItems.variantId, quantity: schema.cartItems.quantity })
+    .from(schema.cartItems)
+    .where(and(eq(schema.cartItems.userId, userId), eq(schema.cartItems.isSaved, false)));
+  return rows
+    .filter((r) => r.variantId !== excludeVariantId)
+    .reduce((sum, r) => sum + r.quantity, 0);
+}
 
 function imageUrl(key: string) {
   if (key.startsWith("https://") || key.startsWith("http://")) return key;
@@ -82,6 +101,16 @@ export const cartRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Cap total active-cart quantity (saved-for-later items don't count).
+      if (!input.isSaved) {
+        const others = await activeCartQty(ctx.db, ctx.session.user.id, input.variantId);
+        if (others + input.quantity > MAX_CART_QTY) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Cart limit is ${MAX_CART_QTY} items. Remove something to add more.`,
+          });
+        }
+      }
       await ctx.db
         .insert(schema.cartItems)
         .values({
@@ -105,6 +134,13 @@ export const cartRouter = router({
           .delete(schema.cartItems)
           .where(and(eq(schema.cartItems.userId, userId), eq(schema.cartItems.variantId, input.variantId)));
       } else {
+        const others = await activeCartQty(ctx.db, userId, input.variantId);
+        if (others + input.quantity > MAX_CART_QTY) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Cart limit is ${MAX_CART_QTY} items.`,
+          });
+        }
         await ctx.db
           .update(schema.cartItems)
           .set({ quantity: input.quantity })
@@ -184,13 +220,18 @@ export const cartRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      // Clamp merged total to the cap (don't throw — must not block sign-in).
+      let running = await activeCartQty(ctx.db, userId);
       for (const item of input) {
+        if (running >= MAX_CART_QTY) break;
+        const qty = Math.min(item.quantity, MAX_CART_QTY - running);
+        running += qty;
         await ctx.db
           .insert(schema.cartItems)
-          .values({ userId, variantId: item.variantId, quantity: item.quantity, isSaved: false })
+          .values({ userId, variantId: item.variantId, quantity: qty, isSaved: false })
           .onConflictDoUpdate({
             target: [schema.cartItems.userId, schema.cartItems.variantId],
-            set: { quantity: item.quantity },
+            set: { quantity: qty },
           });
       }
     }),
