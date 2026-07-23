@@ -11,6 +11,17 @@
 export const PACKAGING_BUFFER_GRAMS = 100;
 export const MIN_BILLABLE_GRAMS = 500;
 
+// Couriers bill on whichever is greater: what the parcel weighs, or the space it
+// occupies. Volumetric weight (kg) = L×W×H(cm) / 5000, Shiprocket's default
+// divisor. In grams that is L×W×H / 5.
+//
+// This matters because the rate API accepts only a weight — it has no dimension
+// parameters — while the booking API is sent the box dimensions. Quote on dead
+// weight alone and Shiprocket silently re-rates the parcel at booking on its
+// volumetric weight, landing it in a heavier slab than the customer was charged
+// for. So we resolve the applicable weight ourselves and quote on that.
+const VOLUMETRIC_DIVISOR = 5000;
+
 const DEFAULT_BOX = { lengthCm: 15, widthCm: 10, heightCm: 10 };
 
 /** Variant weight is required in the catalog; this covers rows predating that. */
@@ -52,9 +63,25 @@ export type ShipmentPackage = {
   unitPrice: number;
 };
 
-/** Courier-billable weight of one parcel holding a single unit. */
-export function billableWeightGrams(unitWeightGrams: number): number {
-  return Math.max(MIN_BILLABLE_GRAMS, unitWeightGrams + PACKAGING_BUFFER_GRAMS);
+/** Volumetric weight of a box, in grams. */
+export function volumetricWeightGrams(lengthCm: number, widthCm: number, heightCm: number): number {
+  return Math.ceil((lengthCm * widthCm * heightCm) / (VOLUMETRIC_DIVISOR / 1000));
+}
+
+/**
+ * Applicable weight of one parcel — what the courier actually bills.
+ *
+ * The greater of the packed dead weight and the volumetric weight, floored at the
+ * courier minimum. Quoting and booking must both use this, otherwise the customer
+ * is charged for one slab and we are billed for another.
+ */
+export function billableWeightGrams(
+  unitWeightGrams: number,
+  box?: { lengthCm: number; widthCm: number; heightCm: number },
+): number {
+  const deadWeight = unitWeightGrams + PACKAGING_BUFFER_GRAMS;
+  const volumetric = box ? volumetricWeightGrams(box.lengthCm, box.widthCm, box.heightCm) : 0;
+  return Math.max(MIN_BILLABLE_GRAMS, deadWeight, volumetric);
 }
 
 /**
@@ -72,6 +99,12 @@ export function splitIntoPackages(
     const unitWeight =
       variant?.weightGrams != null ? Number(variant.weightGrams) : fallbackUnitWeight(item.sizeMl);
 
+    const box = {
+      lengthCm: variant?.boxLengthCm ?? DEFAULT_BOX.lengthCm,
+      widthCm: variant?.boxWidthCm ?? DEFAULT_BOX.widthCm,
+      heightCm: variant?.boxHeightCm ?? DEFAULT_BOX.heightCm,
+    };
+
     for (let unit = 0; unit < item.quantity; unit++) {
       packages.push({
         packageNumber: packages.length + 1,
@@ -80,10 +113,10 @@ export function splitIntoPackages(
         productName: item.productName ?? "Item",
         variantSku: item.variantSku ?? "",
         sizeMl: item.sizeMl,
-        weightGrams: billableWeightGrams(unitWeight),
-        lengthCm: variant?.boxLengthCm ?? DEFAULT_BOX.lengthCm,
-        widthCm: variant?.boxWidthCm ?? DEFAULT_BOX.widthCm,
-        heightCm: variant?.boxHeightCm ?? DEFAULT_BOX.heightCm,
+        // The box travels with the parcel, so its volumetric weight is part of
+        // what we get billed — fold it in before quoting.
+        weightGrams: billableWeightGrams(unitWeight, box),
+        ...box,
         unitPrice: item.unitPrice ?? 0,
       });
     }

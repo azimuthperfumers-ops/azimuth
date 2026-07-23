@@ -19,6 +19,7 @@ import type {
 } from "../logistics.service";
 import { env } from "../../env";
 import { MIN_BILLABLE_GRAMS } from "../packaging";
+import { PERFUME_HSN } from "../invoice/seller.js";
 import { cacheGet, cacheSet, cacheDel } from "@azimuth/redis";
 
 const BASE = "https://apiv2.shiprocket.in/v1/external";
@@ -298,7 +299,10 @@ export class ShiprocketProvider implements ILogisticsService {
         selling_price: item.price,
         discount: 0,
         tax: 0,
-        hsn: 3303, // perfume HSN
+        // The product's own HSN, falling back to the perfume default (3303) —
+        // the same constant the GST invoice prints, so the courier manifest and
+        // the tax invoice always declare the same code.
+        hsn: item.hsn?.trim() || PERFUME_HSN,
       })),
       payment_method: "Prepaid", // always — Razorpay already collected
       sub_total: totalAmount,
@@ -343,7 +347,7 @@ export class ShiprocketProvider implements ILogisticsService {
       return { waybill: "", trackingUrl: "", status: "failed", errorMessage: String(err) };
     }
 
-    // Step 2: Assign AWB (auto-assign best courier)
+    // Step 2: Assign AWB to an explicitly chosen surface courier (never auto-assign)
     type AwbResp = {
       awb_assign_status?: number;
       response?: {

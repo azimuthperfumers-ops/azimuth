@@ -29,7 +29,12 @@ export type CreateShipmentInput = {
     state: string;
     pincode: string;
   };
-  items: { name: string; sku: string; qty: number; price: number }[];
+  /**
+   * hsn is the product's own HSN code. It goes on the courier manifest as a tax
+   * declaration, so it must match what the GST invoice states — callers pass the
+   * product's configured code rather than letting the provider assume one.
+   */
+  items: { name: string; sku: string; qty: number; price: number; hsn?: string | null }[];
   codAmount: number;
   weightGrams: number;
   lengthCm: number;

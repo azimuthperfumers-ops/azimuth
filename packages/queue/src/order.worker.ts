@@ -405,6 +405,10 @@ async function processBookShipment(data: BookShipmentJob) {
     return { packageCount: shipments.length, waybills: shipments.map((s) => s.waybill).filter(Boolean) };
   }
 
+  // HSN per parcel, resolved variant → product. Declared on the courier manifest,
+  // so it has to be the product's real code rather than a blanket perfume default.
+  const hsnByVariant = await loadHsnByVariant(shipments.map((s) => s.variantId));
+
   const logistics = createLogisticsService();
   const destination = {
     line1: addr.line1 ?? "",
@@ -442,6 +446,7 @@ async function processBookShipment(data: BookShipmentJob) {
           sku: shipment.variantSku,
           qty: 1,
           price: unitPriceFor(order.items, shipment),
+          hsn: shipment.variantId ? hsnByVariant.get(shipment.variantId) : null,
         }],
         codAmount: 0,
         weightGrams: shipment.weightGrams,
@@ -536,6 +541,25 @@ async function processBookShipment(data: BookShipmentJob) {
   console.log(`[order-worker] Order ${order.orderNumber} booked → ${booked.length} parcel(s)`);
 
   return { packageCount: booked.length, waybills: booked.map((b) => b.waybill) };
+}
+
+/**
+ * variantId → the owning product's HSN code. Variants whose product has no code
+ * configured are absent, and the provider falls back to the perfume default.
+ */
+async function loadHsnByVariant(variantIds: (string | null)[]): Promise<Map<string, string>> {
+  const ids = variantIds.filter((id): id is string => id != null);
+  if (ids.length === 0) return new Map();
+
+  const rows = await db
+    .select({ variantId: schema.productVariants.id, hsnCode: schema.products.hsnCode })
+    .from(schema.productVariants)
+    .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+    .where(inArray(schema.productVariants.id, ids));
+
+  return new Map(
+    rows.filter((r) => r.hsnCode?.trim()).map((r) => [r.variantId, r.hsnCode!.trim()]),
+  );
 }
 
 /** Price declared to the courier for a parcel — the unit price of its line. */
