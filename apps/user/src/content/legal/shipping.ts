@@ -20,6 +20,19 @@ export const shippingPolicy: LegalDoc = {
           type: "p",
           text: "We currently ship across India only. We deliver to most pincodes nationwide through our logistics partner and its courier network. We do not offer international shipping at this time.",
         },
+        {
+          type: "p",
+          text: "Fragrances are classified as flammable goods and cannot travel by air. Every order therefore moves by surface transport only. A small number of remote pincodes are served by air couriers alone — if yours is one of them, checkout will tell you we can't deliver there rather than let you place an order we cannot fulfil.",
+        },
+      ],
+    },
+    {
+      heading: "How your order is packed",
+      blocks: [
+        {
+          type: "p",
+          text: "Each bottle is packed and shipped in its own protective box. An order of four fragrances therefore travels as four separate packages, each with its own tracking number. This keeps glass from knocking against glass in transit — but it does mean your packages may arrive on different days, and each one is tracked separately from your account.",
+        },
       ],
     },
     {
@@ -45,7 +58,7 @@ export const shippingPolicy: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "Any applicable shipping charge is shown at checkout before you pay, so there are never surprises. Where a free-shipping threshold or offer applies, it will be reflected on your cart.",
+          text: "Any applicable shipping charge is shown at checkout before you pay, so there are never surprises. Because each bottle ships as its own package, shipping is calculated per package and the total for your order is shown at checkout. Where a free-shipping threshold or offer applies, it will be reflected on your cart.",
         },
       ],
     },
@@ -54,7 +67,7 @@ export const shippingPolicy: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "When your order ships, we email you the tracking details. You can also follow your order from your account. Please allow a few hours after dispatch for the first tracking scan to appear.",
+          text: "When your order ships, we email you the tracking details. You can also follow your order from your account, where every package in the order is listed with its own tracking number and status. Please allow a few hours after dispatch for the first tracking scan to appear.",
         },
       ],
     },

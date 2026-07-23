@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 
 import type { Database } from "@azimuth/db";
 import { schema } from "@azimuth/db";
@@ -243,13 +243,16 @@ export async function advanceOrderStatus(
 export async function getUserOrders(db: Database, userId: string) {
   const orders = await db.query.orders.findMany({
     where: eq(schema.orders.userId, userId),
-    with: { items: true },
+    with: { items: true, shipments: { orderBy: asc(schema.orderShipments.packageNumber) } },
     orderBy: desc(schema.orders.createdAt),
   });
-  // RTO legs are internal — the customer's list shows those orders as cancelled.
-  return orders.map((o) =>
-    o.status === "rto_initiated" || o.status === "rto_delivered" ? { ...o, status: "cancelled" as typeof o.status } : o,
-  );
+  // RTO legs are internal — the customer's list shows those orders as cancelled,
+  // and each parcel gets the same masking (see toCustomerShipment).
+  return orders.map((o) => ({
+    ...o,
+    status: RTO_STATUSES.has(o.status) ? ("cancelled" as typeof o.status) : o.status,
+    shipments: o.shipments.map(toCustomerShipment),
+  }));
 }
 
 function resolveImageKey(key: string) {
@@ -317,9 +320,35 @@ const USER_VISIBLE_STATUSES = new Set([
 
 const RTO_STATUSES = new Set(["rto_initiated", "rto_delivered"]);
 
+// Per-parcel equivalent of the order-level masking. A parcel travelling back to
+// the warehouse is internal logistics, so it reads as "cancelled" to the customer
+// exactly like the order status does.
+const SHIPMENT_RTO_STATUSES = new Set(["rto_initiated", "rto_delivered"]);
+
+type CustomerShipment = {
+  status: string;
+  errorMessage?: string | null;
+  shippingCostActual?: string | null;
+  shippingChargeQuoted?: string | null;
+} & Record<string, unknown>;
+
+// Strips internal-only parcel fields: the raw courier failure text and what the
+// courier billed us (which is not what the customer paid). Generic so callers keep
+// the concrete parcel shape — clients read waybill/packageNumber off these rows.
+function toCustomerShipment<T extends CustomerShipment>(
+  shipment: T,
+): Omit<T, "errorMessage" | "shippingCostActual"> {
+  const { errorMessage: _err, shippingCostActual: _cost, ...visible } = shipment;
+  return {
+    ...visible,
+    status: SHIPMENT_RTO_STATUSES.has(shipment.status) ? "cancelled" : shipment.status,
+  } as Omit<T, "errorMessage" | "shippingCostActual">;
+}
+
 type OrderWithHistory = {
   status: string;
   statusHistory?: { fromStatus: string | null; toStatus: string; note: string | null; actorId: string | null }[];
+  shipments?: CustomerShipment[];
 } & Record<string, unknown>;
 
 function toCustomerView<T extends OrderWithHistory | undefined>(order: T): T {
@@ -337,6 +366,11 @@ function toCustomerView<T extends OrderWithHistory | undefined>(order: T): T {
       )
       .map((h) => ({ ...h, note: null, actorId: null }));
   }
+  if (order.shipments) {
+    // Omit<> drops the index signature that CustomerShipment carries, so the
+    // element type no longer matches structurally even though the data does.
+    masked.shipments = order.shipments.map(toCustomerShipment) as CustomerShipment[];
+  }
   return masked as T;
 }
 
@@ -349,6 +383,8 @@ export async function getOrderById(db: Database, orderId: string, userId?: strin
     where,
     with: {
       items: true,
+      // One row per physical parcel — an order of N units ships as N packages.
+      shipments: { orderBy: asc(schema.orderShipments.packageNumber) },
       statusHistory: { orderBy: desc(schema.orderStatusHistory.createdAt) },
       paymentAttempts: { orderBy: desc(schema.paymentAttempts.createdAt) },
     },
@@ -367,6 +403,8 @@ export async function getOrderByNumber(db: Database, orderNumber: string, userId
     where,
     with: {
       items: true,
+      // One row per physical parcel — an order of N units ships as N packages.
+      shipments: { orderBy: asc(schema.orderShipments.packageNumber) },
       statusHistory: { orderBy: desc(schema.orderStatusHistory.createdAt) },
       paymentAttempts: { orderBy: desc(schema.paymentAttempts.createdAt) },
     },
@@ -401,6 +439,13 @@ export async function getAllOrders(
         sql`${schema.orders.shippingAddress}->>'fullName' ILIKE ${q}`,
         sql`${schema.orders.shippingAddress}->>'phone' ILIKE ${q}`,
         ilike(schema.orders.waybill, q),
+        // Support hands us whichever AWB the customer quotes, and only the first
+        // parcel's is mirrored onto the order — search every parcel.
+        sql`EXISTS (
+          SELECT 1 FROM ${schema.orderShipments}
+          WHERE ${schema.orderShipments.orderId} = ${schema.orders.id}
+            AND ${schema.orderShipments.waybill} ILIKE ${q}
+        )`,
       ),
     );
   }
@@ -417,6 +462,7 @@ export async function getAllOrders(
     where: conditions.length > 0 ? and(...conditions) : undefined,
     with: {
       items: true,
+      shipments: { orderBy: asc(schema.orderShipments.packageNumber) },
       statusHistory: { orderBy: desc(schema.orderStatusHistory.createdAt) },
     },
     orderBy: desc(schema.orders.createdAt),

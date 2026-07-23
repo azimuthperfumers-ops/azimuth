@@ -363,6 +363,7 @@ function CheckoutSummary({
   shippingRate,
   shippingLoading,
   estimatedDays,
+  packageCount,
   pincode,
   freeShippingAbove,
   paying,
@@ -377,6 +378,7 @@ function CheckoutSummary({
   shippingRate: number | null;
   shippingLoading: boolean;
   estimatedDays: number | null;
+  packageCount: number | null;
   pincode: string;
   freeShippingAbove: number;
   paying: boolean;
@@ -441,6 +443,16 @@ function CheckoutSummary({
               {estimatedDays} {estimatedDays === 1 ? "day" : "days"}
             </span>
           </div>
+        )}
+
+        {/* Every bottle travels in its own box, so shipping is charged per parcel.
+            Without this the multi-parcel rate reads as an error. */}
+        {packageCount != null && packageCount > 1 && pincode.length === 6 && !shippingLoading && (
+          <p className="text-[10.5px] text-muted-foreground/60 leading-relaxed border-t border-border/60 pt-3">
+            Each fragrance is packed and shipped in its own box, so this order goes out as{" "}
+            <span className="font-semibold text-foreground/80">{packageCount} separate packages</span>
+            {isFreeShipping ? " — shipping is on us." : " and shipping is charged per package."} They may arrive on different days.
+          </p>
         )}
 
         {subtotal < freeShippingAbove && (
@@ -618,6 +630,7 @@ export default function CheckoutPage() {
   const shippingRate: number | null =
     shippingQuery.data?.available ? shippingQuery.data.chargeInr : null;
   const estimatedDays: number | null = shippingQuery.data?.estimatedDays ?? null;
+  const packageCount: number | null = shippingQuery.data?.packageCount ?? null;
   const shippingLoading = currentPincode.length === 6 && shippingQuery.isLoading;
 
   const shippingForOrder = shippingRate ?? 0;
@@ -957,6 +970,7 @@ export default function CheckoutPage() {
             shippingRate={shippingRate}
             shippingLoading={shippingLoading}
             estimatedDays={estimatedDays}
+            packageCount={packageCount}
             pincode={currentPincode}
             freeShippingAbove={freeShippingAbove}
             paying={paying}

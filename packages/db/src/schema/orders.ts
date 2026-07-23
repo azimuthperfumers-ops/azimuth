@@ -136,6 +136,109 @@ export const orderItems = pgTable(
   (t) => [index("order_items_order_idx").on(t.orderId)],
 );
 
+// ── Order shipments (one row per physical parcel) ─────────────────────────────
+// Perfume ships one unit per box, so an order of N units dispatches as N parcels,
+// each with its own AWB, courier, rate and delivery lifecycle. The order-level
+// status is derived from these rows (see deriveOrderStatus); orders.waybill keeps
+// the first parcel's AWB so pre-existing single-parcel lookups still resolve.
+
+export const shipmentStatusEnum = pgEnum("shipment_status", [
+  "pending",
+  "booked",
+  "picked_up",
+  "in_transit",
+  "out_for_delivery",
+  "delivery_attempted",
+  "delivered",
+  "cancelled",
+  "rto_initiated",
+  "rto_delivered",
+  "failed",
+]);
+
+export const orderShipments = pgTable(
+  "order_shipments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+
+    // 1-based parcel index within the order — the customer-facing "Package n".
+    packageNumber: integer("package_number").notNull(),
+
+    // Which line this parcel came from. Soft references: the parcel's own
+    // snapshot below keeps it renderable after a variant or line is removed.
+    orderItemId: uuid("order_item_id").references(() => orderItems.id, { onDelete: "set null" }),
+    variantId: uuid("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
+
+    productName: text("product_name").notNull(),
+    variantSku: text("variant_sku").notNull(),
+    sizeMl: integer("size_ml").notNull(),
+
+    // Declared to the courier for this parcel alone (billable weight, incl. buffer).
+    weightGrams: integer("weight_grams").notNull(),
+    lengthCm: integer("length_cm").notNull(),
+    widthCm: integer("width_cm").notNull(),
+    heightCm: integer("height_cm").notNull(),
+
+    status: shipmentStatusEnum("status").notNull().default("pending"),
+
+    waybill: text("waybill"),
+    courierName: text("courier_name"),
+    trackingUrl: text("tracking_url"),
+    estimatedDeliveryDate: text("estimated_delivery_date"),
+    podImageUrl: text("pod_image_url"),
+
+    // What the customer was quoted for this parcel vs what the courier billed us.
+    shippingChargeQuoted: numeric("shipping_charge_quoted", { precision: 10, scale: 2 }),
+    shippingCostActual: numeric("shipping_cost_actual", { precision: 10, scale: 2 }),
+
+    // Last booking failure, kept so admin can see why a parcel has no AWB.
+    errorMessage: text("error_message"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("order_shipments_order_idx").on(t.orderId),
+    // Booking is retried after partial failure — the parcel row must be reused,
+    // never duplicated.
+    uniqueIndex("order_shipments_order_package_idx").on(t.orderId, t.packageNumber),
+    // Courier webhooks arrive keyed only by AWB.
+    uniqueIndex("order_shipments_waybill_idx").on(t.waybill),
+  ],
+);
+
+// ── Shipment status history (append-only audit trail) ─────────────────────────
+// Same contract as orderStatusHistory: every parcel transition is retained with
+// its actor, so admin can reconstruct a delivery dispute per package.
+
+export const orderShipmentEvents = pgTable(
+  "order_shipment_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    shipmentId: uuid("shipment_id")
+      .notNull()
+      .references(() => orderShipments.id, { onDelete: "cascade" }),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    fromStatus: shipmentStatusEnum("from_status"),
+    toStatus: shipmentStatusEnum("to_status").notNull(),
+    note: text("note"),
+    actorId: text("actor_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("order_shipment_events_shipment_idx").on(t.shipmentId),
+    index("order_shipment_events_order_idx").on(t.orderId),
+  ],
+);
+
 // ── Order status history (append-only audit trail) ────────────────────────────
 
 export const orderStatusHistory = pgTable(
@@ -198,6 +301,7 @@ export const orderRelations = relations(orders, ({ one, many }) => ({
   user: one(user, { fields: [orders.userId], references: [user.id] }),
   coupon: one(coupons, { fields: [orders.couponId], references: [coupons.id] }),
   items: many(orderItems),
+  shipments: many(orderShipments),
   statusHistory: many(orderStatusHistory),
   paymentAttempts: many(paymentAttempts),
 }));
@@ -205,6 +309,18 @@ export const orderRelations = relations(orders, ({ one, many }) => ({
 export const orderItemRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
   variant: one(productVariants, { fields: [orderItems.variantId], references: [productVariants.id] }),
+}));
+
+export const orderShipmentRelations = relations(orderShipments, ({ one, many }) => ({
+  order: one(orders, { fields: [orderShipments.orderId], references: [orders.id] }),
+  orderItem: one(orderItems, { fields: [orderShipments.orderItemId], references: [orderItems.id] }),
+  variant: one(productVariants, { fields: [orderShipments.variantId], references: [productVariants.id] }),
+  events: many(orderShipmentEvents),
+}));
+
+export const orderShipmentEventRelations = relations(orderShipmentEvents, ({ one }) => ({
+  shipment: one(orderShipments, { fields: [orderShipmentEvents.shipmentId], references: [orderShipments.id] }),
+  order: one(orders, { fields: [orderShipmentEvents.orderId], references: [orders.id] }),
 }));
 
 export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one }) => ({

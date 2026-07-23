@@ -320,10 +320,15 @@ export default function AdminOrderDetailPage({
     ? [...order.statusHistory].reverse()
     : [];
 
-  // Detect failed shipment booking: processing + no waybill + error note in history
+  // Detect incomplete shipment booking. An order ships as one parcel per unit and
+  // booking can succeed for some and fail for others, so the order-level waybill
+  // being set no longer means the order is fully booked — check every parcel.
+  const unbookedPackages = (order.shipments ?? []).filter(
+    (s) => !s.waybill && s.status !== "cancelled",
+  );
   const needsShipmentRetry =
     order.status === "processing" &&
-    !order.waybill;
+    (order.shipments && order.shipments.length > 0 ? unbookedPackages.length > 0 : !order.waybill);
 
   const bookingErrorEntry = needsShipmentRetry
     ? timeline.find(
@@ -443,19 +448,33 @@ export default function AdminOrderDetailPage({
             </div>
           </section>
 
-          {/* Shipment booking error alert */}
-          {bookingErrorEntry && (
+          {/* Shipment booking error alert. Booking is per parcel, so this reports
+              which packages are missing an AWB and why, not just "it failed". */}
+          {(bookingErrorEntry || unbookedPackages.length > 0) && (
             <div className="flex items-start gap-3 border border-orange-300 bg-orange-50 p-4 text-[12px]">
               <AlertTriangle className="size-4 text-orange-500 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <p className="font-semibold text-orange-800">Shipment booking failed</p>
-                <p className="text-orange-700">{bookingErrorEntry.note}</p>
-                <p className="text-orange-500/70">
-                  {new Date(bookingErrorEntry.createdAt).toLocaleString("en-IN", {
-                    day: "numeric", month: "short", year: "numeric",
-                    hour: "2-digit", minute: "2-digit",
-                  })}
+                <p className="font-semibold text-orange-800">
+                  {unbookedPackages.length > 0 && order.shipments
+                    ? `Shipment booking incomplete — ${unbookedPackages.length} of ${order.shipments.length} package(s) unbooked`
+                    : "Shipment booking failed"}
                 </p>
+                {unbookedPackages.map((pkg) => (
+                  <p key={pkg.id} className="text-orange-700">
+                    Package {pkg.packageNumber}: {pkg.errorMessage ?? "not yet booked"}
+                  </p>
+                ))}
+                {bookingErrorEntry && (
+                  <>
+                    <p className="text-orange-700">{bookingErrorEntry.note}</p>
+                    <p className="text-orange-500/70">
+                      {new Date(bookingErrorEntry.createdAt).toLocaleString("en-IN", {
+                        day: "numeric", month: "short", year: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -603,6 +622,91 @@ export default function AdminOrderDetailPage({
               )}
             </div>
           </section>
+
+          {/* Packages — perfume ships one unit per parcel, each with its own AWB */}
+          {order.shipments && order.shipments.length > 0 && (
+            <section>
+              <SectionLabel>
+                Packages ({order.shipments.length})
+              </SectionLabel>
+              <div className="border border-border divide-y divide-border">
+                {order.shipments.map((pkg) => (
+                  <div key={pkg.id} className="p-4 space-y-2 text-[12px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold">
+                        Package {pkg.packageNumber}
+                        <span className="ml-2 font-normal text-muted-foreground">
+                          {pkg.productName} · {pkg.sizeMl}ml
+                        </span>
+                      </span>
+                      <span className="uppercase tracking-[0.12em] text-[10px] text-muted-foreground">
+                        {pkg.status.replace(/_/g, " ")}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Weight</span>
+                      <span>
+                        {(pkg.weightGrams / 1000).toFixed(2)} kg · {pkg.lengthCm}×{pkg.widthCm}×{pkg.heightCm} cm
+                      </span>
+                    </div>
+
+                    {pkg.waybill ? (
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground shrink-0">AWB</span>
+                        <span className="font-mono">{pkg.waybill}</span>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground shrink-0">AWB</span>
+                        <span className="text-destructive">not booked</span>
+                      </div>
+                    )}
+
+                    {pkg.courierName && (
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground shrink-0">Courier</span>
+                        <span>{pkg.courierName}</span>
+                      </div>
+                    )}
+
+                    {pkg.estimatedDeliveryDate && (
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground shrink-0">Est. delivery</span>
+                        <span>{pkg.estimatedDeliveryDate}</span>
+                      </div>
+                    )}
+
+                    {pkg.errorMessage && (
+                      <p className="text-destructive break-words">{pkg.errorMessage}</p>
+                    )}
+
+                    {pkg.trackingUrl && (
+                      <a
+                        href={pkg.trackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-primary underline underline-offset-2 hover:opacity-70 truncate"
+                      >
+                        {pkg.trackingUrl}
+                      </a>
+                    )}
+
+                    {pkg.podImageUrl && (
+                      <a href={pkg.podImageUrl} target="_blank" rel="noopener noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={pkg.podImageUrl}
+                          alt={`Proof of delivery — package ${pkg.packageNumber}`}
+                          className="max-h-40 border border-border object-contain hover:opacity-80 transition-opacity"
+                        />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Shipping */}
           {(order.waybill || order.trackingUrl || order.podImageUrl) && (

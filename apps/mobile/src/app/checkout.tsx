@@ -302,6 +302,7 @@ export default function CheckoutScreen() {
     { enabled: !!session && currentPincode.length === 6 && activeItems.length > 0 },
   );
   const shippingRate = shippingQuery.data?.available ? shippingQuery.data.chargeInr : null;
+  const packageCount = shippingQuery.data?.packageCount ?? null;
   const shippingLoading = currentPincode.length === 6 && shippingQuery.isLoading;
   const shippingForOrder = shippingRate ?? 0;
   const total = Math.max(0, subtotal - discount) + shippingForOrder;
@@ -616,6 +617,17 @@ export default function CheckoutScreen() {
                 : formatInr(shippingRate)}
             </Text>
           </View>
+          {/* Every bottle travels in its own box, so shipping is charged per
+              parcel — without this the multi-parcel rate reads as an error. */}
+          {packageCount != null && packageCount > 1 && !needsPincode && !shippingLoading && (
+            <Text className="text-[11px] leading-[16px] mb-1" style={{ color: Colors.inkMuted }}>
+              Each fragrance ships in its own box, so this order goes out as {packageCount} separate packages
+              {subtotal >= freeShippingAbove
+                ? " — shipping is on us."
+                : " and shipping is charged per package."}
+              {" "}They may arrive on different days.
+            </Text>
+          )}
           <View className="h-px my-3" style={{ backgroundColor: Colors.border }} />
           <View className="flex-row justify-between items-baseline">
             <Text className="text-[15px] font-semibold" style={{ color: Colors.ink }}>Total</Text>

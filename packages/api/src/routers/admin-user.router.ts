@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { desc, eq, ilike, or, sql } from "drizzle-orm";
+import { asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 import { schema } from "@azimuth/db";
@@ -91,7 +91,9 @@ export const adminUserRouter = router({
       const [orders, tickets] = await Promise.all([
         ctx.db.query.orders.findMany({
           where: eq(schema.orders.userId, input.userId),
-          with: { items: true },
+          // Parcels included so the order rows can show dispatch size — one unit
+          // ships per box, so item count alone understates it.
+          with: { items: true, shipments: { orderBy: asc(schema.orderShipments.packageNumber) } },
           orderBy: desc(schema.orders.createdAt),
         }),
         ctx.db.query.tickets.findMany({

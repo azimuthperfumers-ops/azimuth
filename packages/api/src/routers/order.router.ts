@@ -14,7 +14,8 @@ import {
 } from "@azimuth/comms";
 
 import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
-import { createLogisticsService } from "../services/logistics.service";
+import { createLogisticsService, quotePackages } from "../services/logistics.service";
+import { splitIntoPackages, type VariantDims } from "../services/packaging";
 import { orderQueue } from "../lib/order-queue";
 import {
   advanceOrderStatus,
@@ -25,6 +26,7 @@ import {
   getOrderByNumber,
   getUserOrders,
 } from "../repositories/order.repository";
+import { getOrderShipments } from "../repositories/shipment.repository";
 import { createWalletRepository } from "../repositories/wallet.repository";
 import { generateOrderInvoice } from "../services/invoice";
 import { router } from "../trpc";
@@ -82,7 +84,12 @@ const checkoutItemSchema = z.object({
 });
 
 // Shared by estimateShipping and order.create so the charge quoted at checkout and the
-// charge written on the order come from identical weight + rate logic.
+// charge written on the order come from identical parcel + rate logic.
+//
+// Every unit ships as its own parcel, so the quote is the sum of the per-parcel
+// surface rates — the same split the book_shipment worker uses to create the
+// actual shipments. Quoting a single combined parcel here would undercharge the
+// customer for every order of more than one bottle.
 async function getShippingQuote(
   db: Parameters<typeof advanceOrderStatus>[0],
   pincode: string,
@@ -90,23 +97,21 @@ async function getShippingQuote(
 ) {
   const variantIds = items.map((i) => i.variantId);
   const variants = await db
-    .select({ id: schema.productVariants.id, weightGrams: schema.productVariants.weightGrams })
+    .select({
+      id: schema.productVariants.id,
+      weightGrams: schema.productVariants.weightGrams,
+      boxLengthCm: schema.productVariants.boxLengthCm,
+      boxWidthCm: schema.productVariants.boxWidthCm,
+      boxHeightCm: schema.productVariants.boxHeightCm,
+    })
     .from(schema.productVariants)
     .where(inArray(schema.productVariants.id, variantIds));
-  const weightMap = new Map(variants.map((v) => [v.id, v.weightGrams]));
 
-  const totalGrams = items.reduce((sum, i) => {
-    const dbWeight = weightMap.get(i.variantId);
-    // Use DB weight if set; fall back to volumetric formula
-    const itemWeight = dbWeight != null ? Number(dbWeight) : (i.sizeMl + 300);
-    return sum + itemWeight * i.quantity;
-  }, 0);
-
-  // Match booking: +100g packaging buffer, minimum 500g
-  const weightGrams = Math.max(500, totalGrams + 100);
+  const dims = new Map<string, VariantDims>(variants.map((v) => [v.id, v]));
+  const packages = splitIntoPackages(items, dims);
 
   const logistics = createLogisticsService();
-  return logistics.getShippingRate(pincode, weightGrams);
+  return quotePackages(logistics, pincode, packages);
 }
 
 const ORDER_STATUS_VALUES = [
@@ -193,18 +198,20 @@ export const orderRouter = router({
       // Re-compute shipping server-side — never trust client shippingCharge
       const settings = await ctx.db.query.siteSettings.findFirst();
       const freeThreshold = Number(settings?.freeShippingAboveInr ?? 999);
-      let serverShipping = 0;
-      if (serverSubtotal < freeThreshold) {
-        const quote = await getShippingQuote(
-          ctx.db,
-          input.shippingAddress.pincode,
-          input.items.map((i) => ({ variantId: i.variantId, sizeMl: i.sizeMl, quantity: i.quantity })),
-        );
-        if (!quote.available) {
-          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Delivery not available to this pincode" });
-        }
-        serverShipping = quote.chargeInr;
+
+      // Always quote, even when shipping is free. Free shipping waives the charge,
+      // not the delivery — and since perfume ships surface-only, a pincode reachable
+      // only by air is one we cannot fulfil at any price. Skipping this check for
+      // free orders would accept an order that then dies at booking time.
+      const quote = await getShippingQuote(
+        ctx.db,
+        input.shippingAddress.pincode,
+        input.items.map((i) => ({ variantId: i.variantId, sizeMl: i.sizeMl, quantity: i.quantity })),
+      );
+      if (!quote.available) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Delivery not available to this pincode" });
       }
+      const serverShipping = serverSubtotal < freeThreshold ? quote.chargeInr : 0;
 
       // Rate can drift between the checkout quote and this call — allow ₹5, else make
       // the user re-confirm the new total instead of silently charging something else.
@@ -329,12 +336,26 @@ export const orderRouter = router({
 
       const rate = await getShippingQuote(ctx.db, input.pincode, input.items);
 
-      // Free shipping still surfaces the courier ETA — the customer shouldn't lose
-      // the delivery estimate just because the charge is waived.
+      // packageCount is surfaced so checkout can tell the customer their order
+      // arrives as several parcels — otherwise a multi-parcel charge looks wrong.
+      // Free shipping still surfaces the courier ETA and parcel count: the
+      // customer shouldn't lose the delivery estimate because the charge is waived.
       if (input.subtotal >= threshold) {
-        return { available: true, chargeInr: 0, estimatedDays: rate.estimatedDays, isFree: true };
+        return {
+          available: rate.available,
+          chargeInr: 0,
+          estimatedDays: rate.estimatedDays,
+          packageCount: rate.packageCount,
+          isFree: true,
+        };
       }
-      return { ...rate, isFree: false };
+      return {
+        available: rate.available,
+        chargeInr: rate.chargeInr,
+        estimatedDays: rate.estimatedDays,
+        packageCount: rate.packageCount,
+        isFree: false,
+      };
     }),
 
   // ── Admin: list all orders ───────────────────────────────────────────────────
@@ -568,7 +589,19 @@ export const orderRouter = router({
       });
 
       if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
-      if (order.waybill) throw new TRPCError({ code: "BAD_REQUEST", message: "Order already has a waybill" });
+
+      // An order ships as several parcels and booking can succeed for some and
+      // fail for others, so "the order already has a waybill" is no longer a
+      // reason to refuse — only a fully-booked order is. The worker skips parcels
+      // that already hold an AWB, so a retry re-attempts just the missing ones.
+      const shipments = await getOrderShipments(ctx.db, input.orderId);
+      const unbooked = shipments.filter((s) => !s.waybill && s.status !== "cancelled");
+      if (shipments.length > 0 && unbooked.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "All parcels for this order are already booked" });
+      }
+      if (shipments.length === 0 && order.waybill) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Order already has a waybill" });
+      }
 
       const TERMINAL = ["delivered", "cancelled", "refunded", "rto_delivered"];
       if (TERMINAL.includes(order.status)) {
@@ -590,10 +623,12 @@ export const orderRouter = router({
         input.orderId,
         "processing",
         ctx.session.user.id,
-        "Shipment booking manually re-queued by admin",
+        unbooked.length > 0
+          ? `Shipment booking manually re-queued by admin (${unbooked.length} unbooked parcel(s))`
+          : "Shipment booking manually re-queued by admin",
       );
 
-      return { queued: true };
+      return { queued: true, unbookedPackages: unbooked.length };
     }),
 
   // ── Admin: manually mark order as paid when webhook was missed ───────────────

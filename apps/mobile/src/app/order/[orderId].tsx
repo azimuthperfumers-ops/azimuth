@@ -7,6 +7,21 @@ import { Fonts } from "@/constants/theme";
 
 const STATUS_STEPS = ["confirmed", "picked_up", "out_for_delivery", "delivered"] as const;
 
+// Per-parcel status — packages in one order can be at different stages.
+const PACKAGE_STATUS_LABEL: Record<string, string> = {
+  pending: "Preparing",
+  booked: "Ready to ship",
+  picked_up: "Picked up by courier",
+  in_transit: "In transit",
+  out_for_delivery: "Out for delivery",
+  delivery_attempted: "Delivery attempted",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  rto_initiated: "Returning to sender",
+  rto_delivered: "Return complete",
+  failed: "Preparing",
+};
+
 const STEP_LABEL: Record<string, string> = {
   confirmed: "Order Confirmed",
   picked_up: "Picked Up by Courier",
@@ -75,6 +90,9 @@ export default function OrderDetailScreen() {
   const isTerminal = order.status === "cancelled" || order.status === "payment_failed" || order.status === "refunded";
   const waybill = (order as { shiprocketAwb?: string | null }).shiprocketAwb
     ?? (order as { waybill?: string | null }).waybill;
+  // Only parcels already handed to a courier can be tracked. Orders placed before
+  // per-parcel shipping have none — those fall back to the order-level waybill.
+  const trackedPackages = (order.shipments ?? []).filter((s) => s.waybill);
 
   return (
     <SafeAreaView className="flex-1 bg-[#F5F0E7]" edges={["bottom"]}>
@@ -159,16 +177,49 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
-        {/* ── Tracking number ── */}
-        {waybill && (
+        {/* ── Tracking ──
+            Each bottle ships in its own box, so an order can travel as several
+            parcels with separate waybills and separate delivery dates. */}
+        {trackedPackages.length > 0 ? (
           <View className="px-6 py-5 border-b border-[#E3DDD1]">
             <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#57493A] uppercase mb-2">
-              Tracking
+              {trackedPackages.length > 1 ? `Tracking · ${trackedPackages.length} packages` : "Tracking"}
             </Text>
-            <Text className="text-[15px] font-semibold text-[#1B1611] tracking-widest">
-              {waybill}
-            </Text>
+
+            {trackedPackages.length > 1 && (
+              <Text className="text-[12px] text-[#57493A] mb-3 leading-[18px]">
+                Your order ships as {trackedPackages.length} separate packages — they may arrive on different days.
+              </Text>
+            )}
+
+            {trackedPackages.map((pkg, i) => (
+              <View key={pkg.id} className={i > 0 ? "mt-4 pt-4 border-t border-[#E3DDD1]" : ""}>
+                {trackedPackages.length > 1 && (
+                  <Text className="text-[11px] font-semibold text-[#57493A] mb-1">
+                    Package {pkg.packageNumber} · {pkg.productName} {pkg.sizeMl}ml
+                  </Text>
+                )}
+                <Text className="text-[15px] font-semibold text-[#1B1611] tracking-widest">
+                  {pkg.waybill}
+                </Text>
+                <Text className="text-[12px] text-[#57493A] mt-1">
+                  {PACKAGE_STATUS_LABEL[pkg.status] ?? "In progress"}
+                  {pkg.estimatedDeliveryDate ? ` · Expected ${pkg.estimatedDeliveryDate}` : ""}
+                </Text>
+              </View>
+            ))}
           </View>
+        ) : (
+          waybill && (
+            <View className="px-6 py-5 border-b border-[#E3DDD1]">
+              <Text className="text-[10px] font-semibold tracking-[0.28em] text-[#57493A] uppercase mb-2">
+                Tracking
+              </Text>
+              <Text className="text-[15px] font-semibold text-[#1B1611] tracking-widest">
+                {waybill}
+              </Text>
+            </View>
+          )
         )}
 
         {/* ── Items ── */}

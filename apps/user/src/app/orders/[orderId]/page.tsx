@@ -50,6 +50,22 @@ const STATUS_COLOR: Record<string, string> = {
 
 const TERMINAL_STATUSES = ["delivered", "cancelled", "payment_failed", "refunded", "rto_delivered"];
 
+// Per-parcel status. Each bottle ships in its own box, so packages in one order
+// can be at different stages.
+const PACKAGE_STATUS_LABEL: Record<string, string> = {
+  pending: "Preparing",
+  booked: "Ready to ship",
+  picked_up: "Picked up by courier",
+  in_transit: "In transit",
+  out_for_delivery: "Out for delivery",
+  delivery_attempted: "Delivery attempted",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  rto_initiated: "Returning to sender",
+  rto_delivered: "Return complete",
+  failed: "Preparing",
+};
+
 // ─── Order detail page ───────────────────────────────────────────────────────
 
 export default function OrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
@@ -136,6 +152,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
 
   const isComplete = TERMINAL_STATUSES.includes(order.status);
 
+  // Only parcels that are actually on their way have something to track. Orders
+  // placed before per-parcel shipping fall back to the single order waybill below.
+  const trackedPackages = (order.shipments ?? []).filter((s) => s.waybill);
+
   return (
     <>
       <SiteHeader />
@@ -170,40 +190,104 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
 
         <div className="space-y-8">
 
-          {/* Tracking */}
-          {order.waybill && (
+          {/* Shipments. Each bottle travels in its own box, so an order can arrive
+              as several parcels — each is tracked separately and they can land on
+              different days. */}
+          {trackedPackages.length > 0 ? (
             <section>
-              <p className="label-xs mb-3">Shipment</p>
-              <div className="border border-border p-4 flex flex-col gap-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
-                      Waybill
-                    </p>
-                    <p className="font-mono text-sm font-semibold mt-0.5">{order.waybill}</p>
+              <p className="label-xs mb-3">
+                {trackedPackages.length > 1 ? `Shipments (${trackedPackages.length} packages)` : "Shipment"}
+              </p>
+
+              {trackedPackages.length > 1 && (
+                <p className="text-[12px] text-muted-foreground mb-3 leading-relaxed">
+                  Your order ships as {trackedPackages.length} separate packages, so they may arrive on different days.
+                </p>
+              )}
+
+              <div className="border border-border divide-y divide-border">
+                {trackedPackages.map((pkg) => (
+                  <div key={pkg.id} className="p-4 flex flex-col gap-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
+                          {trackedPackages.length > 1 ? `Package ${pkg.packageNumber} · ` : ""}Waybill
+                        </p>
+                        <p className="font-mono text-sm font-semibold mt-0.5">{pkg.waybill}</p>
+                        {trackedPackages.length > 1 && (
+                          <p className="text-[12px] text-muted-foreground mt-1">
+                            {pkg.productName} · {pkg.sizeMl}ml
+                          </p>
+                        )}
+                      </div>
+                      {pkg.trackingUrl && (
+                        <a
+                          href={pkg.trackingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 border border-foreground px-4 py-2 text-[10.5px] font-semibold tracking-[0.14em] uppercase hover:bg-foreground hover:text-background transition-all shrink-0"
+                        >
+                          Track
+                          <ExternalLink className="size-3" />
+                        </a>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-x-8 gap-y-3">
+                      <div>
+                        <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
+                          Status
+                        </p>
+                        <p className="text-sm font-semibold mt-0.5">{PACKAGE_STATUS_LABEL[pkg.status] ?? "In progress"}</p>
+                      </div>
+                      {pkg.estimatedDeliveryDate && (
+                        <div>
+                          <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
+                            Expected delivery
+                          </p>
+                          <p className="text-sm font-semibold mt-0.5">{pkg.estimatedDeliveryDate}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {order.trackingUrl && (
-                    <a
-                      href={order.trackingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 border border-foreground px-4 py-2 text-[10.5px] font-semibold tracking-[0.14em] uppercase hover:bg-foreground hover:text-background transition-all"
-                    >
-                      Track shipment
-                      <ExternalLink className="size-3" />
-                    </a>
-                  )}
-                </div>
-                {order.estimatedDeliveryDate && (
-                  <div>
-                    <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
-                      Expected delivery
-                    </p>
-                    <p className="text-sm font-semibold mt-0.5">{order.estimatedDeliveryDate}</p>
-                  </div>
-                )}
+                ))}
               </div>
             </section>
+          ) : (
+            order.waybill && (
+              <section>
+                <p className="label-xs mb-3">Shipment</p>
+                <div className="border border-border p-4 flex flex-col gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
+                        Waybill
+                      </p>
+                      <p className="font-mono text-sm font-semibold mt-0.5">{order.waybill}</p>
+                    </div>
+                    {order.trackingUrl && (
+                      <a
+                        href={order.trackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 border border-foreground px-4 py-2 text-[10.5px] font-semibold tracking-[0.14em] uppercase hover:bg-foreground hover:text-background transition-all"
+                      >
+                        Track shipment
+                        <ExternalLink className="size-3" />
+                      </a>
+                    )}
+                  </div>
+                  {order.estimatedDeliveryDate && (
+                    <div>
+                      <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
+                        Expected delivery
+                      </p>
+                      <p className="text-sm font-semibold mt-0.5">{order.estimatedDeliveryDate}</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )
           )}
 
           {/* Status timeline */}

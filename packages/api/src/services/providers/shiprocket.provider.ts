@@ -18,9 +18,34 @@ import type {
   TrackingResult,
 } from "../logistics.service";
 import { env } from "../../env";
+import { MIN_BILLABLE_GRAMS } from "../packaging";
 import { cacheGet, cacheSet, cacheDel } from "@azimuth/redis";
 
 const BASE = "https://apiv2.shiprocket.in/v1/external";
+
+// ── Serviceability response ───────────────────────────────────────────────────
+
+type ServiceabilityResp = {
+  data?: {
+    available_courier_companies?: {
+      courier_company_id?: number;
+      courier_name?: string;
+      is_surface?: number;
+      rate?: number;
+      freight_charge?: number;
+      estimated_delivery_days?: number;
+      cod?: number;
+    }[];
+  };
+};
+
+type SurfaceCourier = {
+  courierCompanyId: number | null;
+  courierName: string;
+  rate: number;
+  estimatedDays: number | null;
+  cod: boolean;
+};
 
 // ── Token cache ───────────────────────────────────────────────────────────────
 // Token valid ~10 days. Cached in-process AND in Redis so a server restart
@@ -181,30 +206,40 @@ export class ShiprocketProvider implements ILogisticsService {
     this.warehouseAddress = env.SHIPROCKET_WAREHOUSE_ADDRESS!;
   }
 
+  // Surface couriers for one parcel, cheapest first.
+  //
+  // Perfume is a flammable/hazmat good — air cargo is not an option, so every
+  // quote, serviceability check and AWB assignment is filtered to is_surface=1.
+  // Shiprocket has no request-side mode filter, so the response is filtered here;
+  // an empty list means "not deliverable by surface", not "not deliverable".
+  private async getSurfaceCouriers(destPincode: string, weightGrams: number): Promise<SurfaceCourier[]> {
+    const weightKg = weightGrams / 1000;
+    const data = await apiGet<ServiceabilityResp>(
+      `/courier/serviceability/?pickup_postcode=${this.warehousePincode}&delivery_postcode=${destPincode}&weight=${weightKg}&cod=0`,
+    );
+    const companies = data.data?.available_courier_companies ?? [];
+    return companies
+      .filter((c) => Number(c.is_surface ?? 0) === 1)
+      .map((c) => ({
+        courierCompanyId: c.courier_company_id ?? null,
+        courierName: c.courier_name ?? "",
+        rate: c.rate ?? c.freight_charge ?? 0,
+        estimatedDays: c.estimated_delivery_days ?? null,
+        cod: Number(c.cod ?? 0) === 1,
+      }))
+      .sort((a, b) => a.rate - b.rate);
+  }
+
   async checkServiceability(pincode: string): Promise<ServiceabilityResult> {
     try {
-      type SvcResp = {
-        data?: {
-          available_courier_companies?: {
-            is_surface?: number;
-            estimated_delivery_days?: number;
-            cod?: number;
-          }[];
-        };
-      };
-      const data = await apiGet<SvcResp>(
-        `/courier/serviceability/?pickup_postcode=${this.warehousePincode}&delivery_postcode=${pincode}&weight=0.5&cod=0`,
-      );
-      const companies = data.data?.available_courier_companies ?? [];
-      if (companies.length === 0) {
-        return { serviceable: false, mode: null, estimatedDays: null, cod: false };
-      }
-      const best = companies[0]!;
+      const couriers = await this.getSurfaceCouriers(pincode, MIN_BILLABLE_GRAMS);
+      const best = couriers[0];
+      if (!best) return { serviceable: false, mode: null, estimatedDays: null, cod: false };
       return {
         serviceable: true,
-        mode: best.is_surface ? "Surface" : "Express",
-        estimatedDays: best.estimated_delivery_days ?? null,
-        cod: (best.cod ?? 0) === 1,
+        mode: "Surface",
+        estimatedDays: best.estimatedDays,
+        cod: best.cod,
       };
     } catch (err) {
       console.error("[shiprocket] serviceability error:", err);
@@ -214,62 +249,17 @@ export class ShiprocketProvider implements ILogisticsService {
 
   async getShippingRate(destPincode: string, weightGrams: number): Promise<ShippingRateResult> {
     try {
-      const weightKg = weightGrams / 1000;
-      type RateResp = {
-        data?: {
-          available_courier_companies?: {
-            rate?: number;
-            freight_charge?: number;
-            estimated_delivery_days?: number;
-          }[];
-        };
-      };
-      const data = await apiGet<RateResp>(
-        `/courier/serviceability/?pickup_postcode=${this.warehousePincode}&delivery_postcode=${destPincode}&weight=${weightKg}&cod=0`,
-      );
-      const companies = data.data?.available_courier_companies ?? [];
-      if (companies.length === 0) return { available: false, chargeInr: 0, estimatedDays: null };
-
-      // Pick cheapest available courier
-      const sorted = [...companies].sort(
-        (a, b) => (a.rate ?? a.freight_charge ?? 999) - (b.rate ?? b.freight_charge ?? 999),
-      );
-      const best = sorted[0]!;
-      const charge = best.rate ?? best.freight_charge ?? 0;
+      const couriers = await this.getSurfaceCouriers(destPincode, weightGrams);
+      const best = couriers[0];
+      if (!best) return { available: false, chargeInr: 0, estimatedDays: null };
       return {
-        available: charge > 0,
-        chargeInr: Math.ceil(charge),
-        estimatedDays: best.estimated_delivery_days ?? null,
+        available: best.rate > 0,
+        chargeInr: Math.ceil(best.rate),
+        estimatedDays: best.estimatedDays,
       };
     } catch (err) {
       console.error("[shiprocket] rate error:", err);
       return { available: false, chargeInr: 0, estimatedDays: null };
-    }
-  }
-
-  private async getCheapestCourierId(destPincode: string, weightGrams: number): Promise<number | null> {
-    try {
-      const weightKg = weightGrams / 1000;
-      type CourierResp = {
-        data?: {
-          available_courier_companies?: {
-            courier_company_id?: number;
-            rate?: number;
-            freight_charge?: number;
-          }[];
-        };
-      };
-      const data = await apiGet<CourierResp>(
-        `/courier/serviceability/?pickup_postcode=${this.warehousePincode}&delivery_postcode=${destPincode}&weight=${weightKg}&cod=0`,
-      );
-      const companies = data.data?.available_courier_companies ?? [];
-      if (companies.length === 0) return null;
-      const sorted = [...companies].sort(
-        (a, b) => (a.rate ?? a.freight_charge ?? 9999) - (b.rate ?? b.freight_charge ?? 9999),
-      );
-      return sorted[0]?.courier_company_id ?? null;
-    } catch {
-      return null;
     }
   }
 
@@ -371,14 +361,32 @@ export class ShiprocketProvider implements ILogisticsService {
       status_code?: number;
     };
 
-    // Pick cheapest courier explicitly — Shiprocket auto-assign picks "Recommended" (most expensive)
-    const cheapestCourierId = await this.getCheapestCourierId(input.address.pincode, input.weightGrams);
-    console.log(`[shiprocket] cheapest courier_id=${cheapestCourierId ?? "auto"} for pincode=${input.address.pincode}`);
+    // Always assign an explicit courier: Shiprocket's auto-assign picks its
+    // "Recommended" courier, which is both pricier and free to be an air service.
+    // Perfume cannot fly, so no-surface-courier is a hard failure — never fall
+    // back to auto-assign.
+    let surfaceCourier: SurfaceCourier | undefined;
+    try {
+      const couriers = await this.getSurfaceCouriers(input.address.pincode, input.weightGrams);
+      surfaceCourier = couriers[0];
+    } catch (err) {
+      return { waybill: "", trackingUrl: "", status: "failed", errorMessage: `Surface courier lookup failed: ${String(err)}` };
+    }
+
+    if (!surfaceCourier?.courierCompanyId) {
+      const msg = `No surface courier available for pincode ${input.address.pincode} at ${input.weightGrams}g — perfume cannot ship by air`;
+      console.error(`[shiprocket] ${msg}`);
+      return { waybill: "", trackingUrl: "", status: "failed", errorMessage: msg };
+    }
+
+    console.log(
+      `[shiprocket] surface courier_id=${surfaceCourier.courierCompanyId} (${surfaceCourier.courierName}) for pincode=${input.address.pincode}`,
+    );
 
     try {
       const awbResp = await apiPost<AwbResp>("/courier/assign/awb", {
         shipment_id: shipmentId,
-        ...(cheapestCourierId ? { courier_id: cheapestCourierId } : {}),
+        courier_id: surfaceCourier.courierCompanyId,
       });
 
       const awbCode = awbResp.response?.data?.awb_code;
@@ -412,6 +420,7 @@ export class ShiprocketProvider implements ILogisticsService {
       return {
         waybill: awbCode,
         trackingUrl: `https://shiprocket.co/tracking/${awbCode}`,
+        courierName: awbResp.response?.data?.courier_name ?? surfaceCourier.courierName,
         estimatedDeliveryDate: etd,
         status: "created",
       };

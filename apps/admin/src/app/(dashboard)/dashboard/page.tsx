@@ -519,6 +519,12 @@ export default function DashboardPage() {
                   {o.waybill && (
                     <span className="text-muted-foreground font-mono">{o.waybill}</span>
                   )}
+                  {/* Flag orders still waiting on parcels — each unit books its own AWB. */}
+                  {o.shipments && o.shipments.some((s) => !s.waybill && s.status !== "cancelled") && (
+                    <span className="text-orange-600">
+                      {o.shipments.filter((s) => !s.waybill && s.status !== "cancelled").length} unbooked
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

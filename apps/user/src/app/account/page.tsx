@@ -503,6 +503,11 @@ function AddressesTab() {
 
 // ─── Orders tab ──────────────────────────────────────────────────────────────
 
+/** Parcels already handed to a courier — each bottle ships in its own box. */
+function trackedPackageCount(order: { shipments?: { waybill: string | null }[] | null }): number {
+  return (order.shipments ?? []).filter((s) => s.waybill).length;
+}
+
 const ORDER_STATUS_LABEL: Record<string, string> = {
   pending_payment: "Awaiting payment",
   payment_failed: "Payment failed",
@@ -595,15 +600,27 @@ function OrdersTab() {
                     {ORDER_STATUS_LABEL[order.status] ?? order.status}
                   </p>
                   <p className="text-xl font-bold tabular-nums mt-1">{formatInr(Number(order.total))}</p>
-                  {order.waybill && order.trackingUrl && (
-                    <a
-                      href={order.trackingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                  {/* An order ships as one parcel per bottle. Linking a single
+                      AWB here would track only the first package, so multi-parcel
+                      orders point at the order page where all of them are listed. */}
+                  {trackedPackageCount(order) > 1 ? (
+                    <Link
+                      href={`/orders/${order.id}`}
                       className="text-[10px] font-semibold tracking-[0.1em] uppercase text-primary underline underline-offset-2 hover:opacity-70"
                     >
-                      Track — {order.waybill}
-                    </a>
+                      Track {trackedPackageCount(order)} packages
+                    </Link>
+                  ) : (
+                    order.waybill && order.trackingUrl && (
+                      <a
+                        href={order.trackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-semibold tracking-[0.1em] uppercase text-primary underline underline-offset-2 hover:opacity-70"
+                      >
+                        Track — {order.waybill}
+                      </a>
+                    )
                   )}
                 </div>
               </div>

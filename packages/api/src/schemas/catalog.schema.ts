@@ -85,11 +85,16 @@ const variantFieldsSchema = z.object({
   concentration: z.enum(["edp", "edt", "parfum", "cologne", "attar"]),
   sizeMl: z.number().int().min(1).max(2000),
   mrp: z.number().positive(),
-  weightGrams: z.number().int().positive(),
+  // Bounds are deliberately tight. These values go straight to the courier as the
+  // declared weight/size of one parcel, and Shiprocket bills on max(dead weight,
+  // L×W×H/5000). An unbounded typo here (grams keyed as milligrams, box keyed in
+  // mm) silently becomes a multi-thousand-rupee freight charge, so a single
+  // packed perfume must stay inside a sane envelope.
+  weightGrams: z.number().int().positive().max(5000),
   // Packed shipping box dimensions (outer corrugated box handed to courier — NOT bottle dimensions)
-  boxLengthCm: z.number().int().positive(),
-  boxWidthCm: z.number().int().positive(),
-  boxHeightCm: z.number().int().positive(),
+  boxLengthCm: z.number().int().positive().max(60),
+  boxWidthCm: z.number().int().positive().max(60),
+  boxHeightCm: z.number().int().positive().max(60),
   barcode: z.string().max(64).optional(),
   isDefault: z.boolean().default(false),
 });

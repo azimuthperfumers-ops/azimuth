@@ -2,7 +2,15 @@ import { UnrecoverableError, Worker } from "bullmq";
 import { and, eq, inArray, lt } from "drizzle-orm";
 
 import { db, schema } from "@azimuth/db";
-import { advanceOrderStatus, applyOrderStockMovement, createWalletRepository, generateOrderInvoice } from "@azimuth/api";
+import {
+  advanceOrderStatus,
+  advanceShipmentStatus,
+  applyOrderStockMovement,
+  createWalletRepository,
+  ensureOrderShipments,
+  generateOrderInvoice,
+  getOrderShipments,
+} from "@azimuth/api";
 import { alertAdminNewOrder, notifyOrderPlaced, notifyRefundInitiated } from "@azimuth/comms";
 import { createLogisticsService, createRazorpayService } from "@azimuth/api";
 
@@ -364,11 +372,6 @@ async function processBookShipment(data: BookShipmentJob) {
     return {};
   }
 
-  if (order.waybill) {
-    console.log(`[order-worker] Order ${order.orderNumber} already has waybill ${order.waybill}, skipping`);
-    return { waybill: order.waybill };
-  }
-
   const BOOK_SHIPMENT_BLOCKED = ["delivered", "cancelled", "payment_failed", "refunded", "rto_initiated", "rto_delivered", "refund_processing"];
   if (BOOK_SHIPMENT_BLOCKED.includes(order.status)) {
     console.log(`[order-worker] book_shipment: order ${order.orderNumber} is ${order.status} — skipping, nothing to do`);
@@ -381,115 +384,175 @@ async function processBookShipment(data: BookShipmentJob) {
     city?: string; state?: string; pincode?: string;
   };
 
-  const variantIds = order.items
-    .map((i) => i.variantId)
-    .filter((id): id is string => id != null);
-
-  const variants = variantIds.length > 0
-    ? await db
-        .select({
-          id: schema.productVariants.id,
-          weightGrams: schema.productVariants.weightGrams,
-          boxLengthCm: schema.productVariants.boxLengthCm,
-          boxWidthCm: schema.productVariants.boxWidthCm,
-          boxHeightCm: schema.productVariants.boxHeightCm,
-        })
-        .from(schema.productVariants)
-        .where(inArray(schema.productVariants.id, variantIds))
-    : [];
-
-  const variantMap = new Map(variants.map((v) => [v.id, v]));
-
-  let totalWeightGrams = 0;
-  let maxWeight = 0;
-  let boxL = 15, boxW = 10, boxH = 10;
-
-  for (const item of order.items) {
-    const v = item.variantId ? variantMap.get(item.variantId) : undefined;
-    // Same fallback as order.estimateShipping's getShippingQuote (sizeMl + 300g) —
-    // the customer was charged on that weight, so book on it too.
-    const unitWeight = v?.weightGrams != null ? Number(v.weightGrams) : item.sizeMl + 300;
-    const itemWeight = unitWeight * item.quantity;
-    totalWeightGrams += itemWeight;
-    if (itemWeight > maxWeight) {
-      maxWeight = itemWeight;
-      boxL = v?.boxLengthCm ?? 15;
-      boxW = v?.boxWidthCm ?? 10;
-      boxH = v?.boxHeightCm ?? 10;
-    }
-  }
-
-  // +100g packaging, 500g floor — must match order.estimateShipping so the rate
-  // quoted at checkout is computed from the same billable weight as the booking.
-  totalWeightGrams = Math.max(500, totalWeightGrams + 100);
-
   const orderUser = await db.query.user.findFirst({
     where: eq(schema.user.id, order.userId),
     columns: { email: true },
   });
 
+  // One parcel per unit — the same split the checkout quote was priced on.
+  // Idempotent: re-runs reuse these rows, so parcels already carrying an AWB are
+  // never booked twice.
+  const shipments = await ensureOrderShipments(db, orderId);
+  if (shipments.length === 0) {
+    throw new UnrecoverableError(`book_shipment: order ${order.orderNumber} has no items to ship`);
+  }
+
+  // Everything already has an AWB — a duplicate job or a post-success retry.
+  // Return without touching the order, so re-runs don't pad the audit trail.
+  const pending = shipments.filter((s) => !s.waybill && s.status !== "cancelled");
+  if (pending.length === 0) {
+    console.log(`[order-worker] Order ${order.orderNumber} already fully booked (${shipments.length} parcel(s)), skipping`);
+    return { packageCount: shipments.length, waybills: shipments.map((s) => s.waybill).filter(Boolean) };
+  }
+
   const logistics = createLogisticsService();
-  let result: Awaited<ReturnType<typeof logistics.createShipment>>;
-  try {
-    result = await logistics.createShipment({
-      orderNumber: order.orderNumber,
-      customerName: addr.fullName ?? "Customer",
-      customerPhone: addr.phone ?? "",
-      customerEmail: orderUser?.email ?? undefined,
-      address: {
-        line1: addr.line1 ?? "",
-        line2: addr.line2,
-        city: addr.city ?? "",
-        state: addr.state ?? "",
-        pincode: addr.pincode ?? "",
-      },
-      items: order.items.map((item) => ({
-        name: item.productName,
-        sku: item.variantSku,
-        qty: item.quantity,
-        price: Number(item.unitPrice),
-      })),
-      codAmount: 0,
-      weightGrams: totalWeightGrams,
-      lengthCm: boxL,
-      widthCm: boxW,
-      heightCm: boxH,
+  const destination = {
+    line1: addr.line1 ?? "",
+    line2: addr.line2,
+    city: addr.city ?? "",
+    state: addr.state ?? "",
+    pincode: addr.pincode ?? "",
+  };
+
+  const booked: { packageNumber: number; waybill: string }[] = [];
+  const failures: string[] = [];
+
+  for (const shipment of shipments) {
+    if (shipment.waybill) {
+      booked.push({ packageNumber: shipment.packageNumber, waybill: shipment.waybill });
+      continue;
+    }
+    if (shipment.status === "cancelled") continue;
+
+    // Shiprocket keys orders by order_id and rejects duplicates, so each parcel
+    // needs its own reference off the order number.
+    const packageRef = `${order.orderNumber}-P${shipment.packageNumber}`;
+
+    let result: Awaited<ReturnType<typeof logistics.createShipment>>;
+    try {
+      result = await logistics.createShipment({
+        orderNumber: packageRef,
+        customerName: addr.fullName ?? "Customer",
+        customerPhone: addr.phone ?? "",
+        customerEmail: orderUser?.email ?? undefined,
+        address: destination,
+        // One unit per parcel.
+        items: [{
+          name: shipment.productName,
+          sku: shipment.variantSku,
+          qty: 1,
+          price: unitPriceFor(order.items, shipment),
+        }],
+        codAmount: 0,
+        weightGrams: shipment.weightGrams,
+        lengthCm: shipment.lengthCm,
+        widthCm: shipment.widthCm,
+        heightCm: shipment.heightCm,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Auth problems affect every remaining parcel — stop rather than burn
+      // through the rest of the order against a blocked account.
+      if (
+        (err instanceof Error && (err as { unrecoverable?: boolean }).unrecoverable) ||
+        msg.includes("auth failed") ||
+        msg.includes("blocked") ||
+        msg.includes("403")
+      ) {
+        await recordShipmentFailure(shipment.id, msg);
+        throw new UnrecoverableError(`Shiprocket booking failed for ${packageRef}: ${msg}`);
+      }
+      await recordShipmentFailure(shipment.id, msg);
+      failures.push(`${packageRef}: ${msg}`);
+      continue;
+    }
+
+    if (result.status === "failed") {
+      const msg = result.errorMessage ?? "unknown error";
+      await recordShipmentFailure(shipment.id, msg);
+      if (msg.includes("auth failed") || msg.includes("blocked")) {
+        throw new UnrecoverableError(`Shiprocket booking failed for ${packageRef}: ${msg}`);
+      }
+      failures.push(`${packageRef}: ${msg}`);
+      continue;
+    }
+
+    await db
+      .update(schema.orderShipments)
+      .set({
+        waybill: result.waybill,
+        courierName: result.courierName ?? null,
+        trackingUrl: result.trackingUrl,
+        estimatedDeliveryDate: result.estimatedDeliveryDate ?? null,
+        errorMessage: null,
+      })
+      .where(eq(schema.orderShipments.id, shipment.id));
+
+    await advanceShipmentStatus(
+      db,
+      shipment.id,
+      "booked",
+      "worker:order",
+      `AWB ${result.waybill}${result.courierName ? ` · ${result.courierName}` : ""}`,
+    );
+
+    booked.push({ packageNumber: shipment.packageNumber, waybill: result.waybill });
+    console.log(`[order-worker] ${packageRef} booked → AWB=${result.waybill}`);
+  }
+
+  // Order-level AWB mirrors the first parcel so existing lookups (admin search,
+  // support tickets, notification templates) keep resolving.
+  const first = booked.sort((a, b) => a.packageNumber - b.packageNumber)[0];
+  if (first) {
+    const firstShipment = await db.query.orderShipments.findFirst({
+      where: and(eq(schema.orderShipments.orderId, orderId), eq(schema.orderShipments.waybill, first.waybill)),
     });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (
-      (err instanceof Error && (err as { unrecoverable?: boolean }).unrecoverable) ||
-      msg.includes("auth failed") ||
-      msg.includes("blocked") ||
-      msg.includes("403")
-    ) {
-      throw new UnrecoverableError(`Shiprocket booking failed: ${msg}`);
-    }
-    throw err;
+    await db
+      .update(schema.orders)
+      .set({
+        waybill: first.waybill,
+        trackingUrl: firstShipment?.trackingUrl ?? null,
+        estimatedDeliveryDate: firstShipment?.estimatedDeliveryDate ?? null,
+      })
+      .where(eq(schema.orders.id, orderId));
   }
 
-  if (result.status === "failed") {
-    const msg = `Shiprocket booking failed: ${result.errorMessage}`;
-    if (result.errorMessage?.includes("auth failed") || result.errorMessage?.includes("blocked")) {
-      throw new UnrecoverableError(msg);
-    }
-    throw new Error(msg);
+  // Retry the job until every parcel has an AWB — booked ones are skipped above,
+  // so a retry only re-attempts what actually failed.
+  if (failures.length > 0) {
+    throw new Error(
+      `Shiprocket booking incomplete for order ${order.orderNumber}: ${booked.length}/${shipments.length} parcels booked — ${failures.join("; ")}`,
+    );
   }
 
+  await advanceOrderStatus(
+    db,
+    orderId,
+    "processing",
+    "worker:order",
+    `${booked.length} parcel(s) booked: ${booked.map((b) => b.waybill).join(", ")}`,
+  );
+
+  console.log(`[order-worker] Order ${order.orderNumber} booked → ${booked.length} parcel(s)`);
+
+  return { packageCount: booked.length, waybills: booked.map((b) => b.waybill) };
+}
+
+/** Price declared to the courier for a parcel — the unit price of its line. */
+function unitPriceFor(
+  items: { id: string; unitPrice: string }[],
+  shipment: { orderItemId: string | null },
+): number {
+  const line = items.find((i) => i.id === shipment.orderItemId);
+  return line ? Number(line.unitPrice) : 0;
+}
+
+async function recordShipmentFailure(shipmentId: string, message: string) {
   await db
-    .update(schema.orders)
-    .set({
-      waybill: result.waybill,
-      trackingUrl: result.trackingUrl,
-      estimatedDeliveryDate: result.estimatedDeliveryDate ?? null,
-    })
-    .where(eq(schema.orders.id, orderId));
-
-  await advanceOrderStatus(db, orderId, "processing", "worker:order", `Shipment booked: ${result.waybill}`);
-
-  console.log(`[order-worker] Order ${order.orderNumber} booked → waybill=${result.waybill}`);
-
-  return { waybill: result.waybill, trackingUrl: result.trackingUrl };
+    .update(schema.orderShipments)
+    .set({ errorMessage: message.slice(0, 500) })
+    .where(eq(schema.orderShipments.id, shipmentId))
+    .catch((e: unknown) => console.warn("[order-worker] recordShipmentFailure:", e));
 }
 
 async function processInitiateRefund(data: InitiateRefundJob) {
@@ -572,15 +635,50 @@ async function processCancelShipment(data: CancelShipmentJob) {
     return {};
   }
 
+  // Cancelling an order recalls every parcel, not just the one named on the job.
+  // The job's waybill is the order-level (first parcel) AWB — a stale value means
+  // the order was re-booked since, so skip rather than recall the wrong parcels.
   if (order.waybill !== waybill) {
     console.log(`[order-worker] cancel_shipment: waybill mismatch for order ${order.orderNumber} (job=${waybill}, current=${order.waybill ?? "none"}) — skipping`);
     return {};
   }
 
   const logistics = createLogisticsService();
-  await logistics.cancelShipment(waybill);
-  console.log(`[order-worker] Cancelled shipment waybill=${waybill} for order ${orderId}`);
-  return { waybill };
+  const shipments = await getOrderShipments(db, orderId);
+
+  // Orders booked before per-parcel shipments existed have no rows — fall back to
+  // the single order-level AWB.
+  const targets = shipments.length > 0
+    ? shipments.filter((s) => s.waybill && s.status !== "cancelled" && s.status !== "delivered")
+    : [{ id: null, packageNumber: 1, waybill, status: "booked" as const }];
+
+  const cancelled: string[] = [];
+  const failed: string[] = [];
+
+  for (const target of targets) {
+    if (!target.waybill) continue;
+    const result = await logistics.cancelShipment(target.waybill);
+    if (result.cancelled) {
+      cancelled.push(target.waybill);
+      if (target.id) {
+        await advanceShipmentStatus(db, target.id, "cancelled", "worker:order", result.message ?? "Cancelled at courier");
+      }
+    } else {
+      // Keep going: one stuck parcel must not leave the rest in transit.
+      failed.push(`P${target.packageNumber} (${target.waybill}): ${result.message ?? "unknown"}`);
+    }
+  }
+
+  console.log(
+    `[order-worker] cancel_shipment order ${order.orderNumber}: cancelled ${cancelled.length}/${targets.length} parcel(s)` +
+      (failed.length > 0 ? ` — failed: ${failed.join("; ")}` : ""),
+  );
+
+  if (failed.length > 0) {
+    throw new Error(`cancel_shipment incomplete for order ${order.orderNumber}: ${failed.join("; ")}`);
+  }
+
+  return { cancelled };
 }
 
 // ── Worker ────────────────────────────────────────────────────────────────────

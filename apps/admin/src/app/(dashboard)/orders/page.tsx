@@ -104,6 +104,18 @@ function fmtDate(iso: string | Date) {
 
 // ─── Order row ────────────────────────────────────────────────────────────────
 
+/**
+ * "3 packages" / "3 packages · 1 unbooked". Empty for orders with no parcel rows
+ * (placed before per-parcel shipping) so those rows read exactly as they did.
+ */
+function packageSummary(order: Order): string | null {
+  const shipments = order.shipments ?? [];
+  if (shipments.length === 0) return null;
+  const unbooked = shipments.filter((s) => !s.waybill && s.status !== "cancelled").length;
+  const base = `${shipments.length} package${shipments.length !== 1 ? "s" : ""}`;
+  return unbooked > 0 ? `${base} · ${unbooked} unbooked` : base;
+}
+
 function OrderRow({ order }: { order: Order }) {
   const router = useRouter();
   const customer = getCustomer(order);
@@ -127,6 +139,13 @@ function OrderRow({ order }: { order: Order }) {
       <TableCell className="font-semibold tabular-nums">{formatInr(Number(order.total))}</TableCell>
       <TableCell>
         <div className="text-sm">{order.items.length} item{order.items.length !== 1 ? "s" : ""}</div>
+
+        {/* Parcel count and booking progress. One unit ships per box, so a row
+            showing a single AWB would hide that other packages are unbooked. */}
+        {packageSummary(order) && (
+          <div className="text-[11px] text-muted-foreground mt-0.5">{packageSummary(order)}</div>
+        )}
+
         {order.waybill && (
           <div className="flex items-center gap-1 mt-0.5">
             <span className="font-mono text-[11px] text-muted-foreground">{order.waybill}</span>

@@ -429,7 +429,15 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
                         </Badge>
                       </TableCell>
                       <TableCell className="font-semibold tabular-nums">{formatInr(Number(order.total))}</TableCell>
-                      <TableCell className="text-sm">{order.items.length} item{order.items.length !== 1 ? "s" : ""}</TableCell>
+                      <TableCell className="text-sm">
+                        {order.items.length} item{order.items.length !== 1 ? "s" : ""}
+                        {/* One parcel per unit — item count alone understates dispatch. */}
+                        {order.shipments && order.shipments.length > 0 && (
+                          <span className="block text-[11px] text-muted-foreground">
+                            {order.shipments.length} package{order.shipments.length !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs font-mono text-muted-foreground">
                         {order.waybill ? (
                           <div className="flex items-center gap-1">
