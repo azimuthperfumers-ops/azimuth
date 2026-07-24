@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, avg, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 
 import { schema } from "@azimuth/db";
-import { adminProcedure } from "../middleware/auth.middleware";
+import { adminProcedure, permissionProcedure } from "../middleware/auth.middleware";
 import { cacheGetOrSet } from "../lib/redis";
 import { router } from "../trpc";
 
@@ -14,8 +14,10 @@ const CONFIRMED_STATUSES = [
 
 const RETURN_STATUSES = ["rto_initiated", "rto_delivered"] as const;
 
+const readAnalytics = permissionProcedure("analytics", "read");
+
 export const analyticsRouter = router({
-  orders: adminProcedure
+  orders: readAnalytics
     .input(z.object({
       zoom: z.enum(["week", "month", "year"]),
       periodStart: z.string().optional(), // ISO date string — e.g. "2026-06-01"
@@ -155,7 +157,7 @@ export const analyticsRouter = router({
 
   // ── Per-product deep-dive (heavy aggregates — Redis-cached 10 min) ──────────
 
-  productDetail: adminProcedure
+  productDetail: permissionProcedure("products", "read")
     .input(z.object({ productId: z.string().uuid() }))
     .query(({ ctx, input }) =>
       cacheGetOrSet(`analytics:product:${input.productId}`, 600, async () => {

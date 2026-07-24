@@ -6,7 +6,10 @@ import { schema } from "@azimuth/db";
 import { alertAdminNewTicket, notifyRefundInitiated } from "@azimuth/comms";
 import { advanceOrderStatus } from "../repositories/order.repository";
 import { createWalletRepository } from "../repositories/wallet.repository";
-import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
+import { permissionProcedure, protectedProcedure } from "../middleware/auth.middleware";
+
+const readTickets = permissionProcedure("tickets", "read");
+const writeTickets = permissionProcedure("tickets", "write");
 import { router } from "../trpc";
 import { orderQueue } from "../lib/order-queue";
 
@@ -148,7 +151,7 @@ export const ticketRouter = router({
 
   // ── Admin: list all tickets ────────────────────────────────────────────────
 
-  adminList: adminProcedure
+  adminList: readTickets
     .input(
       z.object({
         status: z.enum(["open", "awaiting_admin", "awaiting_user", "resolved", "closed"]).optional(),
@@ -212,7 +215,7 @@ export const ticketRouter = router({
 
   // ── Admin: send message (always senderRole:"admin") ────────────────────────
 
-  adminSendMessage: adminProcedure
+  adminSendMessage: writeTickets
     .input(
       z.object({
         ticketId: z.string().uuid(),
@@ -254,7 +257,7 @@ export const ticketRouter = router({
   // ── Admin: take action (refund / close / reopen) ───────────────────────────
   // No returns/exchanges — refund-only policy, granted after verifying proof.
 
-  adminAction: adminProcedure
+  adminAction: writeTickets
     .input(
       z.object({
         ticketId: z.string().uuid(),

@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
+import { usePermissions } from "@/hooks/use-permissions";
 import { formatInr } from "@/lib/format";
 
 const PAGE = 50;
@@ -313,6 +314,8 @@ function StatementDialog({
 
 export default function WalletsPage() {
   const utils = trpc.useUtils();
+  const { can } = usePermissions();
+  const canCredit = can("wallets", "write"); // support can view wallets but not credit
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -380,7 +383,7 @@ export default function WalletsPage() {
             }}
           />
         </div>
-        {selectedIds.length > 0 && (
+        {canCredit && selectedIds.length > 0 && (
           <Button
             className="gap-1.5"
             onClick={() =>
@@ -472,15 +475,17 @@ export default function WalletsPage() {
                       <ReceiptText className="size-3.5" />
                       Statement
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1"
-                      onClick={() => setCreditTargets([{ userId: w.userId, name: w.userName || w.userEmail }])}
-                    >
-                      <Plus className="size-3.5" />
-                      Credit
-                    </Button>
+                    {canCredit && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => setCreditTargets([{ userId: w.userId, name: w.userName || w.userEmail }])}
+                      >
+                        <Plus className="size-3.5" />
+                        Credit
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

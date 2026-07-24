@@ -1,5 +1,8 @@
-import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
+import { permissionProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import { publicProcedure } from "../trpc";
+
+const readCoupons = permissionProcedure("coupons", "read");
+const writeCoupons = permissionProcedure("coupons", "write");
 import {
   createCouponSchema,
   deleteCouponSchema,
@@ -12,19 +15,19 @@ import { createCouponService } from "../services/coupon.service";
 import { router } from "../trpc";
 
 export const couponRouter = router({
-  list: adminProcedure
+  list: readCoupons
     .input(listCouponsSchema)
     .query(({ ctx, input }) => createCouponService(ctx.db).listCoupons(input)),
 
-  create: adminProcedure
+  create: writeCoupons
     .input(createCouponSchema)
     .mutation(({ ctx, input }) => createCouponService(ctx.db).createCoupon(input)),
 
-  update: adminProcedure
+  update: writeCoupons
     .input(updateCouponSchema)
     .mutation(({ ctx, input }) => createCouponService(ctx.db).updateCoupon(input)),
 
-  delete: adminProcedure
+  delete: writeCoupons
     .input(deleteCouponSchema)
     .mutation(({ ctx, input }) => createCouponService(ctx.db).deleteCoupon(input)),
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { type FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -10,19 +9,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
+import { usePermissions } from "@/hooks/use-permissions";
+import { firstAccessiblePath } from "@/lib/nav";
 
 export default function LoginPage() {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
+  const { can } = usePermissions();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
     if (!isPending && session?.user.role === "admin") {
-      router.replace("/dashboard");
+      router.replace(firstAccessiblePath(can));
     }
-  }, [isPending, session, router]);
+  }, [isPending, session, router, can]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -131,10 +133,7 @@ export default function LoginPage() {
             </form>
 
             <p className="text-center text-xs text-muted-foreground">
-              Need an account?{" "}
-              <Link href="/signup" className="text-foreground underline underline-offset-2">
-                Register with invite code
-              </Link>
+              Staff accounts are created by an owner.
             </p>
           </div>
         </div>

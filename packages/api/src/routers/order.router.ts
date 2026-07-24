@@ -13,7 +13,7 @@ import {
   type OrderInfo,
 } from "@azimuth/comms";
 
-import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
+import { permissionProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import { createLogisticsService, quotePackages } from "../services/logistics.service";
 import { splitIntoPackages, type VariantDims } from "../services/packaging";
 import { orderQueue } from "../lib/order-queue";
@@ -129,6 +129,12 @@ const ORDER_STATUS_VALUES = [
   "rto_initiated",
   "rto_delivered",
 ] as const;
+
+const readOrders = permissionProcedure("orders", "read");
+const writeOrders = permissionProcedure("orders", "write");
+// Money actions — refunds, payment confirmation, invoices. Accounts + owner +
+// orders_manager hold this; separated from orders:write so finance can be scoped.
+const writePayments = permissionProcedure("payments", "write");
 
 export const orderRouter = router({
   // ── User: place order ────────────────────────────────────────────────────────
@@ -360,7 +366,7 @@ export const orderRouter = router({
 
   // ── Admin: list all orders ───────────────────────────────────────────────────
 
-  adminList: adminProcedure
+  adminList: readOrders
     .input(
       z.object({
         status: z.enum(ORDER_STATUS_VALUES).optional(),
@@ -375,7 +381,7 @@ export const orderRouter = router({
 
   // ── Admin: dashboard stats (DB-aggregated, React Query caches 5min) ──────────
 
-  adminStats: adminProcedure.query(async ({ ctx }) => {
+  adminStats: readOrders.query(async ({ ctx }) => {
     const db = ctx.db;
 
     const now = new Date();
@@ -431,13 +437,13 @@ export const orderRouter = router({
     };
   }),
 
-  adminGet: adminProcedure
+  adminGet: readOrders
     .input(z.object({ orderId: z.string().uuid() }))
     .query(({ ctx, input }) => getOrderById(ctx.db, input.orderId)),
 
   // ── Admin: advance status ────────────────────────────────────────────────────
 
-  updateStatus: adminProcedure
+  updateStatus: writeOrders
     .input(
       z.object({
         orderId: z.string().uuid(),
@@ -581,7 +587,7 @@ export const orderRouter = router({
 
   // ── Admin: manually retry shipment booking after all queue attempts exhausted ──
 
-  retryShipmentBooking: adminProcedure
+  retryShipmentBooking: writeOrders
     .input(z.object({ orderId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const order = await ctx.db.query.orders.findFirst({
@@ -636,7 +642,7 @@ export const orderRouter = router({
   // If razorpayPaymentId is already on the order, refunds work normally later.
   // If not, admin handles refunds manually for this order.
 
-  confirmPayment: adminProcedure
+  confirmPayment: writePayments
     .input(z.object({ orderId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const order = await ctx.db.query.orders.findFirst({
@@ -687,7 +693,7 @@ export const orderRouter = router({
   // ── Admin: generate / regenerate the GST invoice ───────────────────────────
   // Idempotent. Backfills paid orders that missed invoice generation (e.g. paid
   // before the feature shipped), or re-renders if the PDF upload failed.
-  generateInvoice: adminProcedure
+  generateInvoice: writePayments
     .input(z.object({ orderId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const order = await ctx.db.query.orders.findFirst({
@@ -705,7 +711,7 @@ export const orderRouter = router({
   // Admin talks to the customer, then picks a destination. Wallet-paid orders can
   // only be refunded to the wallet (money never reached a bank).
 
-  issueRefund: adminProcedure
+  issueRefund: writePayments
     .input(
       z.object({
         orderId: z.string().uuid(),

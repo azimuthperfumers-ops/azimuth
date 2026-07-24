@@ -6,6 +6,19 @@ import { pgTable, text, timestamp, boolean, index, pgEnum } from "drizzle-orm/pg
 // TS-level hint. We upgrade it to a real Postgres enum for a DB-level constraint.
 export const userRoleEnum = pgEnum("user_role", ["admin", "user", "system"]);
 
+// Staff sub-role. Only meaningful when `role = 'admin'` — it decides which admin
+// panel sections the person can view/edit (see packages/api/src/permissions.ts).
+// Null for customers/system. `owner` is the superuser and the only role that can
+// create or manage other staff. Kept in sync manually with the `staffRole`
+// additionalField in packages/auth/src/index.ts.
+export const staffRoleEnum = pgEnum("staff_role", [
+  "owner",
+  "orders_manager",
+  "cataloging",
+  "accounts",
+  "support",
+]);
+
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -21,6 +34,8 @@ export const user = pgTable("user", {
   phoneNumberVerified: boolean("phone_number_verified"),
   phone: text("phone"),
   role: userRoleEnum("role").default("user").notNull(),
+  // Nullable — set only for staff (role='admin'). See staffRoleEnum above.
+  staffRole: staffRoleEnum("staff_role"),
 });
 
 export const session = pgTable(

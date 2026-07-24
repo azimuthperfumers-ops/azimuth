@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { formatInr } from "@/lib/format";
+import { usePermissions } from "@/hooks/use-permissions";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -232,6 +233,7 @@ const STATS_QUERY_OPTS = { staleTime: 5 * 60 * 1000 } as const;
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { can } = usePermissions();
   const { from: mtdFrom, to: mtdTo } = thisMonthRange();
 
   // Heavy aggregations — server-side, cached 5 min
@@ -244,7 +246,7 @@ export default function DashboardPage() {
   );
   const ticketsQuery = trpc.ticket.adminList.useQuery(
     { limit: 100 },
-    { staleTime: 60 * 1000 },
+    { staleTime: 60 * 1000, enabled: can("tickets") },
   );
   const productsQuery = trpc.catalog.listProducts.useQuery(
     { limit: 100 },

@@ -1,8 +1,11 @@
 import { z } from "zod";
 import { schema } from "@azimuth/db";
 import { asc, desc, eq } from "drizzle-orm";
-import { adminProcedure } from "../middleware/auth.middleware";
+import { permissionProcedure } from "../middleware/auth.middleware";
 import { publicProcedure, router } from "../trpc";
+
+const readContent = permissionProcedure("content", "read");
+const writeContent = permissionProcedure("content", "write");
 
 export const contentRouter = router({
   getSection: publicProcedure
@@ -14,7 +17,7 @@ export const contentRouter = router({
       return (row?.data ?? {}) as Record<string, unknown>;
     }),
 
-  updateSection: adminProcedure
+  updateSection: writeContent
     .input(z.object({ section: z.string(), data: z.record(z.string(), z.unknown()) }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db
@@ -36,13 +39,13 @@ export const contentRouter = router({
       });
     }),
 
-  listAllBanners: adminProcedure.query(async ({ ctx }) => {
+  listAllBanners: readContent.query(async ({ ctx }) => {
     return ctx.db.query.banners.findMany({
       orderBy: [asc(schema.banners.page), asc(schema.banners.sortOrder)],
     });
   }),
 
-  createBanner: adminProcedure
+  createBanner: writeContent
     .input(z.object({
       page: z.enum(["home", "shop"]),
       imageUrl: z.string().min(1),
@@ -62,7 +65,7 @@ export const contentRouter = router({
       return banner!;
     }),
 
-  updateBanner: adminProcedure
+  updateBanner: writeContent
     .input(z.object({
       id: z.string().uuid(),
       alt: z.string().optional(),
@@ -79,7 +82,7 @@ export const contentRouter = router({
       return { ok: true };
     }),
 
-  deleteBanner: adminProcedure
+  deleteBanner: writeContent
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db.delete(schema.banners).where(eq(schema.banners.id, input.id));

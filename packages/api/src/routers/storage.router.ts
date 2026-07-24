@@ -3,8 +3,11 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
+import { permissionProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import { router } from "../trpc";
+
+const writeProducts = permissionProcedure("products", "write");
+const writeContent = permissionProcedure("content", "write");
 import { env } from "../env";
 
 function r2Client() {
@@ -32,7 +35,7 @@ function r2BucketAndBase() {
 }
 
 export const storageRouter = router({
-  getUploadUrl: adminProcedure
+  getUploadUrl: writeProducts
     .input(z.object({ filename: z.string().min(1), contentType: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const { bucket, base } = r2BucketAndBase();
@@ -66,7 +69,7 @@ export const storageRouter = router({
       return { uploadUrl, publicUrl: `${base}/${key}`, key };
     }),
 
-  getBannerUploadUrl: adminProcedure
+  getBannerUploadUrl: writeContent
     .input(z.object({ filename: z.string().min(1), contentType: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const { bucket, base } = r2BucketAndBase();
@@ -77,7 +80,7 @@ export const storageRouter = router({
       return { uploadUrl, publicUrl: `${base}/${key}`, key };
     }),
 
-  getLandingUploadUrl: adminProcedure
+  getLandingUploadUrl: writeContent
     .input(z.object({ filename: z.string().min(1), contentType: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const { bucket, base } = r2BucketAndBase();

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, avg, count, eq, inArray } from "drizzle-orm";
 
 import { schema } from "@azimuth/db";
-import { adminProcedure, protectedProcedure } from "../middleware/auth.middleware";
+import { permissionProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import { publicProcedure, router } from "../trpc";
 
 // Ratings are per PRODUCT (not variant) and unlocked only by a delivered order
@@ -196,7 +196,7 @@ export const ratingRouter = router({
 
   // ── Admin: real vs mock stats + display-mode switch ─────────────────────────
 
-  adminGetForProduct: adminProcedure
+  adminGetForProduct: permissionProcedure("products", "read")
     .input(z.object({ productId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const product = await ctx.db.query.products.findFirst({
@@ -219,7 +219,7 @@ export const ratingRouter = router({
       };
     }),
 
-  adminSetDisplay: adminProcedure
+  adminSetDisplay: permissionProcedure("products", "write")
     .input(
       z.object({
         productId: z.string().uuid(),

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { schema } from "@azimuth/db";
-import { adminProcedure } from "../middleware/auth.middleware";
+import { permissionProcedure } from "../middleware/auth.middleware";
 import { publicProcedure, router } from "../trpc";
 
 export const settingsRouter = router({
@@ -10,7 +10,7 @@ export const settingsRouter = router({
     return { freeShippingAboveInr: Number(row?.freeShippingAboveInr ?? 999) };
   }),
 
-  update: adminProcedure
+  update: permissionProcedure("settings", "write")
     .input(z.object({ freeShippingAboveInr: z.number().nonnegative() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db

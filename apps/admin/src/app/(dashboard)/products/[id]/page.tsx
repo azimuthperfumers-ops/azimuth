@@ -26,13 +26,19 @@ import {
 } from "@/components/ui/table";
 import { formatInr } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
   const productId = params.id;
+  const { can } = usePermissions();
 
   const product = trpc.catalog.getProduct.useQuery({ id: productId });
-  const variantDiscounts = trpc.discount.listForProduct.useQuery({ productId });
+  // Only roles that can read discounts fetch the per-variant discount overlay.
+  const variantDiscounts = trpc.discount.listForProduct.useQuery(
+    { productId },
+    { enabled: can("discounts") },
+  );
   const [stockDialogVariantId, setStockDialogVariantId] = useState<string | null>(null);
   const [removeStockVariantId, setRemoveStockVariantId] = useState<string | null>(null);
   const [editVariantId, setEditVariantId] = useState<string | null>(null);

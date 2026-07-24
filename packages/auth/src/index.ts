@@ -69,6 +69,14 @@ export const auth = betterAuth({
         defaultValue: "user",
         input: false,
       },
+      // Staff sub-role — decides admin-panel access. Null for customers. Never
+      // client-settable (input:false); only the owner sets it server-side via the
+      // staff router. Mirrored as a real pg enum in packages/db/src/schema/auth.ts.
+      staffRole: {
+        type: ["owner", "orders_manager", "cataloging", "accounts", "support"],
+        required: false,
+        input: false,
+      },
       phone: {
         type: "string",
         required: false,

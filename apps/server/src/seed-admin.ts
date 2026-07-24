@@ -14,7 +14,7 @@ const existing = await db
   .limit(1);
 
 if (existing.length > 0) {
-  await db.update(schema.user).set({ role: "admin" }).where(eq(schema.user.email, ADMIN_EMAIL));
+  await db.update(schema.user).set({ role: "admin", staffRole: "owner" }).where(eq(schema.user.email, ADMIN_EMAIL));
   console.log(`Admin role set for existing user: ${ADMIN_EMAIL}`);
   process.exit(0);
 }
@@ -29,6 +29,6 @@ if (!result?.user?.id) {
   process.exit(1);
 }
 
-await db.update(schema.user).set({ role: "admin" }).where(eq(schema.user.id, result.user.id));
+await db.update(schema.user).set({ role: "admin", staffRole: "owner" }).where(eq(schema.user.id, result.user.id));
 
 console.log(`Admin created: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);

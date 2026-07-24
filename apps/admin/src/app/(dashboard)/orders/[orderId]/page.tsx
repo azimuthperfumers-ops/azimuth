@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { formatInr } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
+import { usePermissions } from "@/hooks/use-permissions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -256,6 +257,10 @@ export default function AdminOrderDetailPage({
   const [refundNote, setRefundNote] = useState("");
   const [refundDest, setRefundDest] = useState<"razorpay" | "wallet">("wallet");
   const utils = trpc.useUtils();
+  const { can } = usePermissions();
+  // orders:write → status/fulfillment actions; payments:write → money actions.
+  const canOrders = can("orders", "write");
+  const canPay = can("payments", "write");
 
   const retryBooking = trpc.order.retryShipmentBooking.useMutation({
     onSuccess: async () => {
@@ -369,7 +374,7 @@ export default function AdminOrderDetailPage({
             <Badge variant={STATUS_VARIANT[order.status as OrderStatus] ?? "outline"}>
               {STATUS_LABEL[order.status as OrderStatus] ?? order.status}
             </Badge>
-            {needsShipmentRetry && (
+            {canOrders && needsShipmentRetry && (
               <Button
                 size="sm"
                 variant="outline"
@@ -381,7 +386,7 @@ export default function AdminOrderDetailPage({
                 {retryBooking.isPending ? "Queueing…" : "Retry shipment booking"}
               </Button>
             )}
-            {(order.status === "pending_payment" || order.status === "payment_failed") && (
+            {canPay && (order.status === "pending_payment" || order.status === "payment_failed") && (
               <Button
                 size="sm"
                 variant="outline"
@@ -393,7 +398,8 @@ export default function AdminOrderDetailPage({
               </Button>
             )}
             {/* Wallet-paid orders have no razorpayPaymentId but are still refundable (to wallet). */}
-            {(order.razorpayPaymentId || (order as { paymentMethod?: string }).paymentMethod === "wallet") &&
+            {canPay &&
+              (order.razorpayPaymentId || (order as { paymentMethod?: string }).paymentMethod === "wallet") &&
               !["refund_processing", "refunded", "cancelled", "pending_payment", "payment_failed"].includes(order.status) && (
               <Button
                 size="sm"
@@ -407,9 +413,11 @@ export default function AdminOrderDetailPage({
                 Issue refund
               </Button>
             )}
-            <Button size="sm" onClick={() => setStatusDialog(true)}>
-              Update status
-            </Button>
+            {canOrders && (
+              <Button size="sm" onClick={() => setStatusDialog(true)}>
+                Update status
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -605,7 +613,7 @@ export default function AdminOrderDetailPage({
               {!order.razorpayOrderId && !order.gstInvoiceNumber && (
                 <p className="text-muted-foreground/50">No payment data yet.</p>
               )}
-              {order.status !== "pending_payment" && order.status !== "payment_failed" && (
+              {canPay && order.status !== "pending_payment" && order.status !== "payment_failed" && (
                 <Button
                   size="sm"
                   variant="outline"

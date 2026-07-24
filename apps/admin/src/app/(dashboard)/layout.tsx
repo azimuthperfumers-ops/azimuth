@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart2, Boxes, FlaskConical, LayoutDashboard, LogOut, Package, Paintbrush, PercentCircle, Settings, ShoppingBag, Tag, Tags, TicketIcon, Users, Cpu, Wallet } from "lucide-react";
+import { LogOut, ShieldCheck } from "lucide-react";
 
+import { NAV_GROUPS, NAV_ITEMS } from "@/lib/nav";
+import { usePermissions } from "@/hooks/use-permissions";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -47,59 +49,6 @@ function NavBadge({ count, urgent }: { count: number; urgent: boolean }) {
   );
 }
 
-const NAV_GROUPS = [
-  {
-    label: "Overview",
-    items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/analytics", label: "Analytics", icon: BarChart2 },
-    ],
-  },
-  {
-    label: "Catalog",
-    items: [
-      { href: "/products", label: "Products", icon: Package },
-      { href: "/categories", label: "Categories", icon: Tags },
-      { href: "/inventory", label: "Inventory", icon: Boxes },
-      { href: "/fragrance-notes", label: "Notes library", icon: FlaskConical },
-    ],
-  },
-  {
-    label: "Orders",
-    items: [
-      { href: "/orders", label: "Orders", icon: ShoppingBag },
-      { href: "/jobs", label: "Job Queue", icon: Cpu },
-    ],
-  },
-  {
-    label: "Promotions",
-    items: [
-      { href: "/discounts", label: "Discounts", icon: PercentCircle },
-      { href: "/coupons", label: "Coupons", icon: Tag },
-    ],
-  },
-  {
-    label: "Customers",
-    items: [
-      { href: "/users", label: "Users", icon: Users },
-      { href: "/wallets", label: "Wallets", icon: Wallet },
-    ],
-  },
-  {
-    label: "Support",
-    items: [
-      { href: "/support", label: "Tickets", icon: TicketIcon },
-    ],
-  },
-  {
-    label: "Config",
-    items: [
-      { href: "/content", label: "Content", icon: Paintbrush },
-      { href: "/settings", label: "Settings", icon: Settings },
-    ],
-  },
-];
-
 function getSidebarDefaultOpen(): boolean {
   if (typeof document === "undefined") return true;
   const match = document.cookie.match(/(?:^|;\s*)sidebar_state=([^;]*)/);
@@ -119,8 +68,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const { data: session, isPending } = authClient.useSession();
+  const { can } = usePermissions();
   const [sidebarDefaultOpen] = useState(getSidebarDefaultOpen);
   const isAdmin = session?.user.role === "admin";
+
+  // Sidebar shows only sections this role can view; groups with no visible items
+  // disappear entirely.
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => can(item.resource)),
+  })).filter((group) => group.items.length > 0);
+
+  // Route guard: if the current path maps to a section the role can't view, block
+  // render (deep links / removed access) rather than firing forbidden queries.
+  const activeItem = NAV_ITEMS.find((item) => pathname.startsWith(item.href));
+  const routeDenied = !!activeItem && !can(activeItem.resource);
 
   // Pending-work counts for the nav badges. Kept cheap: 2-min poll, 1-min
   // staleTime (focus/nav inside that window reuses the cached result), and the
@@ -160,7 +122,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Navigation */}
         <SidebarContent className="px-2 pt-3">
-          {NAV_GROUPS.map((group) => (
+          {visibleGroups.map((group) => (
             <SidebarGroup key={group.label} className="py-1">
               <SidebarGroupLabel className="mb-1 px-2 text-[9.5px] font-semibold tracking-[0.22em] uppercase text-sidebar-foreground/35">
                 {group.label}
@@ -227,7 +189,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Separator orientation="vertical" className="h-3.5 opacity-20" />
           <ModeToggle />
         </header>
-        <main className="flex-1 px-8 pt-7 pb-16">{children}</main>
+        <main className="flex-1 px-8 pt-7 pb-16">
+          {routeDenied ? (
+            <div className="mx-auto mt-24 max-w-md text-center">
+              <ShieldCheck className="mx-auto mb-4 size-8 text-muted-foreground" />
+              <h1 className="text-lg font-semibold">No access to this section</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Your role doesn&apos;t include this area. Contact an owner if you need access.
+              </p>
+              <Link href="/dashboard" className="mt-4 inline-block text-sm font-medium text-primary underline">
+                Back to dashboard
+              </Link>
+            </div>
+          ) : (
+            children
+          )}
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -3,15 +3,18 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 import { schema } from "@azimuth/db";
-import { adminProcedure } from "../middleware/auth.middleware";
+import { permissionProcedure } from "../middleware/auth.middleware";
 import { router } from "../trpc";
 import { orderQueue } from "../lib/order-queue";
+
+const readJobs = permissionProcedure("jobs", "read");
+const writeJobs = permissionProcedure("jobs", "write");
 
 const JOB_TYPES = ["book_shipment", "cancel_shipment", "initiate_refund"] as const;
 const JOB_STATUSES = ["pending", "running", "completed", "failed"] as const;
 
 export const jobRouter = router({
-  adminList: adminProcedure
+  adminList: readJobs
     .input(
       z.object({
         type: z.enum(JOB_TYPES).optional(),
@@ -47,7 +50,7 @@ export const jobRouter = router({
       return { jobs, total: countResult[0]?.count ?? 0 };
     }),
 
-  adminCancel: adminProcedure
+  adminCancel: writeJobs
     .input(z.object({ jobId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const job = await ctx.db.query.backgroundJobs.findFirst({
@@ -73,7 +76,7 @@ export const jobRouter = router({
       return { ok: true };
     }),
 
-  adminRetry: adminProcedure
+  adminRetry: writeJobs
     .input(z.object({ jobId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const job = await ctx.db.query.backgroundJobs.findFirst({

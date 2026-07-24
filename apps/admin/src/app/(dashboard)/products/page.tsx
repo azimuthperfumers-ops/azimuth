@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { formatInr } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
+import { usePermissions } from "@/hooks/use-permissions";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   active: "default",
@@ -48,12 +49,17 @@ export default function ProductsPage() {
     router.replace(`${pathname}?${params.toString()}`);
   }
 
+  const { can } = usePermissions();
   const products = trpc.catalog.listProducts.useQuery({
     limit: 50,
     search: search || undefined,
     status: statusFilter === "all" ? undefined : statusFilter,
   });
-  const linkedVariants = trpc.discount.listLinkedVariants.useQuery();
+  // Discount overlay is only fetched for roles that can read discounts (e.g. not
+  // orders_manager, who can view products but not discounts).
+  const linkedVariants = trpc.discount.listLinkedVariants.useQuery(undefined, {
+    enabled: can("discounts"),
+  });
 
   const discountMap = new Map(
     (linkedVariants.data ?? [])

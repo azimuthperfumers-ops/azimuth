@@ -41,6 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
+import { usePermissions } from "@/hooks/use-permissions";
 import { formatInr } from "@/lib/format";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -156,6 +157,8 @@ function WalletCard({ userId, userName }: { userId: string; userName: string }) 
   const utils = trpc.useUtils();
   const wallet = trpc.adminUser.wallet.useQuery({ userId });
 
+  const { can } = usePermissions();
+  const canCredit = can("wallets", "write");
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -182,10 +185,12 @@ function WalletCard({ userId, userName }: { userId: string; userName: string }) 
           <div className="text-2xl font-bold tabular-nums">{formatInr(wallet.data?.balance ?? 0)}</div>
           <div className="text-[10px] text-muted-foreground mt-0.5">Store credit balance</div>
         </div>
+        {canCredit && (
         <Button size="sm" variant="outline" className="gap-1" onClick={() => setOpen(true)}>
           <Plus className="size-3.5" />
           Add money
         </Button>
+        )}
       </div>
 
       {(wallet.data?.transactions.length ?? 0) > 0 && (

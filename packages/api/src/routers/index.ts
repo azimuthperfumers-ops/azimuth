@@ -1,5 +1,4 @@
 import { router } from "../trpc";
-import { adminAuthRouter } from "./admin-auth.router";
 import { cartRouter } from "./cart.router";
 import { orderRouter } from "./order.router";
 import { paymentRouter } from "./payment.router";
@@ -19,12 +18,12 @@ import { contentRouter } from "./content.router";
 import { jobRouter } from "./job.router";
 import { ratingRouter } from "./rating.router";
 import { walletRouter } from "./wallet.router";
+import { staffRouter } from "./staff.router";
 
 export const appRouter = router({
   analytics: analyticsRouter,
   health: healthRouter,
   user: userRouter,
-  adminAuth: adminAuthRouter,
   adminUser: adminUserRouter,
   catalog: catalogRouter,
   cart: cartRouter,
@@ -41,6 +40,7 @@ export const appRouter = router({
   job: jobRouter,
   rating: ratingRouter,
   wallet: walletRouter,
+  staff: staffRouter,
 });
 
 export type AppRouter = typeof appRouter;

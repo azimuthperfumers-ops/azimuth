@@ -3,12 +3,16 @@ import { asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 import { schema } from "@azimuth/db";
-import { adminProcedure } from "../middleware/auth.middleware";
+import { permissionProcedure } from "../middleware/auth.middleware";
 import { createWalletRepository } from "../repositories/wallet.repository";
 import { router } from "../trpc";
 
+const readCustomers = permissionProcedure("customers", "read");
+const readWallets = permissionProcedure("wallets", "read");
+const writeWallets = permissionProcedure("wallets", "write");
+
 export const adminUserRouter = router({
-  list: adminProcedure
+  list: readCustomers
     .input(
       z.object({
         search: z.string().optional(),
@@ -80,7 +84,7 @@ export const adminUserRouter = router({
       };
     }),
 
-  get: adminProcedure
+  get: readCustomers
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
       const user = await ctx.db.query.user.findFirst({
@@ -114,7 +118,7 @@ export const adminUserRouter = router({
     }),
 
   // Customer's wallet as the admin sees it: balance + recent ledger entries.
-  wallet: adminProcedure
+  wallet: readCustomers
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
       const wallet = createWalletRepository(ctx.db);
@@ -130,7 +134,7 @@ export const adminUserRouter = router({
   // the admin's id and a mandatory reason, visible to the customer.
   // direction "debit" deducts instead (correction, clawback of a mistaken
   // credit). A debit can never push the balance below zero — record() rejects it.
-  walletCredit: adminProcedure
+  walletCredit: writeWallets
     .input(
       z.object({
         userId: z.string(),
@@ -163,7 +167,7 @@ export const adminUserRouter = router({
 
   // Every customer with a wallet: balance + last movement, searchable, paginated.
   // Also returns the store's total outstanding wallet liability.
-  walletList: adminProcedure
+  walletList: readWallets
     .input(
       z.object({
         search: z.string().optional(),
@@ -220,7 +224,7 @@ export const adminUserRouter = router({
     }),
 
   // Full paginated ledger for one customer — the admin-side wallet statement.
-  walletTransactions: adminProcedure
+  walletTransactions: readWallets
     .input(
       z.object({
         userId: z.string(),
@@ -238,7 +242,7 @@ export const adminUserRouter = router({
   // Credit several customers at once (campaign goodwill, launch credit, etc).
   // Same rules as single credit: adjustment ledger rows, admin id, mandatory
   // reason. Applied one by one; reports how many succeeded.
-  walletBulkCredit: adminProcedure
+  walletBulkCredit: writeWallets
     .input(
       z.object({
         userIds: z.array(z.string()).min(1).max(200),
