@@ -66,8 +66,8 @@ const ROLE_ACCESS: Record<Exclude<StaffRole, "owner">, Partial<Record<Resource, 
     tickets: "read",
   },
   cataloging: {
-    // No dashboard — cataloging works from the catalog sections, not the overview.
-    analytics: "read",
+    // No overview at all — cataloging works from the catalog sections, not the
+    // dashboard or analytics.
     products: "write",
     categories: "write",
     inventory: "write",
