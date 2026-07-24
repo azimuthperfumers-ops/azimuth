@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -133,7 +134,10 @@ export default function LoginPage() {
             </form>
 
             <p className="text-center text-xs text-muted-foreground">
-              Staff accounts are created by an owner.
+              Staff accounts are created by an owner.{" "}
+              <Link href="/register" className="text-foreground underline underline-offset-2">
+                Owner setup
+              </Link>
             </p>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { router } from "../trpc";
+import { ownerAuthRouter } from "./owner-auth.router";
 import { cartRouter } from "./cart.router";
 import { orderRouter } from "./order.router";
 import { paymentRouter } from "./payment.router";
@@ -24,6 +25,7 @@ export const appRouter = router({
   analytics: analyticsRouter,
   health: healthRouter,
   user: userRouter,
+  ownerAuth: ownerAuthRouter,
   adminUser: adminUserRouter,
   catalog: catalogRouter,
   cart: cartRouter,
