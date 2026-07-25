@@ -20,7 +20,14 @@
     "ios": {
       "bundleIdentifier": "com.azimuthperfumers.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": [
+          "tez",
+          "phonepe",
+          "paytmmp",
+          "bhim",
+          "credpay"
+        ]
       }
     },
     "web": {

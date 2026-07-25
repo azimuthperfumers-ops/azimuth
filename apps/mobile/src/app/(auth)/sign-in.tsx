@@ -125,7 +125,17 @@ export default function SignInScreen() {
   async function handleGoogle() {
     setError(null);
     setGoogleLoading(true);
-    const { error: err } = await authClient.signIn.social({ provider: "google" });
+    // callbackURL must deep-link back into the app. Without it, better-auth
+    // redirects to the server root ("/") after Google auth → "Cannot GET /".
+    // Pass the absolute "azimuth://" scheme (same as the email-verify flow) —
+    // the expo plugin leaves absolute scheme URLs untouched, and it matches the
+    // server's trustedOrigins verbatim. A relative "/" instead gets rewritten
+    // by Linking.createURL to a scheme the server doesn't trust → the sign-in
+    // request is rejected with INVALID_CALLBACK_URL before the browser opens.
+    const { error: err } = await authClient.signIn.social({
+      provider: "google",
+      callbackURL: VERIFY_CALLBACK,
+    });
     setGoogleLoading(false);
     if (err) { Alert.alert("Google sign-in failed", authErrorMessage(err, "Please try again.")); return; }
     router.back();
