@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Heart, Minus, Plus, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ProductGallery } from "@/components/product-gallery";
 import { ProductOffers } from "@/components/product-offers";
 import { RatingDisplay } from "@/components/rating-stars";
 import { SiteFooter } from "@/components/site-footer";
@@ -82,7 +83,6 @@ export default function ProductDetailPage() {
   });
 
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
-  const [activeImg, setActiveImg] = useState(0);
   const cart = useCart();
 
   const isLoading = productQuery.isLoading;
@@ -188,53 +188,7 @@ export default function ProductDetailPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 lg:gap-20">
           {/* ── Left: images ── */}
-          <div className="space-y-3">
-            {/* Main image */}
-            <div
-              className="aspect-[3/4] w-full overflow-hidden"
-              style={{ backgroundColor: bg }}
-            >
-              {orderedImages[activeImg]?.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={orderedImages[activeImg]!.url!}
-                  alt={product.name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-end justify-start p-10">
-                  <span
-                    className="font-heading text-4xl font-medium leading-tight text-white/60"
-                    style={{ mixBlendMode: "overlay" }}
-                  >
-                    {product.name}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Thumbnails */}
-            {orderedImages.length > 1 && (
-              <div className="flex gap-2">
-                {orderedImages.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setActiveImg(i)}
-                    className={cn(
-                      "size-16 shrink-0 overflow-hidden border transition-colors",
-                      i === activeImg ? "border-foreground" : "border-border hover:border-foreground/40",
-                    )}
-                    style={{ backgroundColor: bg }}
-                  >
-                    {img.url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={img.url} alt="" className="h-full w-full object-cover" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <ProductGallery images={orderedImages} name={product.name} bg={bg} />
 
           {/* ── Right: info ── */}
           <div className="flex flex-col gap-7 pt-2">
