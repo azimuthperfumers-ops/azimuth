@@ -190,6 +190,11 @@ export const orderShipments = pgTable(
     estimatedDeliveryDate: text("estimated_delivery_date"),
     podImageUrl: text("pod_image_url"),
 
+    // Shiprocket's internal shipment id — needed to generate the shipping label
+    // (the label API keys on shipment_id, not the AWB). Stored at booking time so
+    // admin can re-download the label on demand without re-resolving it.
+    shiprocketShipmentId: integer("shiprocket_shipment_id"),
+
     // What the customer was quoted for this parcel vs what the courier billed us.
     shippingChargeQuoted: numeric("shipping_charge_quoted", { precision: 10, scale: 2 }),
     shippingCostActual: numeric("shipping_cost_actual", { precision: 10, scale: 2 }),

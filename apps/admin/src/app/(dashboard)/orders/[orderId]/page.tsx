@@ -296,6 +296,20 @@ export default function AdminOrderDetailPage({
     onError: (err) => toast.error(err.message),
   });
 
+  const generateLabel = trpc.order.generateLabel.useMutation({
+    onSuccess: async (res) => {
+      await utils.order.adminGet.invalidate({ orderId });
+      // Open the label PDF in a new tab so the admin can print & paste it.
+      window.open(res.labelUrl, "_blank", "noopener,noreferrer");
+      toast.success(
+        res.packageCount > 1
+          ? `Label ready for ${res.packageCount} parcels`
+          : "Label ready",
+      );
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const { data: order, isLoading } = trpc.order.adminGet.useQuery({ orderId });
 
   if (isLoading) {
@@ -634,9 +648,23 @@ export default function AdminOrderDetailPage({
           {/* Packages — perfume ships one unit per parcel, each with its own AWB */}
           {order.shipments && order.shipments.length > 0 && (
             <section>
-              <SectionLabel>
-                Packages ({order.shipments.length})
-              </SectionLabel>
+              <div className="flex items-center justify-between gap-2">
+                <SectionLabel>
+                  Packages ({order.shipments.length})
+                </SectionLabel>
+                {/* Label needs at least one booked parcel (AWB assigned). */}
+                {canOrders &&
+                  order.shipments.some((s) => s.waybill && s.status !== "cancelled") && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => generateLabel.mutate({ orderId })}
+                      disabled={generateLabel.isPending}
+                    >
+                      {generateLabel.isPending ? "Generating…" : "Download label"}
+                    </Button>
+                  )}
+              </div>
               <div className="border border-border divide-y divide-border">
                 {order.shipments.map((pkg) => (
                   <div key={pkg.id} className="p-4 space-y-2 text-[12px]">

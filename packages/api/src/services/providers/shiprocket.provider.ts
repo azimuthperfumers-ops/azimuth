@@ -16,6 +16,7 @@ import type {
   CreateShipmentInput,
   ShipmentResult,
   TrackingResult,
+  LabelResult,
 } from "../logistics.service";
 import { env } from "../../env";
 import { MIN_BILLABLE_GRAMS } from "../packaging";
@@ -426,6 +427,7 @@ export class ShiprocketProvider implements ILogisticsService {
         trackingUrl: `https://shiprocket.co/tracking/${awbCode}`,
         courierName: awbResp.response?.data?.courier_name ?? surfaceCourier.courierName,
         estimatedDeliveryDate: etd,
+        shipmentId,
         status: "created",
       };
     } catch (err) {
@@ -476,6 +478,57 @@ export class ShiprocketProvider implements ILogisticsService {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[shiprocket] cancelShipment failed for ${waybill}:`, msg);
       return { cancelled: false, message: msg };
+    }
+  }
+
+  // Generate the shipping label PDF. Passing several shipment ids yields one
+  // combined label so a multi-parcel order downloads as a single sheet. The AWB
+  // must already be assigned (done at booking) or Shiprocket returns not_created.
+  async generateLabel(shipmentIds: number[]): Promise<LabelResult> {
+    if (shipmentIds.length === 0) {
+      return { created: false, errorMessage: "No shipment ids to label" };
+    }
+    try {
+      type LabelResp = {
+        label_created?: number;
+        label_url?: string;
+        response?: string;
+        not_created?: unknown[];
+      };
+      const resp = await apiPost<LabelResp>("/courier/generate/label", {
+        shipment_id: shipmentIds,
+      });
+      if (resp.label_created === 1 && resp.label_url) {
+        return { created: true, labelUrl: resp.label_url };
+      }
+      const msg =
+        resp.response ||
+        (Array.isArray(resp.not_created) && resp.not_created.length > 0
+          ? `Label not created for shipment(s): ${JSON.stringify(resp.not_created)}`
+          : "Label generation failed");
+      console.error(`[shiprocket] generateLabel failed for ${shipmentIds.join(",")}:`, JSON.stringify(resp));
+      return { created: false, errorMessage: msg };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[shiprocket] generateLabel error for ${shipmentIds.join(",")}:`, msg);
+      return { created: false, errorMessage: msg };
+    }
+  }
+
+  // Backfill: recover a shipment id from the seller order number for parcels
+  // booked before the id was persisted. Uses the same order-lookup endpoint the
+  // duplicate-order path in createShipment already relies on.
+  async resolveShipmentId(orderNumber: string): Promise<number | undefined> {
+    try {
+      type ListResp = { data?: { order_id?: number; shipment_id?: number }[] };
+      const resp = await apiGet<ListResp>(
+        `/orders/processing?filter_by=order_id&filter=${encodeURIComponent(orderNumber)}`,
+      );
+      const found = resp.data?.find((o) => o.shipment_id);
+      return found?.shipment_id;
+    } catch (err) {
+      console.warn(`[shiprocket] resolveShipmentId failed for ${orderNumber}:`, err);
+      return undefined;
     }
   }
 }

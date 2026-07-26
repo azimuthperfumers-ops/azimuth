@@ -47,7 +47,16 @@ export type ShipmentResult = {
   trackingUrl: string;
   courierName?: string;
   estimatedDeliveryDate?: string;
+  /** Courier's internal shipment id — persisted so the label can be regenerated later. */
+  shipmentId?: number;
   status: "created" | "failed";
+  errorMessage?: string;
+};
+
+export type LabelResult = {
+  /** URL of the generated label PDF, if the courier produced one. */
+  labelUrl?: string;
+  created: boolean;
   errorMessage?: string;
 };
 
@@ -74,6 +83,11 @@ export interface ILogisticsService {
   createShipment(input: CreateShipmentInput): Promise<ShipmentResult>;
   trackShipment(waybill: string): Promise<TrackingResult>;
   cancelShipment(waybill: string): Promise<{ cancelled: boolean; message?: string }>;
+  /** Generate a combined shipping label PDF for one or more courier shipment ids. */
+  generateLabel(shipmentIds: number[]): Promise<LabelResult>;
+  /** Look up a courier shipment id from the seller's order number (backfill for
+   *  parcels booked before the id was persisted). Returns undefined if not found. */
+  resolveShipmentId(orderNumber: string): Promise<number | undefined>;
 }
 
 // ── Multi-package quoting ─────────────────────────────────────────────────────

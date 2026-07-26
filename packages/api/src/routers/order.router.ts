@@ -637,6 +637,66 @@ export const orderRouter = router({
       return { queued: true, unbookedPackages: unbooked.length };
     }),
 
+  // ── Admin: generate the Shiprocket shipping label for an order ───────────────
+  // Returns the URL of a combined label PDF covering every booked parcel, so the
+  // admin can print it and paste it on the package. The AWB must already be
+  // assigned (label keys on Shiprocket's shipment_id, resolved/persisted here).
+
+  generateLabel: writeOrders
+    .input(z.object({ orderId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const order = await ctx.db.query.orders.findFirst({
+        where: eq(schema.orders.id, input.orderId),
+      });
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+
+      const shipments = await getOrderShipments(ctx.db, input.orderId);
+      // Only booked parcels have an AWB and can be labelled.
+      const booked = shipments.filter((s) => s.waybill && s.status !== "cancelled");
+      if (booked.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No booked parcels to label — assign an AWB first",
+        });
+      }
+
+      const logistics = createLogisticsService();
+
+      // Resolve any missing Shiprocket shipment ids (parcels booked before the id
+      // was persisted) and backfill them so the next label is instant.
+      const shipmentIds: number[] = [];
+      for (const s of booked) {
+        let sid = s.shiprocketShipmentId ?? undefined;
+        if (sid == null) {
+          sid = await logistics.resolveShipmentId(order.orderNumber);
+          if (sid != null) {
+            await ctx.db
+              .update(schema.orderShipments)
+              .set({ shiprocketShipmentId: sid })
+              .where(eq(schema.orderShipments.id, s.id));
+          }
+        }
+        if (sid != null) shipmentIds.push(sid);
+      }
+
+      if (shipmentIds.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Could not resolve a Shiprocket shipment id for this order",
+        });
+      }
+
+      const label = await logistics.generateLabel(shipmentIds);
+      if (!label.created || !label.labelUrl) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: label.errorMessage ?? "Label generation failed",
+        });
+      }
+
+      return { labelUrl: label.labelUrl, packageCount: shipmentIds.length };
+    }),
+
   // ── Admin: manually mark order as paid when webhook was missed ───────────────
   // Mirrors the payment_captured webhook flow: paid → processing → notifications → book_shipment.
   // If razorpayPaymentId is already on the order, refunds work normally later.

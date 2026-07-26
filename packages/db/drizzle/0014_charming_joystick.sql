@@ -1,0 +1,1 @@
+ALTER TABLE "order_shipments" ADD COLUMN "shiprocket_shipment_id" integer;
