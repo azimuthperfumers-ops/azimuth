@@ -1,6 +1,6 @@
 import type { Database } from "@azimuth/db";
 import { schema } from "@azimuth/db";
-import { and, asc, count, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 
 import type {
   AddProductImageInput,
@@ -237,6 +237,45 @@ export function createCatalogRepository(db: Database) {
 
     async deleteImage(id: string) {
       await db.delete(schema.productImages).where(eq(schema.productImages.id, id));
+    },
+
+    // How many distinct customer orders reference this product (via any of its
+    // variants). Order lines snapshot their own data, so this survives even after
+    // the variant link is nulled — but a live product's links are intact here.
+    async countOrdersForProduct(productId: string): Promise<number> {
+      const [row] = await db
+        .select({ n: sql<number>`count(distinct ${schema.orderItems.orderId})` })
+        .from(schema.orderItems)
+        .innerJoin(
+          schema.productVariants,
+          eq(schema.orderItems.variantId, schema.productVariants.id),
+        )
+        .where(eq(schema.productVariants.productId, productId));
+      return Number(row?.n ?? 0);
+    },
+
+    // Hard delete: remove the product and everything hanging off it. Deleting the
+    // product row cascades to variants, images, notes, discount targets, ratings
+    // and wishlist entries; order_items / order_shipments keep their snapshots and
+    // only null out the soft variant reference, so order history stays intact.
+    // The inventory ledger's FK to variants is onDelete:"restrict", so its rows
+    // must be cleared first — this is a deliberate, non-recoverable wipe.
+    async deleteProduct(id: string) {
+      await db.transaction(async (tx) => {
+        const variants = await tx
+          .select({ id: schema.productVariants.id })
+          .from(schema.productVariants)
+          .where(eq(schema.productVariants.productId, id));
+        const variantIds = variants.map((v) => v.id);
+
+        if (variantIds.length > 0) {
+          await tx
+            .delete(schema.inventoryLedger)
+            .where(inArray(schema.inventoryLedger.variantId, variantIds));
+        }
+
+        await tx.delete(schema.products).where(eq(schema.products.id, id));
+      });
     },
 
     async addProductNote(input: AddProductNoteInput) {

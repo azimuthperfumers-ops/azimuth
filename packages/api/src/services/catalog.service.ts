@@ -156,6 +156,35 @@ export function createCatalogService(db: Database) {
       return product;
     },
 
+    // What an admin is about to destroy — surfaced in the delete confirmation so
+    // the warning ("N orders reference this, non-recoverable") is truthful.
+    async getDeletionImpact(id: string) {
+      const product = await catalogRepository.getProductById(id);
+      if (!product) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      const orderCount = await catalogRepository.countOrdersForProduct(id);
+      return {
+        productName: product.name,
+        variantCount: product.variants.length,
+        imageCount: product.images.length,
+        orderCount,
+      };
+    },
+
+    // Permanent, non-recoverable delete of the product and all its variants,
+    // images, notes, ratings, discount targets and wishlist entries. Order history
+    // is preserved (line items keep their snapshots). See repository for the cascade.
+    async deleteProduct(id: string) {
+      const product = await catalogRepository.getProductById(id);
+      if (!product) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      await catalogRepository.deleteProduct(id);
+      await cacheDel(CacheKey.categoryProductCount(product.categoryId));
+      return { deleted: true };
+    },
+
     async listProducts(filters: ListProductsInput) {
       const products = await catalogRepository.listProducts(filters);
       return products.map((p) => ({ ...p, images: p.images.map(withUrl) }));

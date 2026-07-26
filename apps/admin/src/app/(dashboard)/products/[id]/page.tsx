@@ -7,6 +7,7 @@ import { BookOpen, ChartLine } from "lucide-react";
 
 import { AddStockDialog } from "@/components/products/add-stock-dialog";
 import { AddVariantDialog } from "@/components/products/add-variant-dialog";
+import { DeleteProductDialog } from "@/components/products/delete-product-dialog";
 import { EditProductDialog } from "@/components/products/edit-product-dialog";
 import { EditVariantDialog } from "@/components/products/edit-variant-dialog";
 import { ProductImagesCard } from "@/components/products/product-images-card";
@@ -114,6 +115,9 @@ export default function ProductDetailPage() {
             </Link>
           </Button>
           <EditProductDialog product={data} />
+          {can("products", "write") && (
+            <DeleteProductDialog productId={data.id} productName={data.name} />
+          )}
         </div>
       </div>
 

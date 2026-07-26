@@ -83,11 +83,13 @@ export interface ILogisticsService {
   createShipment(input: CreateShipmentInput): Promise<ShipmentResult>;
   trackShipment(waybill: string): Promise<TrackingResult>;
   cancelShipment(waybill: string): Promise<{ cancelled: boolean; message?: string }>;
-  /** Generate a combined shipping label PDF for one or more courier shipment ids. */
+  /** Generate a shipping label PDF for the given courier shipment ids. Pass a
+   *  single id to get that one parcel's label — each box is labelled on its own. */
   generateLabel(shipmentIds: number[]): Promise<LabelResult>;
-  /** Look up a courier shipment id from the seller's order number (backfill for
-   *  parcels booked before the id was persisted). Returns undefined if not found. */
-  resolveShipmentId(orderNumber: string): Promise<number | undefined>;
+  /** Look up every (awb → courier shipment id) pair Shiprocket holds for the
+   *  seller's order number. Backfill for parcels booked before the id was
+   *  persisted; the caller matches each parcel to its own shipment by AWB. */
+  resolveShipmentIds(orderNumber: string): Promise<{ awb: string; shipmentId: number }[]>;
 }
 
 // ── Multi-package quoting ─────────────────────────────────────────────────────

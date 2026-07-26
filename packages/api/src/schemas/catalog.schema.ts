@@ -80,6 +80,11 @@ export const getProductSchema = z.object({
 });
 export type GetProductInput = z.infer<typeof getProductSchema>;
 
+export const deleteProductSchema = z.object({
+  id: z.uuid(),
+});
+export type DeleteProductInput = z.infer<typeof deleteProductSchema>;
+
 const variantFieldsSchema = z.object({
   sku: z.string().min(1).max(64),
   concentration: z.enum(["edp", "edt", "parfum", "cologne", "attar"]),

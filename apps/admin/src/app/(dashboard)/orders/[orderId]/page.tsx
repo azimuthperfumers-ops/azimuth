@@ -296,18 +296,18 @@ export default function AdminOrderDetailPage({
     onError: (err) => toast.error(err.message),
   });
 
+  // Track which parcel is generating so only its button shows a spinner.
+  const [labellingId, setLabellingId] = useState<string | null>(null);
   const generateLabel = trpc.order.generateLabel.useMutation({
+    onMutate: (vars) => setLabellingId(vars.shipmentId),
     onSuccess: async (res) => {
       await utils.order.adminGet.invalidate({ orderId });
       // Open the label PDF in a new tab so the admin can print & paste it.
       window.open(res.labelUrl, "_blank", "noopener,noreferrer");
-      toast.success(
-        res.packageCount > 1
-          ? `Label ready for ${res.packageCount} parcels`
-          : "Label ready",
-      );
+      toast.success(`Label ready — Package ${res.packageNumber}`);
     },
     onError: (err) => toast.error(err.message),
+    onSettled: () => setLabellingId(null),
   });
 
   const { data: order, isLoading } = trpc.order.adminGet.useQuery({ orderId });
@@ -648,23 +648,9 @@ export default function AdminOrderDetailPage({
           {/* Packages — perfume ships one unit per parcel, each with its own AWB */}
           {order.shipments && order.shipments.length > 0 && (
             <section>
-              <div className="flex items-center justify-between gap-2">
-                <SectionLabel>
-                  Packages ({order.shipments.length})
-                </SectionLabel>
-                {/* Label needs at least one booked parcel (AWB assigned). */}
-                {canOrders &&
-                  order.shipments.some((s) => s.waybill && s.status !== "cancelled") && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => generateLabel.mutate({ orderId })}
-                      disabled={generateLabel.isPending}
-                    >
-                      {generateLabel.isPending ? "Generating…" : "Download label"}
-                    </Button>
-                  )}
-              </div>
+              <SectionLabel>
+                Packages ({order.shipments.length})
+              </SectionLabel>
               <div className="border border-border divide-y divide-border">
                 {order.shipments.map((pkg) => (
                   <div key={pkg.id} className="p-4 space-y-2 text-[12px]">
@@ -679,6 +665,19 @@ export default function AdminOrderDetailPage({
                         {pkg.status.replace(/_/g, " ")}
                       </span>
                     </div>
+
+                    {/* Each booked parcel prints its own label to paste on that box. */}
+                    {canOrders && pkg.waybill && pkg.status !== "cancelled" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => generateLabel.mutate({ shipmentId: pkg.id })}
+                        disabled={labellingId === pkg.id}
+                      >
+                        {labellingId === pkg.id ? "Generating…" : "Download label"}
+                      </Button>
+                    )}
 
                     <div className="flex justify-between gap-2">
                       <span className="text-muted-foreground shrink-0">Weight</span>

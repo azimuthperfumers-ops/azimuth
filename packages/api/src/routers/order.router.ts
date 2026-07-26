@@ -642,51 +642,54 @@ export const orderRouter = router({
   // admin can print it and paste it on the package. The AWB must already be
   // assigned (label keys on Shiprocket's shipment_id, resolved/persisted here).
 
+  // Label a single parcel. Each box ships on its own AWB and needs its own label
+  // to print and paste, so the admin downloads one label per package.
   generateLabel: writeOrders
-    .input(z.object({ orderId: z.string().uuid() }))
+    .input(z.object({ shipmentId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const order = await ctx.db.query.orders.findFirst({
-        where: eq(schema.orders.id, input.orderId),
+      const parcel = await ctx.db.query.orderShipments.findFirst({
+        where: eq(schema.orderShipments.id, input.shipmentId),
       });
-      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      if (!parcel) throw new TRPCError({ code: "NOT_FOUND", message: "Package not found" });
 
-      const shipments = await getOrderShipments(ctx.db, input.orderId);
-      // Only booked parcels have an AWB and can be labelled.
-      const booked = shipments.filter((s) => s.waybill && s.status !== "cancelled");
-      if (booked.length === 0) {
+      if (!parcel.waybill || parcel.status === "cancelled") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "No booked parcels to label — assign an AWB first",
+          message: "This package has no booked AWB yet — book the shipment first",
         });
       }
 
       const logistics = createLogisticsService();
 
-      // Resolve any missing Shiprocket shipment ids (parcels booked before the id
-      // was persisted) and backfill them so the next label is instant.
-      const shipmentIds: number[] = [];
-      for (const s of booked) {
-        let sid = s.shiprocketShipmentId ?? undefined;
-        if (sid == null) {
-          sid = await logistics.resolveShipmentId(order.orderNumber);
+      // Resolve this parcel's Shiprocket shipment id. Stored at booking for new
+      // orders; for older parcels, look it up by the order number and match on
+      // THIS parcel's AWB (never assume one id for the whole order), then backfill.
+      let sid = parcel.shiprocketShipmentId ?? undefined;
+      if (sid == null) {
+        const order = await ctx.db.query.orders.findFirst({
+          where: eq(schema.orders.id, parcel.orderId),
+          columns: { orderNumber: true },
+        });
+        if (order) {
+          const pairs = await logistics.resolveShipmentIds(order.orderNumber);
+          sid = pairs.find((p) => p.awb === parcel.waybill)?.shipmentId;
           if (sid != null) {
             await ctx.db
               .update(schema.orderShipments)
               .set({ shiprocketShipmentId: sid })
-              .where(eq(schema.orderShipments.id, s.id));
+              .where(eq(schema.orderShipments.id, parcel.id));
           }
         }
-        if (sid != null) shipmentIds.push(sid);
       }
 
-      if (shipmentIds.length === 0) {
+      if (sid == null) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Could not resolve a Shiprocket shipment id for this order",
+          message: "Could not resolve this package's Shiprocket shipment id",
         });
       }
 
-      const label = await logistics.generateLabel(shipmentIds);
+      const label = await logistics.generateLabel([sid]);
       if (!label.created || !label.labelUrl) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -694,7 +697,7 @@ export const orderRouter = router({
         });
       }
 
-      return { labelUrl: label.labelUrl, packageCount: shipmentIds.length };
+      return { labelUrl: label.labelUrl, packageNumber: parcel.packageNumber };
     }),
 
   // ── Admin: manually mark order as paid when webhook was missed ───────────────

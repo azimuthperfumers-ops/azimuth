@@ -11,6 +11,7 @@ import {
   deleteCategorySchema,
   deleteFragranceNoteSchema,
   deleteImageSchema,
+  deleteProductSchema,
   getProductSchema,
   listProductsSchema,
   removeProductNoteSchema,
@@ -76,6 +77,16 @@ export const catalogRouter = router({
   updateProduct: writeProducts
     .input(updateProductSchema)
     .mutation(({ ctx, input }) => createCatalogService(ctx.db).updateProduct(input)),
+
+  // Impact preview for the delete confirmation dialog (order count etc.).
+  productDeletionImpact: writeProducts
+    .input(getProductSchema)
+    .query(({ ctx, input }) => createCatalogService(ctx.db).getDeletionImpact(input.id)),
+
+  // Permanent, non-recoverable delete of a product and all its variants.
+  deleteProduct: writeProducts
+    .input(deleteProductSchema)
+    .mutation(({ ctx, input }) => createCatalogService(ctx.db).deleteProduct(input.id)),
 
   createVariant: writeProducts
     .input(createVariantSchema)

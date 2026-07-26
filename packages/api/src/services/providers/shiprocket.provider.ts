@@ -481,9 +481,9 @@ export class ShiprocketProvider implements ILogisticsService {
     }
   }
 
-  // Generate the shipping label PDF. Passing several shipment ids yields one
-  // combined label so a multi-parcel order downloads as a single sheet. The AWB
-  // must already be assigned (done at booking) or Shiprocket returns not_created.
+  // Generate the shipping label PDF for the given shipment ids. We call this with
+  // a single id per parcel so each box gets its own label to print and paste. The
+  // AWB must already be assigned (done at booking) or Shiprocket returns not_created.
   async generateLabel(shipmentIds: number[]): Promise<LabelResult> {
     if (shipmentIds.length === 0) {
       return { created: false, errorMessage: "No shipment ids to label" };
@@ -515,20 +515,24 @@ export class ShiprocketProvider implements ILogisticsService {
     }
   }
 
-  // Backfill: recover a shipment id from the seller order number for parcels
-  // booked before the id was persisted. Uses the same order-lookup endpoint the
-  // duplicate-order path in createShipment already relies on.
-  async resolveShipmentId(orderNumber: string): Promise<number | undefined> {
+  // Backfill: recover every parcel's shipment id from the seller order number,
+  // for parcels booked before the id was persisted. Each entry in Shiprocket's
+  // processing list is one shipment (its own AWB), so the caller matches each of
+  // our parcels to its shipment by AWB — never assumes a single id for the order.
+  // Uses the same order-lookup endpoint the duplicate-order path in createShipment
+  // already relies on.
+  async resolveShipmentIds(orderNumber: string): Promise<{ awb: string; shipmentId: number }[]> {
     try {
-      type ListResp = { data?: { order_id?: number; shipment_id?: number }[] };
+      type ListResp = { data?: { shipment_id?: number; awb?: string; awb_code?: string }[] };
       const resp = await apiGet<ListResp>(
         `/orders/processing?filter_by=order_id&filter=${encodeURIComponent(orderNumber)}`,
       );
-      const found = resp.data?.find((o) => o.shipment_id);
-      return found?.shipment_id;
+      return (resp.data ?? [])
+        .map((o) => ({ awb: o.awb ?? o.awb_code ?? "", shipmentId: o.shipment_id ?? 0 }))
+        .filter((o) => o.shipmentId > 0);
     } catch (err) {
-      console.warn(`[shiprocket] resolveShipmentId failed for ${orderNumber}:`, err);
-      return undefined;
+      console.warn(`[shiprocket] resolveShipmentIds failed for ${orderNumber}:`, err);
+      return [];
     }
   }
 }
