@@ -4,7 +4,7 @@ import { use, useState } from "react";
 import Link from "next/link";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@azimuth/api";
-import { AlertTriangle, ArrowLeft, MapPin, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, MapPin, RefreshCw, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -310,6 +310,19 @@ export default function AdminOrderDetailPage({
     onSettled: () => setLabellingId(null),
   });
 
+  const reconcile = trpc.order.reconcileShiprocket.useMutation({
+    onSuccess: async (res) => {
+      await utils.order.adminGet.invalidate({ orderId });
+      const changed = res.updates.filter((u) => u.changed).length;
+      if (changed > 0) {
+        toast.success(`Synced with Shiprocket — order is now ${res.finalStatus.replace(/_/g, " ")}`);
+      } else {
+        toast(`No change — order is ${res.finalStatus.replace(/_/g, " ")} (${res.checked} parcel(s) checked)`);
+      }
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const { data: order, isLoading } = trpc.order.adminGet.useQuery({ orderId });
 
   if (isLoading) {
@@ -411,20 +424,35 @@ export default function AdminOrderDetailPage({
                 {markPaid.isPending ? "Processing…" : "Mark as paid"}
               </Button>
             )}
-            {/* Wallet-paid orders have no razorpayPaymentId but are still refundable (to wallet). */}
+            {/* Wallet-paid orders have no razorpayPaymentId but are still refundable (to wallet).
+                Cancelled orders ARE refundable (courier cancellations move here and leave the
+                refund as a manual decision) — we only hide the button once a refund exists. */}
             {canPay &&
-              (order.razorpayPaymentId || (order as { paymentMethod?: string }).paymentMethod === "wallet") &&
-              !["refund_processing", "refunded", "cancelled", "pending_payment", "payment_failed"].includes(order.status) && (
+              (order.razorpayPaymentId || order.paymentMethod === "wallet") &&
+              !order.refundMethod &&
+              !["refund_processing", "refunded", "pending_payment", "payment_failed"].includes(order.status) && (
               <Button
                 size="sm"
                 variant="outline"
                 className="border-red-400 text-red-700 hover:bg-red-50"
                 onClick={() => {
-                  setRefundDest((order as { paymentMethod?: string }).paymentMethod === "wallet" ? "wallet" : "wallet");
+                  setRefundDest(order.paymentMethod === "wallet" ? "wallet" : "razorpay");
                   setRefundDialog(true);
                 }}
               >
-                Issue refund
+                {order.status === "cancelled" ? "Issue refund (pending)" : "Issue refund"}
+              </Button>
+            )}
+            {canOrders && (order.shipments?.some((s) => s.waybill) || order.waybill) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => reconcile.mutate({ orderId })}
+                disabled={reconcile.isPending}
+                title="Pull the live status of every parcel from Shiprocket and update this order"
+              >
+                <RefreshCw className={`size-3.5 mr-1.5 ${reconcile.isPending ? "animate-spin" : ""}`} />
+                {reconcile.isPending ? "Syncing…" : "Sync with Shiprocket"}
               </Button>
             )}
             {canOrders && (

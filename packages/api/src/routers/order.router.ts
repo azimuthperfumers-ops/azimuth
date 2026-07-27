@@ -9,13 +9,13 @@ import {
   alertAdminNewOrder,
   notifyOrderPlaced,
   notifyRefundInitiated,
-  type CustomerContact,
-  type OrderInfo,
 } from "@azimuth/comms";
 
 import { permissionProcedure, protectedProcedure } from "../middleware/auth.middleware";
 import { createLogisticsService, quotePackages } from "../services/logistics.service";
 import { splitIntoPackages, type VariantDims } from "../services/packaging";
+import { getOrderContact, toOrderInfo } from "../services/order-notify";
+import { reconcileOrderWithCourier } from "../services/shipment-sync.service";
 import { orderQueue } from "../lib/order-queue";
 import {
   advanceOrderStatus,
@@ -34,32 +34,6 @@ import { router } from "../trpc";
 // ── Notification helpers ──────────────────────────────────────────────────────
 
 type OrderRow = typeof schema.orders.$inferSelect;
-interface ShippingAddr { fullName?: string; phone?: string; }
-
-async function getOrderContact(db: Parameters<typeof advanceOrderStatus>[0], order: OrderRow): Promise<CustomerContact> {
-  const addr = order.shippingAddress as ShippingAddr;
-  const user = await db.query.user.findFirst({
-    where: eq(schema.user.id, order.userId),
-    columns: { email: true, name: true, phone: true },
-  });
-  return {
-    name: addr.fullName ?? user?.name ?? "Customer",
-    email: user?.email ?? undefined,
-    phone: addr.phone ?? user?.phone ?? undefined,
-  };
-}
-
-function toOrderInfo(order: OrderRow): OrderInfo {
-  return {
-    orderId: order.id,
-    orderNumber: order.orderNumber,
-    totalInr: new Intl.NumberFormat("en-IN", {
-      style: "currency", currency: "INR", maximumFractionDigits: 0,
-    }).format(Number(order.total)),
-    waybill: order.waybill ?? undefined,
-    trackingUrl: order.trackingUrl ?? undefined,
-  };
-}
 
 const addressSchema = z.object({
   fullName: z.string().min(1),
@@ -500,6 +474,9 @@ export const orderRouter = router({
           if (refundJob) {
             await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
           }
+          // Mark the refund as decided so a second refund can't be issued in the
+          // window before the worker advances the order to refund_processing.
+          await ctx.db.update(schema.orders).set({ refundMethod: "razorpay" }).where(eq(schema.orders.id, currentOrder.id));
         }
       }
 
@@ -542,6 +519,7 @@ export const orderRouter = router({
         if (refundJob) {
           await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
         }
+        await ctx.db.update(schema.orders).set({ refundMethod: "razorpay" }).where(eq(schema.orders.id, currentOrder.id));
       }
 
       if (input.waybill || input.trackingUrl || input.gstInvoiceNumber || input.shippingCostActual) {
@@ -582,6 +560,23 @@ export const orderRouter = router({
         }
       }
 
+      return result;
+    }),
+
+  // ── Admin: reconcile with Shiprocket ──────────────────────────────────────────
+  // Pull the live status of every parcel from Shiprocket and apply it through the
+  // same state machine the webhook uses. Recovers orders whose webhook was missed
+  // (e.g. a dashboard cancellation that never reached us) — cancellations here also
+  // trigger the refund, exactly as the webhook would.
+
+  reconcileShiprocket: writeOrders
+    .input(z.object({ orderId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await reconcileOrderWithCourier(
+        ctx.db,
+        input.orderId,
+        `admin:reconcile:${ctx.session.user.id}`,
+      );
       return result;
     }),
 
@@ -792,8 +787,13 @@ export const orderRouter = router({
       if (order.status === "pending_payment" || order.status === "payment_failed") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot refund: this order was never paid." });
       }
-      const BLOCKED = ["refund_processing", "refunded", "cancelled"];
-      if (BLOCKED.includes(order.status)) {
+      // A `cancelled` order IS refundable — courier cancellations move here and leave
+      // the refund as a deliberate admin decision. Block only orders where a refund
+      // has already happened or is under way: refundMethod set, or status past it.
+      if (order.refundMethod) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot refund: a refund was already issued for this order." });
+      }
+      if (["refund_processing", "refunded"].includes(order.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `Cannot refund: order is already ${order.status}` });
       }
 
@@ -840,7 +840,11 @@ export const orderRouter = router({
         await ctx.db.update(schema.backgroundJobs).set({ bullmqJobId: refundBullJob.id?.toString() }).where(eq(schema.backgroundJobs.id, refundJob.id));
       }
       await ctx.db.update(schema.orders).set({ refundMethod: "razorpay" }).where(eq(schema.orders.id, order.id));
-      await advanceOrderStatus(ctx.db, input.orderId, "refund_processing", ctx.session.user.id, input.note ?? "Direct refund to bank initiated by admin");
+      // Do NOT pre-set refund_processing here. The initiate_refund worker skips when
+      // the order is already refund_processing (its retry-idempotency guard), so
+      // setting it now makes the worker no-op and Razorpay is never called. The
+      // worker advances the order to refund_processing once the refund is actually
+      // submitted — matching the cancel / RTO refund paths.
       return { ok: true, destination: "razorpay" as const };
     }),
 

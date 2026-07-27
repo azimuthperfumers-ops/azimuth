@@ -11,6 +11,8 @@ export {
 } from "./repositories/shipment.repository";
 export type { ShipmentRow, ShipmentStatus } from "./repositories/shipment.repository";
 export { createWalletRepository } from "./repositories/wallet.repository";
+export { applyCourierStatus, reconcileOrderWithCourier } from "./services/shipment-sync.service";
+export type { CourierStatusUpdate, ApplyResult, ReconcileResult } from "./services/shipment-sync.service";
 export { createRazorpayService } from "./services/razorpay.service";
 export type { IRazorpayService } from "./services/razorpay.service";
 export { createLogisticsService } from "./services/logistics.service";
