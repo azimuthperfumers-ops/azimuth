@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, notInArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "@azimuth/db";
 import { schema } from "@azimuth/db";
@@ -240,9 +240,25 @@ export async function advanceOrderStatus(
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
+// Statuses the customer should never see. An abandoned checkout (Razorpay window
+// dismissed, or the pending-payment sweep) ends in `payment_failed` — it carries no
+// fulfillment and is already excluded from revenue/analytics, so to the customer it
+// is a "ghost" order: hidden from their list and unreachable by direct link. A late
+// Razorpay capture can still recover one to `paid` (see the order worker), at which
+// point it reappears automatically. `pending_payment` stays visible on purpose — it
+// is the transient in-checkout state and lets a customer resume an unfinished order.
+const CUSTOMER_HIDDEN_STATUSES = ["payment_failed"] as const;
+
+function isCustomerHidden(status: string): boolean {
+  return (CUSTOMER_HIDDEN_STATUSES as readonly string[]).includes(status);
+}
+
 export async function getUserOrders(db: Database, userId: string) {
   const orders = await db.query.orders.findMany({
-    where: eq(schema.orders.userId, userId),
+    where: and(
+      eq(schema.orders.userId, userId),
+      notInArray(schema.orders.status, [...CUSTOMER_HIDDEN_STATUSES]),
+    ),
     with: { items: true, shipments: { orderBy: asc(schema.orderShipments.packageNumber) } },
     orderBy: desc(schema.orders.createdAt),
   });
@@ -391,6 +407,8 @@ export async function getOrderById(db: Database, orderId: string, userId?: strin
   });
   const enriched = await enrichItemImages(db, order);
   // userId present = customer-scoped call → curated view. Admin passes no userId.
+  // Abandoned/failed checkouts are ghosted from the customer — treat as not found.
+  if (userId && enriched && isCustomerHidden(enriched.status)) return undefined;
   return userId ? toCustomerView(enriched) : enriched;
 }
 
@@ -410,6 +428,7 @@ export async function getOrderByNumber(db: Database, orderNumber: string, userId
     },
   });
   const enriched = await enrichItemImages(db, order);
+  if (userId && enriched && isCustomerHidden(enriched.status)) return undefined;
   return userId ? toCustomerView(enriched) : enriched;
 }
 

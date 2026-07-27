@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { schema } from "@azimuth/db";
-import { and, count, eq, gte, inArray, sql, sum } from "drizzle-orm";
+import { and, count, eq, gte, inArray, notInArray, sql, sum } from "drizzle-orm";
 import { computeEffectivePrice, fetchActiveDiscountMap } from "../utils/pricing";
 import { createCouponService } from "../services/coupon.service";
 import {
@@ -394,10 +394,17 @@ export const orderRouter = router({
         ),
       );
 
+    // Real orders placed today — exclude ghost checkouts (never paid). Cancelled /
+    // refunded orders still count: they were real orders that reached payment.
     const todayOrders = await db
       .select({ orderCount: count() })
       .from(schema.orders)
-      .where(gte(schema.orders.createdAt, startOfToday));
+      .where(
+        and(
+          gte(schema.orders.createdAt, startOfToday),
+          notInArray(schema.orders.status, ["pending_payment", "payment_failed"]),
+        ),
+      );
 
     return {
       breakdown: breakdown.map((r) => ({
