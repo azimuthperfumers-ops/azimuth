@@ -12,6 +12,7 @@ const STATUS_LABEL: Record<string, string> = {
   picked_up: "Picked Up",
   out_for_delivery: "Out for Delivery",
   delivered: "Delivered",
+  refund_processing: "Refund processing",
   refunded: "Refunded",
   cancelled: "Cancelled",
 };
@@ -23,6 +24,7 @@ const STATUS_COLOR: Record<string, string> = {
   picked_up: "#1B1611",
   out_for_delivery: "#9A5B2B",
   delivered: "#2d6a4f",
+  refund_processing: "#9A5B2B",
   refunded: "#57493A",
   cancelled: "#57493A",
 };
