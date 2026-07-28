@@ -134,6 +134,8 @@ export interface CourierStatusUpdate {
   courierName?: string;
   etd?: string;
   pod?: string;
+  /** When the courier is scheduled to collect (Shiprocket sends this on every event). */
+  pickupScheduledDate?: string;
 }
 
 export interface ApplyResult {
@@ -199,18 +201,18 @@ export async function applyCourierStatus(
   let targetStatus: OurOrderStatus | null | undefined;
 
   if (shipment) {
-    const parcelStatus = SHIPMENT_STATUS_MAP[rawStatus];
+    // Enrichments ride on every event (including "PICKUP SCHEDULED", which carries
+    // no status change) — persist them regardless of whether the status advances.
+    const enrich: Partial<typeof schema.orderShipments.$inferInsert> = {};
+    if (update.pickupScheduledDate) enrich.pickupScheduledDate = update.pickupScheduledDate;
+    if (update.etd) enrich.estimatedDeliveryDate = update.etd;
+    if (update.courierName) enrich.courierName = update.courierName;
+    if (Object.keys(enrich).length > 0) {
+      await db.update(schema.orderShipments).set(enrich).where(eq(schema.orderShipments.id, shipment.id));
+    }
 
+    const parcelStatus = SHIPMENT_STATUS_MAP[rawStatus];
     if (parcelStatus) {
-      if (update.etd || update.courierName) {
-        await db
-          .update(schema.orderShipments)
-          .set({
-            ...(update.etd ? { estimatedDeliveryDate: update.etd } : {}),
-            ...(update.courierName ? { courierName: update.courierName } : {}),
-          })
-          .where(eq(schema.orderShipments.id, shipment.id));
-      }
       if (parcelStatus === "delivered" && update.pod && update.pod !== "Not Available") {
         await db.update(schema.orderShipments).set({ podImageUrl: update.pod }).where(eq(schema.orderShipments.id, shipment.id));
       }

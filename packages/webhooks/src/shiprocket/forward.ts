@@ -16,6 +16,8 @@ export interface ShiprocketBody {
   pod_status?: string;
   pod?: string;
   is_return?: number;
+  // Shiprocket includes this on every tracking event once a pickup is scheduled.
+  pickup_scheduled_date?: string;
 }
 
 export async function processForwardShipment(body: ShiprocketBody) {
@@ -27,6 +29,7 @@ export async function processForwardShipment(body: ShiprocketBody) {
       courierName: body.courier_name,
       etd: body.etd,
       pod: body.pod,
+      pickupScheduledDate: body.pickup_scheduled_date,
     },
     "webhook:shiprocket",
   );

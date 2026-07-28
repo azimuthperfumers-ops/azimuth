@@ -1,0 +1,1 @@
+ALTER TABLE "order_shipments" ADD COLUMN "pickup_scheduled_date" text;

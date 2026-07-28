@@ -489,6 +489,7 @@ async function processBookShipment(data: BookShipmentJob) {
         courierName: result.courierName ?? null,
         trackingUrl: result.trackingUrl,
         estimatedDeliveryDate: result.estimatedDeliveryDate ?? null,
+        pickupScheduledDate: result.pickupScheduledDate ?? null,
         shiprocketShipmentId: result.shipmentId ?? null,
         errorMessage: null,
       })

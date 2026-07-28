@@ -244,6 +244,35 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Colour a parcel's status so its stage reads at a glance in the packages panel.
+function pkgStatusChip(status: string): string {
+  switch (status) {
+    case "delivered":
+      return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+    case "booked":
+    case "picked_up":
+    case "in_transit":
+    case "out_for_delivery":
+      return "bg-blue-50 text-blue-700 ring-blue-200";
+    case "cancelled":
+    case "failed":
+      return "bg-red-50 text-red-600 ring-red-200";
+    case "rto_initiated":
+    case "rto_delivered":
+    case "delivery_attempted":
+      return "bg-orange-50 text-orange-700 ring-orange-200";
+    default: // pending
+      return "bg-muted text-muted-foreground ring-border";
+  }
+}
+
+// Shiprocket sends pickup dates as "YYYY-MM-DD HH:mm:ss" (naive). Format for display.
+function fmtDateTime(raw: string): string {
+  const d = new Date(raw.replace(" ", "T"));
+  if (Number.isNaN(d.getTime())) return raw;
+  return d.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminOrderDetailPage({
@@ -358,6 +387,12 @@ export default function AdminOrderDetailPage({
   const unbookedPackages = (order.shipments ?? []).filter(
     (s) => !s.waybill && s.status !== "cancelled",
   );
+
+  // Booking state at a glance — "processing" alone doesn't say whether the parcels
+  // are booked, so we surface a per-package summary near the status.
+  const activePackages = (order.shipments ?? []).filter((s) => s.status !== "cancelled");
+  const bookedPackages = activePackages.filter((s) => s.waybill);
+  const fullyBooked = activePackages.length > 0 && bookedPackages.length === activePackages.length;
   const needsShipmentRetry =
     order.status === "processing" &&
     (order.shipments && order.shipments.length > 0 ? unbookedPackages.length > 0 : !order.waybill);
@@ -462,10 +497,43 @@ export default function AdminOrderDetailPage({
             )}
           </div>
         </div>
+
+        {/* Booking summary — "processing" doesn't reveal booking state; show it here */}
+        {activePackages.length > 0 && (
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-muted-foreground/50 mr-1">
+              Fulfilment
+            </span>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                fullyBooked
+                  ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                  : "bg-orange-50 text-orange-700 ring-1 ring-orange-200"
+              }`}
+            >
+              {fullyBooked
+                ? `All ${activePackages.length} package${activePackages.length > 1 ? "s" : ""} booked`
+                : `${bookedPackages.length}/${activePackages.length} packages booked`}
+            </span>
+            {activePackages.map((s) => (
+              <span
+                key={s.id}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${
+                  s.waybill
+                    ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                    : "bg-orange-50 text-orange-700 ring-1 ring-orange-200"
+                }`}
+                title={s.waybill ? `AWB ${s.waybill}` : "Not booked yet"}
+              >
+                P{s.packageNumber} {s.waybill ? "✓ booked" : "· not booked"}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Two-column grid */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_420px]">
 
         {/* Left column */}
         <div className="space-y-8">
@@ -689,7 +757,7 @@ export default function AdminOrderDetailPage({
                           {pkg.productName} · {pkg.sizeMl}ml
                         </span>
                       </span>
-                      <span className="uppercase tracking-[0.12em] text-[10px] text-muted-foreground">
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ring-1 ${pkgStatusChip(pkg.status)}`}>
                         {pkg.status.replace(/_/g, " ")}
                       </span>
                     </div>
@@ -730,6 +798,17 @@ export default function AdminOrderDetailPage({
                       <div className="flex justify-between gap-2">
                         <span className="text-muted-foreground shrink-0">Courier</span>
                         <span>{pkg.courierName}</span>
+                      </div>
+                    )}
+
+                    {pkg.waybill && pkg.status !== "cancelled" && (
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground shrink-0">Pickup</span>
+                        {pkg.pickupScheduledDate ? (
+                          <span className="font-medium">{fmtDateTime(pkg.pickupScheduledDate)}</span>
+                        ) : (
+                          <span className="text-orange-600 font-medium">Needs scheduling</span>
+                        )}
                       </div>
                     )}
 

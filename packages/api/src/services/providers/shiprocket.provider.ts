@@ -411,22 +411,35 @@ export class ShiprocketProvider implements ILogisticsService {
         };
       }
 
-      // Step 3: Request pickup
-      await apiPost("/courier/generate/pickup", {
-        shipment_id: [shipmentId],
-      }).catch((err) => {
-        // Pickup scheduling failure is non-fatal — Shiprocket will schedule it
+      // Step 3: Request pickup. Capture the scheduled date so admin can see when
+      // the courier will collect (or that it still needs scheduling). Non-fatal.
+      type PickupResp = {
+        pickup_status?: number;
+        response?: { pickup_scheduled_date?: string; pickup_token_number?: string } | string;
+      };
+      let pickupScheduledDate: string | undefined;
+      try {
+        const pickupResp = await apiPost<PickupResp>("/courier/generate/pickup", {
+          shipment_id: [shipmentId],
+        });
+        // Shiprocket returns `response` as an object on success, or a string message
+        // (e.g. "Already in Pickup Queue") when it can't schedule right now.
+        if (typeof pickupResp.response === "object") {
+          pickupScheduledDate = pickupResp.response?.pickup_scheduled_date || undefined;
+        }
+      } catch (err) {
         console.warn(`[shiprocket] pickup schedule failed for ${awbCode}:`, err);
-      });
+      }
 
       const etd = awbResp.response?.data?.etd ?? undefined;
-      console.log(`[shiprocket] Order ${input.orderNumber} → AWB=${awbCode} courier=${awbResp.response?.data?.courier_name} ETD=${etd ?? "unknown"}`);
+      console.log(`[shiprocket] Order ${input.orderNumber} → AWB=${awbCode} courier=${awbResp.response?.data?.courier_name} ETD=${etd ?? "unknown"} pickup=${pickupScheduledDate ?? "unscheduled"}`);
 
       return {
         waybill: awbCode,
         trackingUrl: `https://shiprocket.co/tracking/${awbCode}`,
         courierName: awbResp.response?.data?.courier_name ?? surfaceCourier.courierName,
         estimatedDeliveryDate: etd,
+        pickupScheduledDate,
         shipmentId,
         status: "created",
       };

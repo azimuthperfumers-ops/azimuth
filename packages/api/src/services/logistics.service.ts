@@ -47,6 +47,8 @@ export type ShipmentResult = {
   trackingUrl: string;
   courierName?: string;
   estimatedDeliveryDate?: string;
+  /** When the courier is scheduled to collect the parcel (Shiprocket pickup response). */
+  pickupScheduledDate?: string;
   /** Courier's internal shipment id — persisted so the label can be regenerated later. */
   shipmentId?: number;
   status: "created" | "failed";

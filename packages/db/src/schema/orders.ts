@@ -188,6 +188,9 @@ export const orderShipments = pgTable(
     courierName: text("courier_name"),
     trackingUrl: text("tracking_url"),
     estimatedDeliveryDate: text("estimated_delivery_date"),
+    // When the courier is scheduled to collect this parcel from the warehouse
+    // (from Shiprocket's pickup response at booking). Null = pickup not scheduled yet.
+    pickupScheduledDate: text("pickup_scheduled_date"),
     podImageUrl: text("pod_image_url"),
 
     // Shiprocket's internal shipment id — needed to generate the shipping label
