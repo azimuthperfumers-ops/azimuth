@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { formatInr } from "@/lib/format";
+import { orderStatusBadge, orderStatusLabel } from "@/lib/order-status";
 import { usePermissions } from "@/hooks/use-permissions";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -26,35 +27,6 @@ const LOW_STOCK_THRESHOLD = 5;
 const FULFILLMENT_STATUSES = new Set(["paid", "processing"]);
 const IN_TRANSIT_STATUSES = new Set(["picked_up", "shipped", "out_for_delivery", "delivery_attempted"]);
 
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  pending_payment: "Awaiting payment",
-  paid: "Paid",
-  processing: "Processing",
-  picked_up: "Picked up",
-  out_for_delivery: "Out for delivery",
-  delivery_attempted: "Attempted",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-  refunded: "Refunded",
-  rto_initiated: "RTO initiated",
-  rto_delivered: "RTO delivered",
-};
-
-const ORDER_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  pending_payment: "outline",
-  paid: "secondary",
-  processing: "secondary",
-  shipped: "default",
-  picked_up: "secondary",
-  out_for_delivery: "default",
-  delivery_attempted: "outline",
-  delivered: "default",
-  cancelled: "destructive",
-  refunded: "outline",
-  rto_initiated: "destructive",
-  rto_delivered: "outline",
-};
 
 // Groups for the pie chart
 const PIE_GROUPS: { key: string; label: string; statuses: string[]; color: string }[] = [
@@ -366,8 +338,8 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-4">
                       <span className="text-sm font-semibold tabular-nums">{formatInr(Number(o.total))}</span>
-                      <Badge variant={ORDER_STATUS_VARIANT[o.status] ?? "outline"} className="text-xs">
-                        {ORDER_STATUS_LABEL[o.status] ?? o.status}
+                      <Badge variant="outline" className={`text-xs ${orderStatusBadge(o.status)}`}>
+                        {orderStatusLabel(o.status)}
                       </Badge>
                     </div>
                   </button>
@@ -454,8 +426,8 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-4">
                       <span className="text-sm font-semibold tabular-nums">{formatInr(Number(o.total))}</span>
-                      <Badge variant={ORDER_STATUS_VARIANT[o.status] ?? "outline"} className="text-xs">
-                        {ORDER_STATUS_LABEL[o.status] ?? o.status}
+                      <Badge variant="outline" className={`text-xs ${orderStatusBadge(o.status)}`}>
+                        {orderStatusLabel(o.status)}
                       </Badge>
                     </div>
                   </button>
@@ -515,8 +487,8 @@ export default function DashboardPage() {
                   className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs hover:bg-muted/40 transition-colors"
                 >
                   <span className="font-mono font-medium">{o.orderNumber}</span>
-                  <Badge variant={ORDER_STATUS_VARIANT[o.status] ?? "outline"} className="text-[10px] h-4 px-1.5">
-                    {ORDER_STATUS_LABEL[o.status] ?? o.status}
+                  <Badge variant="outline" className={`text-[10px] h-4 px-1.5 ${orderStatusBadge(o.status)}`}>
+                    {orderStatusLabel(o.status)}
                   </Badge>
                   {o.waybill && (
                     <span className="text-muted-foreground font-mono">{o.waybill}</span>

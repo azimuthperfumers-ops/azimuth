@@ -135,9 +135,12 @@ const PROGRESS: Record<string, { rank: number; orderStatus: OrderStatus }> = {
   failed: { rank: 0, orderStatus: "processing" },
   booked: { rank: 1, orderStatus: "processing" },
   picked_up: { rank: 2, orderStatus: "picked_up" },
-  in_transit: { rank: 2, orderStatus: "picked_up" },
-  out_for_delivery: { rank: 3, orderStatus: "out_for_delivery" },
-  delivered: { rank: 4, orderStatus: "delivered" },
+  // A parcel moving between hubs is further along than one merely collected, and
+  // the order enum has "shipped" for exactly this. Collapsing it into picked_up
+  // (as it used to) left orders sitting on "Picked up" for the whole journey.
+  in_transit: { rank: 3, orderStatus: "shipped" },
+  out_for_delivery: { rank: 4, orderStatus: "out_for_delivery" },
+  delivered: { rank: 5, orderStatus: "delivered" },
 };
 
 /**

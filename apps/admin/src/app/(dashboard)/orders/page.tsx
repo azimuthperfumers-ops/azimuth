@@ -28,61 +28,12 @@ import {
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { formatInr } from "@/lib/format";
+import { ORDER_STATUS_FILTERS, type OrderStatusFilter, orderStatusBadge, orderStatusLabel } from "@/lib/order-status";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type Order = RouterOutputs["order"]["adminList"][number];
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const ORDER_STATUSES = [
-  "pending_payment",
-  "payment_failed",
-  "paid",
-  "processing",
-  "picked_up",
-  "out_for_delivery",
-  "delivery_attempted",
-  "shipped",
-  "delivered",
-  "cancelled",
-  "refunded",
-  "rto_initiated",
-  "rto_delivered",
-] as const;
-
-type OrderStatus = (typeof ORDER_STATUSES)[number];
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending_payment: "Awaiting payment",
-  payment_failed: "Payment failed",
-  paid: "Paid",
-  processing: "Processing",
-  picked_up: "Picked up",
-  out_for_delivery: "Out for delivery",
-  delivery_attempted: "Delivery attempted",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-  refunded: "Refunded",
-  rto_initiated: "RTO initiated",
-  rto_delivered: "RTO delivered",
-};
-
-const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  pending_payment: "outline",
-  payment_failed: "destructive",
-  paid: "secondary",
-  processing: "secondary",
-  picked_up: "secondary",
-  out_for_delivery: "default",
-  delivery_attempted: "outline",
-  shipped: "default",
-  delivered: "default",
-  cancelled: "destructive",
-  refunded: "outline",
-  rto_initiated: "destructive",
-  rto_delivered: "outline",
-};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -132,8 +83,8 @@ function OrderRow({ order }: { order: Order }) {
       </TableCell>
       <TableCell className="text-muted-foreground text-sm">{fmtDate(order.createdAt)}</TableCell>
       <TableCell>
-        <Badge variant={STATUS_VARIANT[order.status as OrderStatus] ?? "outline"}>
-          {STATUS_LABEL[order.status as OrderStatus] ?? order.status}
+        <Badge variant="outline" className={orderStatusBadge(order.status)}>
+          {orderStatusLabel(order.status)}
         </Badge>
       </TableCell>
       <TableCell className="font-semibold tabular-nums">{formatInr(Number(order.total))}</TableCell>
@@ -178,7 +129,7 @@ export default function OrdersPage() {
   const searchParams = useSearchParams();
 
   const search = searchParams.get("q") ?? "";
-  const statusFilter = (searchParams.get("status") ?? "all") as OrderStatus | "all";
+  const statusFilter = (searchParams.get("status") ?? "all") as OrderStatusFilter | "all";
   const dateFrom = searchParams.get("from") ?? "";
   const dateTo = searchParams.get("to") ?? "";
 
@@ -242,8 +193,8 @@ export default function OrdersPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
-            {ORDER_STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+            {ORDER_STATUS_FILTERS.map((s) => (
+              <SelectItem key={s} value={s}>{orderStatusLabel(s)}</SelectItem>
             ))}
           </SelectContent>
         </Select>

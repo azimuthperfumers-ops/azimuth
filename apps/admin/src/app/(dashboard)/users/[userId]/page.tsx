@@ -44,38 +44,9 @@ import {
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatInr } from "@/lib/format";
+import { orderStatusBadge, orderStatusLabel } from "@/lib/order-status";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  pending_payment: "Awaiting payment",
-  paid: "Paid",
-  processing: "Processing",
-  picked_up: "Picked up",
-  out_for_delivery: "Out for delivery",
-  delivery_attempted: "Delivery attempted",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-  refunded: "Refunded",
-  rto_initiated: "RTO initiated",
-  rto_delivered: "RTO delivered",
-};
-
-const ORDER_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  pending_payment: "outline",
-  paid: "secondary",
-  processing: "secondary",
-  picked_up: "secondary",
-  out_for_delivery: "default",
-  delivery_attempted: "outline",
-  shipped: "default",
-  delivered: "default",
-  cancelled: "destructive",
-  refunded: "outline",
-  rto_initiated: "destructive",
-  rto_delivered: "outline",
-};
 
 const TICKET_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   open: "default",
@@ -491,8 +462,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
                       <TableCell className="font-mono text-sm font-medium">{order.orderNumber}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{fmtDate(order.createdAt)}</TableCell>
                       <TableCell>
-                        <Badge variant={ORDER_STATUS_VARIANT[order.status] ?? "outline"}>
-                          {ORDER_STATUS_LABEL[order.status] ?? order.status}
+                        <Badge variant="outline" className={orderStatusBadge(order.status)}>
+                          {orderStatusLabel(order.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-semibold tabular-nums">{formatInr(Number(order.total))}</TableCell>

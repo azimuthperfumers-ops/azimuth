@@ -26,6 +26,13 @@ import {
 import { formatInr } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/use-permissions";
+import {
+  type OrderStatusFilter,
+  orderStatusBadge,
+  orderStatusLabel,
+  shipmentStatusBadge,
+  shipmentStatusLabel,
+} from "@/lib/order-status";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,55 +42,16 @@ type OrderItem = Order["items"][number];
 type StatusHistoryEntry = NonNullable<Order["statusHistory"]>[number];
 
 // ─── Status config ─────────────────────────────────────────────────────────────
-
-const ORDER_STATUSES = [
-  "pending_payment", "payment_failed", "paid", "processing",
-  "picked_up", "out_for_delivery", "delivery_attempted",
-  "shipped", "delivered", "cancelled", "refunded",
-  "rto_initiated", "rto_delivered",
-] as const;
-
-type OrderStatus = (typeof ORDER_STATUSES)[number];
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending_payment: "Awaiting payment",
-  payment_failed: "Payment failed",
-  paid: "Paid",
-  processing: "Processing",
-  picked_up: "Picked up",
-  out_for_delivery: "Out for delivery",
-  delivery_attempted: "Delivery attempted",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-  refunded: "Refunded",
-  rto_initiated: "RTO initiated",
-  rto_delivered: "RTO delivered",
-};
-
-const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  pending_payment: "outline",
-  payment_failed: "destructive",
-  paid: "secondary",
-  processing: "secondary",
-  picked_up: "secondary",
-  out_for_delivery: "default",
-  delivery_attempted: "outline",
-  shipped: "default",
-  delivered: "default",
-  cancelled: "destructive",
-  refunded: "outline",
-  rto_initiated: "destructive",
-  rto_delivered: "outline",
-};
+// Labels and colours live in @/lib/order-status so the list, this page and the
+// customer page all describe a status identically.
 
 // ─── Update status dialog ─────────────────────────────────────────────────────
 
-const PAID_STATUSES: OrderStatus[] = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted"];
-const REFUND_TRIGGERS: OrderStatus[] = ["cancelled", "rto_delivered"];
+const PAID_STATUSES: OrderStatusFilter[] = ["paid", "processing", "picked_up", "shipped", "out_for_delivery", "delivery_attempted"];
+const REFUND_TRIGGERS: OrderStatusFilter[] = ["cancelled", "rto_delivered"];
 
 // Statuses an admin can manually set — excludes system/payment/courier-driven states
-const ADMIN_SETTABLE_STATUSES: OrderStatus[] = [
+const ADMIN_SETTABLE_STATUSES: OrderStatusFilter[] = [
   "processing", "picked_up", "out_for_delivery", "delivery_attempted",
   "shipped", "delivered", "cancelled", "rto_delivered",
 ];
@@ -96,7 +64,7 @@ function UpdateStatusDialog({
   onOpenChange,
 }: {
   orderId: string;
-  currentStatus: OrderStatus;
+  currentStatus: OrderStatusFilter;
   hasPaid: boolean;
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -105,7 +73,7 @@ function UpdateStatusDialog({
   const defaultStatus = ADMIN_SETTABLE_STATUSES.includes(currentStatus)
     ? currentStatus
     : ADMIN_SETTABLE_STATUSES[0];
-  const [status, setStatus] = useState<OrderStatus>(defaultStatus);
+  const [status, setStatus] = useState<OrderStatusFilter>(defaultStatus);
   const [note, setNote] = useState("");
   const [waybill, setWaybill] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
@@ -149,11 +117,11 @@ function UpdateStatusDialog({
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               New status
             </label>
-            <Select value={status} onValueChange={(v) => setStatus(v as OrderStatus)}>
+            <Select value={status} onValueChange={(v) => setStatus(v as OrderStatusFilter)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ADMIN_SETTABLE_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+                  <SelectItem key={s} value={s}>{orderStatusLabel(s)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -242,28 +210,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       {children}
     </p>
   );
-}
-
-// Colour a parcel's status so its stage reads at a glance in the packages panel.
-function pkgStatusChip(status: string): string {
-  switch (status) {
-    case "delivered":
-      return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-    case "booked":
-    case "picked_up":
-    case "in_transit":
-    case "out_for_delivery":
-      return "bg-blue-50 text-blue-700 ring-blue-200";
-    case "cancelled":
-    case "failed":
-      return "bg-red-50 text-red-600 ring-red-200";
-    case "rto_initiated":
-    case "rto_delivered":
-    case "delivery_attempted":
-      return "bg-orange-50 text-orange-700 ring-orange-200";
-    default: // pending
-      return "bg-muted text-muted-foreground ring-border";
-  }
 }
 
 // Shiprocket sends pickup dates as "YYYY-MM-DD HH:mm:ss" (naive). Format for display.
@@ -433,8 +379,8 @@ export default function AdminOrderDetailPage({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Badge variant={STATUS_VARIANT[order.status as OrderStatus] ?? "outline"}>
-              {STATUS_LABEL[order.status as OrderStatus] ?? order.status}
+            <Badge variant="outline" className={orderStatusBadge(order.status)}>
+              {orderStatusLabel(order.status)}
             </Badge>
             {canOrders && needsShipmentRetry && (
               <Button
@@ -612,9 +558,9 @@ export default function AdminOrderDetailPage({
                         <div>
                           <p className={`text-[12px] font-semibold ${isLast ? "text-foreground" : "text-muted-foreground"}`}>
                             {h.fromStatus
-                              ? `${STATUS_LABEL[h.fromStatus as OrderStatus] ?? h.fromStatus} → `
+                              ? `${orderStatusLabel(h.fromStatus)} → `
                               : ""}
-                            {STATUS_LABEL[h.toStatus as OrderStatus] ?? h.toStatus}
+                            {orderStatusLabel(h.toStatus)}
                           </p>
                           <p className="text-[10.5px] text-muted-foreground/50 mt-0.5">
                             {new Date(h.createdAt).toLocaleString("en-IN", {
@@ -757,8 +703,10 @@ export default function AdminOrderDetailPage({
                           {pkg.productName} · {pkg.sizeMl}ml
                         </span>
                       </span>
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ring-1 ${pkgStatusChip(pkg.status)}`}>
-                        {pkg.status.replace(/_/g, " ")}
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${shipmentStatusBadge(pkg.status)}`}
+                      >
+                        {shipmentStatusLabel(pkg.status)}
                       </span>
                     </div>
 
@@ -918,7 +866,7 @@ export default function AdminOrderDetailPage({
 
       <UpdateStatusDialog
         orderId={order.id}
-        currentStatus={order.status as OrderStatus}
+        currentStatus={order.status as OrderStatusFilter}
         hasPaid={!!order.razorpayPaymentId}
         open={statusDialog}
         onOpenChange={setStatusDialog}
