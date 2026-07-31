@@ -28,7 +28,13 @@ import {
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { formatInr } from "@/lib/format";
-import { ORDER_STATUS_FILTERS, type OrderStatusFilter, displayOrderStatus, orderStatusLabel } from "@/lib/order-status";
+import {
+  ORDER_STATUS_FILTERS,
+  ORDER_VIEWS,
+  type OrderStatusFilter,
+  displayOrderStatus,
+  orderStatusLabel,
+} from "@/lib/order-status";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type Order = RouterOutputs["order"]["adminList"][number];
@@ -132,8 +138,9 @@ export default function OrdersPage() {
   const statusFilter = (searchParams.get("status") ?? "all") as OrderStatusFilter | "all";
   const dateFrom = searchParams.get("from") ?? "";
   const dateTo = searchParams.get("to") ?? "";
+  const view = searchParams.get("view") ?? "";
 
-  const hasFilters = search || statusFilter !== "all" || dateFrom || dateTo;
+  const hasFilters = search || statusFilter !== "all" || dateFrom || dateTo || view;
 
   function setParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -145,6 +152,8 @@ export default function OrdersPage() {
   function setStatusFilter(v: string) { setParam("status", v === "all" ? "" : v); }
   function setDateFrom(v: string) { setParam("from", v); }
   function setDateTo(v: string) { setParam("to", v); }
+  // Clicking the active chip clears it, so the chips double as a toggle.
+  function setView(v: string) { setParam("view", v === view ? "" : v); }
 
   function clearFilters() {
     router.replace(pathname);
@@ -159,11 +168,25 @@ export default function OrdersPage() {
     offset: 0,
   });
 
+  // Chip counts always describe the full fetched set, so a chip never hides the
+  // very number that would make you click it.
+  const viewCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const v of ORDER_VIEWS) counts[v.id] = (orders ?? []).filter(v.matches).length;
+    return counts;
+  }, [orders]);
+
+  const visible = useMemo(() => {
+    if (!orders) return [];
+    const active = ORDER_VIEWS.find((v) => v.id === view);
+    return active ? orders.filter(active.matches) : orders;
+  }, [orders, view]);
+
   const stats = useMemo(() => {
     if (!orders) return null;
-    const total = orders.reduce((sum, o) => sum + Number(o.total), 0);
-    return { count: orders.length, total };
-  }, [orders]);
+    const total = visible.reduce((sum, o) => sum + Number(o.total), 0);
+    return { count: visible.length, total };
+  }, [orders, visible]);
 
   return (
     <div className="space-y-5">
@@ -223,6 +246,39 @@ export default function OrdersPage() {
         )}
       </div>
 
+      {/* Quick filters — one click to the queue you actually work from. Hidden
+          when a chip has nothing in it, so the row stays short on a quiet day. */}
+      {(orders?.length ?? 0) > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={() => setView("")}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              view === ""
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+            }`}
+          >
+            All
+            <span className="ml-1.5 tabular-nums opacity-60">{orders?.length ?? 0}</span>
+          </button>
+
+          {ORDER_VIEWS.filter((v) => (viewCounts[v.id] ?? 0) > 0).map((v) => (
+            <button
+              key={v.id}
+              onClick={() => setView(v.id)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                view === v.id
+                  ? v.active
+                  : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+              }`}
+            >
+              {v.label}
+              <span className="ml-1.5 tabular-nums opacity-60">{viewCounts[v.id]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Summary bar */}
       {stats && (
         <div className="flex items-center gap-6 text-sm text-muted-foreground">
@@ -260,14 +316,14 @@ export default function OrdersPage() {
                 </TableCell>
               </TableRow>
             )}
-            {!isLoading && (!orders || orders.length === 0) && (
+            {!isLoading && visible.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                   No orders found.
                 </TableCell>
               </TableRow>
             )}
-            {orders?.map((order) => (
+            {visible.map((order) => (
               <OrderRow key={order.id} order={order} />
             ))}
           </TableBody>

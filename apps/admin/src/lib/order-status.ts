@@ -217,14 +217,45 @@ const PARCEL_RANK: Record<string, number> = {
   delivered: 5,
 };
 
+/**
+ * The customer paid, the goods aren't going to them, and the money hasn't gone
+ * back yet.
+ *
+ * A courier-side cancellation never auto-refunds — handleCourierCancellation in
+ * packages/api deliberately leaves "whether to refund, and to wallet or bank" to
+ * a human. Same for a parcel that came all the way back to us. Until someone
+ * acts, those orders sit under a plain "Cancelled" badge that looks identical to
+ * one already settled, which is how a customer ends up out of pocket and waiting.
+ */
+export function isRefundDue(order: {
+  status: string;
+  refundMethod?: string | null;
+  razorpayPaymentId?: string | null;
+  paymentMethod?: string | null;
+}): boolean {
+  if (!["cancelled", "rto_delivered"].includes(order.status)) return false;
+  if (order.refundMethod) return false; // already sent somewhere
+  // Money actually reached us: a captured gateway payment, or store credit spent.
+  return Boolean(order.razorpayPaymentId) || order.paymentMethod === "wallet";
+}
+
+const REFUND_DUE_BADGE =
+  "bg-red-600 text-white border-red-600 dark:bg-red-600 dark:text-white dark:border-red-600";
+
 export function displayOrderStatus(order: {
   status: string;
   shipments?: readonly { status: string }[] | null;
+  refundMethod?: string | null;
+  razorpayPaymentId?: string | null;
+  paymentMethod?: string | null;
 }): { label: string; badge: string } {
   const fallback = {
     label: orderStatusLabel(order.status),
     badge: orderStatusBadge(order.status),
   };
+
+  // Outranks everything — it's the only state on this screen that owes someone money.
+  if (isRefundDue(order)) return { label: "Refund due", badge: REFUND_DUE_BADGE };
 
   if (!PARCEL_DRIVEN.includes(order.status)) return fallback;
 
@@ -247,3 +278,68 @@ export function displayOrderStatus(order: {
 
   return { label: shipmentStatusLabel(chosen), badge: shipmentStatusBadge(chosen) };
 }
+
+// ─── Quick filters ───────────────────────────────────────────────────────────
+
+/**
+ * The chips above the orders table. They match on what the badge *shows*, which
+ * is why they're applied client-side over the fetched page rather than through
+ * the API's `status` filter — "Booked" and "In transit" aren't order statuses at
+ * all, they're the parcels' stage, and "Refund due" is a condition across three
+ * columns. Ordered by how urgently a human needs to look.
+ */
+export type OrderView = {
+  id: string;
+  label: string;
+  /** Tailwind classes for the chip when it's the active one. */
+  active: string;
+  matches: (order: Parameters<typeof displayOrderStatus>[0]) => boolean;
+};
+
+const byLabel = (label: string) => (order: Parameters<typeof displayOrderStatus>[0]) =>
+  displayOrderStatus(order).label === label;
+
+export const ORDER_VIEWS: OrderView[] = [
+  {
+    id: "refund_due",
+    label: "Refund due",
+    active: "bg-red-600 text-white border-red-600",
+    matches: isRefundDue,
+  },
+  {
+    id: "delivery_failed",
+    label: "Delivery attempted",
+    active: "bg-orange-600 text-white border-orange-600",
+    matches: byLabel("Delivery attempted"),
+  },
+  {
+    id: "booked",
+    label: "Booked",
+    active: "bg-sky-600 text-white border-sky-600",
+    matches: byLabel("Booked"),
+  },
+  {
+    id: "in_transit",
+    label: "In transit",
+    active: "bg-violet-600 text-white border-violet-600",
+    matches: byLabel("In transit"),
+  },
+  {
+    id: "out_for_delivery",
+    label: "Out for delivery",
+    active: "bg-cyan-600 text-white border-cyan-600",
+    matches: byLabel("Out for delivery"),
+  },
+  {
+    id: "processing",
+    label: "Processing",
+    active: "bg-sky-600 text-white border-sky-600",
+    matches: byLabel("Processing"),
+  },
+  {
+    id: "delivered",
+    label: "Delivered",
+    active: "bg-emerald-600 text-white border-emerald-600",
+    matches: byLabel("Delivered"),
+  },
+];
