@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 
 import { schema } from "@azimuth/db";
 import { permissionProcedure } from "../middleware/auth.middleware";
+import { createAccountDeletionRepository } from "../repositories/account-deletion.repository";
 import { createWalletRepository } from "../repositories/wallet.repository";
 import { router } from "../trpc";
 
@@ -46,6 +47,9 @@ export const adminUserRouter = router({
             role: true,
             createdAt: true,
             emailVerified: true,
+            // Tombstones stay in the list — their orders still need an owner —
+            // so the table has to be able to mark them.
+            deletedAt: true,
           },
           orderBy: desc(schema.user.createdAt),
           limit,
@@ -92,7 +96,7 @@ export const adminUserRouter = router({
       });
       if (!user) throw new Error("User not found");
 
-      const [orders, tickets] = await Promise.all([
+      const [orders, tickets, deletions] = await Promise.all([
         ctx.db.query.orders.findMany({
           where: eq(schema.orders.userId, input.userId),
           // Parcels included so the order rows can show dispatch size — one unit
@@ -112,9 +116,12 @@ export const adminUserRouter = router({
             updatedAt: true,
           },
         }),
+        // Empty for a live customer. For a tombstone it carries the identity the
+        // user row no longer holds, plus the credit they walked away from.
+        createAccountDeletionRepository(ctx.db).listForUser(input.userId),
       ]);
 
-      return { user, orders, tickets };
+      return { user, orders, tickets, deletion: deletions[0] ?? null };
     }),
 
   // Customer's wallet as the admin sees it: balance + recent ledger entries.

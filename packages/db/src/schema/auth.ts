@@ -36,6 +36,12 @@ export const user = pgTable("user", {
   role: userRoleEnum("role").default("user").notNull(),
   // Nullable — set only for staff (role='admin'). See staffRoleEnum above.
   staffRole: staffRoleEnum("staff_role"),
+  // Set when the customer deletes their own account. The row is NOT removed —
+  // orders reference it with onDelete:'restrict' and the GST invoices behind
+  // them are legally retained — so instead every personal field above is
+  // overwritten with a placeholder and this stamp marks the row as a tombstone.
+  // See packages/api/src/services/account-deletion.service.ts.
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const session = pgTable(

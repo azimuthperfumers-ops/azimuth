@@ -105,11 +105,17 @@ export default function UsersPage() {
                 className="cursor-pointer hover:bg-muted/40"
                 onClick={() => router.push(`/users/${u.id}`)}
               >
-                <TableCell className="font-medium">{u.name}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <span className={u.deletedAt ? "text-muted-foreground" : undefined}>{u.name}</span>
+                    {/* Tombstone: the row survives only because its orders do. */}
+                    {u.deletedAt && <Badge variant="outline">Deleted</Badge>}
+                  </div>
+                </TableCell>
                 <TableCell className="text-muted-foreground text-sm">
                   <div className="flex items-center gap-1.5">
-                    {u.email}
-                    {u.emailVerified && (
+                    {u.deletedAt ? <span className="italic">erased</span> : u.email}
+                    {u.emailVerified && !u.deletedAt && (
                       <span className="inline-block size-1.5 rounded-full bg-green-500" title="Verified" />
                     )}
                   </div>

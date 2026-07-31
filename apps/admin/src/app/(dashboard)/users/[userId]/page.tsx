@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Wallet,
   Plus,
+  Trash2,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -324,6 +325,66 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
         Users
       </Button>
 
+      {/* Tombstone banner. The row below is a husk — its identifying fields were
+          overwritten when the customer deleted themselves. Everything the account
+          used to be lives in the account_deletions audit row. */}
+      {user.deletedAt && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-5">
+          <div className="flex items-start gap-3">
+            <Trash2 className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold">
+                Customer deleted their account on {fmtDate(user.deletedAt)}
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Name, email, phone, addresses, cart, wishlist and logins were erased. The orders and
+                invoices below are retained for accounting and no longer belong to a named person.
+              </p>
+
+              {data.deletion ? (
+                <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-4">
+                  <div>
+                    <dt className="text-muted-foreground">Email at deletion</dt>
+                    <dd className="mt-0.5 font-medium break-all">{data.deletion.originalEmail}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Name at deletion</dt>
+                    <dd className="mt-0.5 font-medium">{data.deletion.originalName ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Phone at deletion</dt>
+                    <dd className="mt-0.5 font-medium">{data.deletion.originalPhone ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Wallet credit left behind</dt>
+                    <dd className="mt-0.5 font-semibold tabular-nums">
+                      {formatInr(Number(data.deletion.walletBalance))}
+                    </dd>
+                  </div>
+                  {data.deletion.reason && (
+                    <div className="col-span-2 sm:col-span-4">
+                      <dt className="text-muted-foreground">Reason given</dt>
+                      <dd className="mt-0.5 italic">“{data.deletion.reason}”</dd>
+                    </div>
+                  )}
+                </dl>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground italic">
+                  No deletion audit record — this account was anonymised outside the self-service flow.
+                </p>
+              )}
+
+              {Number(data.deletion?.walletBalance ?? 0) > 0 && (
+                <p className="mt-4 text-xs text-muted-foreground">
+                  The wallet balance was left intact and still counts towards outstanding store liability.
+                  It can be honoured if they write in, but there is no longer an account to spend it from.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Profile card — full width */}
       <div className="rounded-xl border bg-card p-6">
         <div className="flex items-start gap-5">
@@ -341,6 +402,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
                 #{user.id.slice(0, 8).toUpperCase()}
               </span>
               {user.role === "admin" && <Badge variant="default">Admin</Badge>}
+              {user.deletedAt && <Badge variant="destructive">Deleted</Badge>}
             </div>
             <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5">

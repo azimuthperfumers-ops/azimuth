@@ -5,14 +5,16 @@ export const dynamic = "force-dynamic";
 import { type FormEvent, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ChevronRight, Heart, LogOut, MapPin, Package, TicketIcon, User } from "lucide-react";
+import { ChevronRight, Heart, LogOut, MapPin, Package, TicketIcon, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 
 import { AuthCard } from "@/components/auth-card";
+import { DeleteAccountPanel } from "@/components/delete-account-panel";
 import { ProductCard } from "@/components/product-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { authClient } from "@/lib/auth-client";
+import { ORDER_STATUS_LABEL } from "@/lib/order-status";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
@@ -508,23 +510,6 @@ function trackedPackageCount(order: { shipments?: { waybill: string | null }[] |
   return (order.shipments ?? []).filter((s) => s.waybill).length;
 }
 
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  pending_payment: "Awaiting payment",
-  payment_failed: "Payment failed",
-  paid: "Payment confirmed",
-  processing: "Processing",
-  picked_up: "Picked up by courier",
-  out_for_delivery: "Out for delivery",
-  delivery_attempted: "Delivery attempted",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-  refund_processing: "Refund processing",
-  refunded: "Refunded",
-  rto_initiated: "Return in transit",
-  rto_delivered: "Return delivered",
-};
-
 const ORDER_STATUS_COLOR: Record<string, string> = {
   pending_payment: "text-yellow-600",
   payment_failed: "text-red-500",
@@ -736,6 +721,7 @@ const TABS = [
   { id: "orders", label: "Orders", icon: Package },
   { id: "wishlist", label: "Wishlist", icon: Heart },
   { id: "support", label: "Support", icon: TicketIcon },
+  { id: "delete", label: "Delete account", icon: Trash2 },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -807,9 +793,15 @@ function AccountPageInner() {
                 onClick={() => setTab(id)}
                 className={cn(
                   "flex shrink-0 w-auto md:w-full items-center gap-3 px-3 py-2.5 text-left text-[13px] font-medium transition-colors whitespace-nowrap",
+                  // The destructive one sits apart from the rest of the list.
+                  id === "delete" && "md:mt-4 md:border-t md:border-border md:pt-4",
                   activeTab === id
-                    ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? id === "delete"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-foreground text-background"
+                    : id === "delete"
+                      ? "text-primary/70 hover:text-primary"
+                      : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <Icon className="size-3.5 shrink-0" />
@@ -838,6 +830,21 @@ function AccountPageInner() {
                   <TicketIcon className="size-3.5" />
                   View support requests
                 </Link>
+              </div>
+            )}
+            {activeTab === "delete" && (
+              <div className="max-w-xl space-y-6">
+                <div>
+                  <h2 className="text-lg font-semibold">Delete account</h2>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    Permanently close this account.{" "}
+                    <Link href="/delete-account" className="text-primary hover:underline">
+                      Read what is deleted and what we must keep
+                    </Link>
+                    .
+                  </p>
+                </div>
+                <DeleteAccountPanel />
               </div>
             )}
           </div>

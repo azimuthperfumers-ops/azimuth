@@ -43,6 +43,9 @@ export function SiteFooter() {
           <ul className="space-y-3 text-[13px] text-background/60">
             <li><Link href="/contact" className="transition-colors hover:text-primary">Contact us</Link></li>
             <li><Link href="/support" className="transition-colors hover:text-primary">Support</Link></li>
+            {/* Public, reachable without signing in — the Play Store data-safety
+                listing points at this URL. */}
+            <li><Link href="/delete-account" className="transition-colors hover:text-primary">Delete account</Link></li>
           </ul>
         </div>
 
