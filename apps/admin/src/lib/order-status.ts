@@ -230,11 +230,13 @@ const PARCEL_RANK: Record<string, number> = {
 export function isRefundDue(order: {
   status: string;
   refundMethod?: string | null;
+  refundWaivedAt?: Date | string | null;
   razorpayPaymentId?: string | null;
   paymentMethod?: string | null;
 }): boolean {
   if (!["cancelled", "rto_delivered"].includes(order.status)) return false;
   if (order.refundMethod) return false; // already sent somewhere
+  if (order.refundWaivedAt) return false; // an admin decided nothing is owed
   // Money actually reached us: a captured gateway payment, or store credit spent.
   return Boolean(order.razorpayPaymentId) || order.paymentMethod === "wallet";
 }

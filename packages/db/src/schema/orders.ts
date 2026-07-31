@@ -74,6 +74,15 @@ export const orders = pgTable(
     // Set when refunded, records where the money went (bank vs wallet).
     refundMethod: refundMethodEnum("refund_method"),
 
+    // An admin declaring that this cancelled/returned order owes the customer
+    // nothing — the goods were reshipped under a new order, the money was
+    // settled outside the app, whatever. Distinct from refundMethod, which says
+    // money moved: this says money should NOT move, and why. Without it the
+    // admin's "Refund due" queue can never be cleared for those cases.
+    refundWaivedAt: timestamp("refund_waived_at"),
+    refundWaivedBy: text("refund_waived_by"),
+    refundWaivedReason: text("refund_waived_reason"),
+
     // Payment gateway (null for wallet-paid orders)
     razorpayOrderId: text("razorpay_order_id"),
     razorpayPaymentId: text("razorpay_payment_id"),

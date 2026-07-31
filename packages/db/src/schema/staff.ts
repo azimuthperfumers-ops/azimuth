@@ -8,6 +8,9 @@ export const staffAuditActionEnum = pgEnum("staff_audit_action", [
   "role_changed",
   "staff_removed",
   "password_reset",
+  // Signed out of every device without touching their password — for a lost
+  // laptop or a shared machine, where forcing a new password is overkill.
+  "sessions_revoked",
 ]);
 
 // Append-only history of every staff-account change (who did what, to whom).

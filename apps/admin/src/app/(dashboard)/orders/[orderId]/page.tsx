@@ -12,10 +12,13 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -29,6 +32,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import {
   type OrderStatusFilter,
   displayOrderStatus,
+  isRefundDue,
   orderStatusLabel,
   shipmentStatusBadge,
   shipmentStatusLabel,
@@ -229,6 +233,8 @@ export default function AdminOrderDetailPage({
   const { orderId } = use(params);
   const [statusDialog, setStatusDialog] = useState(false);
   const [refundDialog, setRefundDialog] = useState(false);
+  const [waiveDialog, setWaiveDialog] = useState(false);
+  const [waiveReason, setWaiveReason] = useState("");
   const [refundNote, setRefundNote] = useState("");
   const [refundDest, setRefundDest] = useState<"razorpay" | "wallet">("wallet");
   const utils = trpc.useUtils();
@@ -283,6 +289,16 @@ export default function AdminOrderDetailPage({
     },
     onError: (err) => toast.error(err.message),
     onSettled: () => setLabellingId(null),
+  });
+
+  const waiveRefund = trpc.order.waiveRefund.useMutation({
+    onSuccess: async () => {
+      await utils.order.adminGet.invalidate({ orderId });
+      toast.success("Marked as needing no refund");
+      setWaiveDialog(false);
+      setWaiveReason("");
+    },
+    onError: (err) => toast.error(err.message),
   });
 
   const reconcile = trpc.order.reconcileShiprocket.useMutation({
@@ -422,6 +438,18 @@ export default function AdminOrderDetailPage({
                 }}
               >
                 {order.status === "cancelled" ? "Issue refund (pending)" : "Issue refund"}
+              </Button>
+            )}
+            {/* The other half of the decision: this order owes nothing. Without it
+                a reshipped or externally-settled order sits in "Refund due" forever. */}
+            {canPay && isRefundDue(order) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setWaiveDialog(true)}
+                title="Clear this order from the Refund due queue without moving money"
+              >
+                No refund needed
               </Button>
             )}
             {canOrders && (order.shipments?.some((s) => s.waybill) || order.waybill) && (
@@ -872,12 +900,46 @@ export default function AdminOrderDetailPage({
         onOpenChange={setStatusDialog}
       />
 
+      <Dialog open={waiveDialog} onOpenChange={setWaiveDialog}>
+    <DialogContent className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>No refund needed</DialogTitle>
+        <DialogDescription>
+          Clears {order.orderNumber} from the Refund due queue without moving any money. The
+          order stays {orderStatusLabel(order.status).toLowerCase()} — this only records that
+          nothing is owed. Your name and reason go into the order&apos;s audit trail.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-1.5 py-1">
+        <Label htmlFor="waive-reason">Reason</Label>
+        <Textarea
+          id="waive-reason"
+          rows={3}
+          placeholder="e.g. Goods reshipped as AZ-2026-0006 — customer keeps the order"
+          value={waiveReason}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setWaiveReason(e.target.value)}
+        />
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setWaiveDialog(false)} disabled={waiveRefund.isPending}>
+          Cancel
+        </Button>
+        <Button
+          disabled={waiveReason.trim().length < 3 || waiveRefund.isPending}
+          onClick={() => waiveRefund.mutate({ orderId, reason: waiveReason.trim() })}
+        >
+          {waiveRefund.isPending ? "Saving…" : "Confirm — no refund"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
       {(() => {
         const walletPaid = (order as { paymentMethod?: string }).paymentMethod === "wallet";
         const canBank = !!order.razorpayPaymentId && !walletPaid;
         const dest = walletPaid ? "wallet" : refundDest;
         return (
-          <Dialog open={refundDialog} onOpenChange={setRefundDialog}>
+      <Dialog open={refundDialog} onOpenChange={setRefundDialog}>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Refund {formatInr(Number(order.total))}</DialogTitle>

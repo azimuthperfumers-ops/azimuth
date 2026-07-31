@@ -1,7 +1,7 @@
 import { auth } from "@azimuth/auth";
 import { schema, type Database } from "@azimuth/db";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { ownerProcedure } from "../middleware/auth.middleware";
@@ -35,8 +35,51 @@ export const staffRouter = router({
       },
       orderBy: desc(schema.user.createdAt),
     });
-    return { staff };
+
+    // Live session count per member, so "sign out everywhere" says how much it
+    // will actually do — and a stale login on a shared machine is visible at all.
+    const now = new Date();
+    const sessions = await ctx.db
+      .select({ userId: schema.session.userId, count: sql<number>`count(*)::int` })
+      .from(schema.session)
+      .where(gt(schema.session.expiresAt, now))
+      .groupBy(schema.session.userId);
+    const active = new Map(sessions.map((r) => [r.userId, r.count]));
+
+    return { staff: staff.map((s) => ({ ...s, activeSessions: active.get(s.id) ?? 0 })) };
   }),
+
+  // Sign a staff member out of every device without touching their password.
+  // The password reset already does this as a side effect; this is the case where
+  // forcing a new password is the wrong tool — a lost laptop, a shared browser.
+  revokeSessions: ownerProcedure
+    .input(z.object({ userId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const target = await ctx.db.query.user.findFirst({
+        where: eq(schema.user.id, input.userId),
+        columns: { id: true, email: true, role: true, staffRole: true },
+      });
+      if (!target || target.role !== "admin") {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Staff member not found." });
+      }
+
+      const removed = await ctx.db
+        .delete(schema.session)
+        .where(eq(schema.session.userId, target.id))
+        .returning({ id: schema.session.id });
+
+      await ctx.db.insert(schema.staffAudit).values({
+        action: "sessions_revoked",
+        actorId: ctx.session.user.id,
+        actorEmail: ctx.session.user.email,
+        targetUserId: target.id,
+        targetEmail: target.email,
+        toRole: target.staffRole,
+        note: `${removed.length} session(s) ended`,
+      });
+
+      return { ok: true, revoked: removed.length };
+    }),
 
   // Append-only audit history for the staff page.
   audit: ownerProcedure

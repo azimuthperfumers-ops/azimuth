@@ -20,6 +20,7 @@ const AUDIT_LABELS: Record<string, string> = {
   role_changed: "role changed",
   staff_removed: "removed",
   password_reset: "password reset",
+  sessions_revoked: "signed out everywhere",
 };
 
 export default function StaffPage() {
@@ -41,6 +42,18 @@ export default function StaffPage() {
     onSuccess: async () => {
       await refresh();
       toast.success("Role updated");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const revokeSessions = trpc.staff.revokeSessions.useMutation({
+    onSuccess: async (res) => {
+      await refresh();
+      toast.success(
+        res.revoked === 0
+          ? "No active sessions — they were already signed out"
+          : `Signed out of ${res.revoked} device${res.revoked === 1 ? "" : "s"}`,
+      );
     },
     onError: (err) => toast.error(err.message),
   });
@@ -74,6 +87,7 @@ export default function StaffPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Sessions</TableHead>
                 <TableHead>Added</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -108,6 +122,15 @@ export default function StaffPage() {
                         </Select>
                       )}
                     </TableCell>
+                    <TableCell>
+                      {s.activeSessions > 0 ? (
+                        <span className="text-sm tabular-nums">
+                          {s.activeSessions} active
+                        </span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(s.createdAt).toLocaleDateString()}
                     </TableCell>
@@ -116,6 +139,17 @@ export default function StaffPage() {
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" size="sm" onClick={() => setResetFor({ id: s.id, email: s.email })}>
                             Reset password
+                          </Button>
+                          {/* Same effect on sessions as a password reset, minus the
+                              password — for a lost device, not a compromised login. */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={s.activeSessions === 0 || revokeSessions.isPending}
+                            onClick={() => revokeSessions.mutate({ userId: s.id })}
+                            title="End every session this person has open"
+                          >
+                            Sign out everywhere
                           </Button>
                           <Button variant="destructive" size="sm" onClick={() => setRemoveFor({ id: s.id, email: s.email })}>
                             Remove
@@ -128,7 +162,7 @@ export default function StaffPage() {
               })}
               {staffQuery.data?.staff.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                     No staff yet.
                   </TableCell>
                 </TableRow>

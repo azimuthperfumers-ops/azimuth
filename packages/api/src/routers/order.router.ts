@@ -855,4 +855,64 @@ export const orderRouter = router({
       return { ok: true, destination: "razorpay" as const };
     }),
 
+  // ── Admin: close out a refund without moving money ──────────────────────────
+  // Some cancellations owe the customer nothing — the goods were reshipped under
+  // a new order number, or the money was settled outside the app. Without this
+  // those orders sit in the "Refund due" queue forever, indistinguishable from a
+  // customer genuinely still waiting. Recorded, not silent: reason is mandatory
+  // and it lands in the order's audit trail with the admin's id on it.
+  waiveRefund: writePayments
+    .input(
+      z.object({
+        orderId: z.string().uuid(),
+        reason: z.string().trim().min(3, "A reason is required so the decision is traceable."),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const order = await ctx.db.query.orders.findFirst({
+        where: eq(schema.orders.id, input.orderId),
+      });
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+
+      if (order.refundMethod) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A refund was already issued for this order.",
+        });
+      }
+      if (order.refundWaivedAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This order is already marked as needing no refund.",
+        });
+      }
+      if (["refund_processing", "refunded"].includes(order.status)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Cannot waive: order is already ${order.status}.`,
+        });
+      }
+
+      await ctx.db
+        .update(schema.orders)
+        .set({
+          refundWaivedAt: new Date(),
+          refundWaivedBy: ctx.session.user.id,
+          refundWaivedReason: input.reason,
+        })
+        .where(eq(schema.orders.id, input.orderId));
+
+      // Status doesn't move — the order really is still cancelled/returned. The
+      // history row is what makes the decision visible next to everything else.
+      await ctx.db.insert(schema.orderStatusHistory).values({
+        orderId: order.id,
+        fromStatus: order.status,
+        toStatus: order.status,
+        note: `No refund required — ${input.reason}`,
+        actorId: ctx.session.user.id,
+      });
+
+      return { ok: true };
+    }),
+
 });
