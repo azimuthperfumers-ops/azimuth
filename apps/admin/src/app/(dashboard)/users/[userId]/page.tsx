@@ -44,7 +44,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatInr } from "@/lib/format";
-import { orderStatusBadge, orderStatusLabel } from "@/lib/order-status";
+import { displayOrderStatus } from "@/lib/order-status";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -462,8 +462,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
                       <TableCell className="font-mono text-sm font-medium">{order.orderNumber}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{fmtDate(order.createdAt)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={orderStatusBadge(order.status)}>
-                          {orderStatusLabel(order.status)}
+                        <Badge variant="outline" className={displayOrderStatus(order).badge}>
+                          {displayOrderStatus(order).label}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-semibold tabular-nums">{formatInr(Number(order.total))}</TableCell>

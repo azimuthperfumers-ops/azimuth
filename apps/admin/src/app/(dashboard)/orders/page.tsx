@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { formatInr } from "@/lib/format";
-import { ORDER_STATUS_FILTERS, type OrderStatusFilter, orderStatusBadge, orderStatusLabel } from "@/lib/order-status";
+import { ORDER_STATUS_FILTERS, type OrderStatusFilter, displayOrderStatus, orderStatusLabel } from "@/lib/order-status";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type Order = RouterOutputs["order"]["adminList"][number];
@@ -83,8 +83,8 @@ function OrderRow({ order }: { order: Order }) {
       </TableCell>
       <TableCell className="text-muted-foreground text-sm">{fmtDate(order.createdAt)}</TableCell>
       <TableCell>
-        <Badge variant="outline" className={orderStatusBadge(order.status)}>
-          {orderStatusLabel(order.status)}
+        <Badge variant="outline" className={displayOrderStatus(order).badge}>
+          {displayOrderStatus(order).label}
         </Badge>
       </TableCell>
       <TableCell className="font-semibold tabular-nums">{formatInr(Number(order.total))}</TableCell>

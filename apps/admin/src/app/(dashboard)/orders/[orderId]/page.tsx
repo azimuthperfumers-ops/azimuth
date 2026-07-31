@@ -28,7 +28,7 @@ import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
   type OrderStatusFilter,
-  orderStatusBadge,
+  displayOrderStatus,
   orderStatusLabel,
   shipmentStatusBadge,
   shipmentStatusLabel,
@@ -379,8 +379,8 @@ export default function AdminOrderDetailPage({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Badge variant="outline" className={orderStatusBadge(order.status)}>
-              {orderStatusLabel(order.status)}
+            <Badge variant="outline" className={displayOrderStatus(order).badge}>
+              {displayOrderStatus(order).label}
             </Badge>
             {canOrders && needsShipmentRetry && (
               <Button

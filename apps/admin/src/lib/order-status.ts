@@ -177,3 +177,73 @@ export function shipmentStatusLabel(status: string): string {
 export function shipmentStatusBadge(status: string): string {
   return SHIPMENT_STATUS_BADGE[status as ShipmentStatus] ?? SLATE;
 }
+
+// ─── What the admin actually shows ───────────────────────────────────────────
+
+/**
+ * The order enum is coarser than reality: it has no `booked`, so an order whose
+ * parcels are printed and waiting for a courier reads "Processing" — the same
+ * word it had before anything was booked. That's the flatness on the orders list.
+ *
+ * Rather than add enum values and migrate on a live store, the admin *displays*
+ * the parcels' own stage while the order is in a courier-driven state. The stored
+ * order status is untouched — this only changes the words and the colour.
+ *
+ * Two consequences worth knowing:
+ *  - "Booked" and "In transit" can appear here before the order row itself has
+ *    caught up, because the parcel rows update on the courier event that the
+ *    order-level derivation may have judged a no-op.
+ *  - Money and terminal states (paid, cancelled, refunded, delivered, RTO) are
+ *    never overridden — those are decided by us, not by a courier.
+ */
+const PARCEL_DRIVEN: readonly string[] = [
+  "processing",
+  "picked_up",
+  "shipped",
+  "out_for_delivery",
+  "delivery_attempted",
+];
+
+// Same shape as deriveOrderStatus in packages/api — least-advanced parcel wins,
+// except states that need attention, which surface immediately. Kept separate on
+// purpose: that one must land on the order enum, this one is free to be finer.
+const PARCEL_RANK: Record<string, number> = {
+  pending: 0,
+  failed: 0,
+  booked: 1,
+  picked_up: 2,
+  in_transit: 3,
+  out_for_delivery: 4,
+  delivered: 5,
+};
+
+export function displayOrderStatus(order: {
+  status: string;
+  shipments?: readonly { status: string }[] | null;
+}): { label: string; badge: string } {
+  const fallback = {
+    label: orderStatusLabel(order.status),
+    badge: orderStatusBadge(order.status),
+  };
+
+  if (!PARCEL_DRIVEN.includes(order.status)) return fallback;
+
+  const live = (order.shipments ?? []).filter((s) => s.status !== "cancelled");
+  if (live.length === 0) return fallback;
+
+  // A parcel in trouble outranks the rest — don't let a healthy sibling hide it.
+  const urgent = live.find(
+    (s) => s.status === "delivery_attempted" || s.status === "rto_initiated",
+  );
+  const chosen =
+    urgent?.status ??
+    live.reduce((slowest, s) =>
+      (PARCEL_RANK[s.status] ?? 0) < (PARCEL_RANK[slowest.status] ?? 0) ? s : slowest,
+    ).status;
+
+  // An order isn't "delivered" because its slowest parcel is — that call belongs
+  // to the server, which has already written it into the order row.
+  if (chosen === "delivered") return fallback;
+
+  return { label: shipmentStatusLabel(chosen), badge: shipmentStatusBadge(chosen) };
+}
