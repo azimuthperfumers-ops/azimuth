@@ -60,6 +60,25 @@ export const auth = betterAuth({
       },
     }),
   ],
+  databaseHooks: {
+    user: {
+      create: {
+        // Every account owns a wallet from the moment it exists. The wallet
+        // repository still creates one lazily on first movement, so this changes
+        // nothing about how money is recorded — it means a customer who has never
+        // spent a rupee is a ₹0 row an admin can find, credit and audit, instead
+        // of being absent from the wallets screen entirely.
+        after: async (createdUser) => {
+          try {
+            await db.insert(schema.wallets).values({ userId: createdUser.id }).onConflictDoNothing();
+          } catch (e: unknown) {
+            // Never fail a signup over the wallet — lazy creation still covers it.
+            console.error("[auth] wallet init failed for", createdUser.id, e);
+          }
+        },
+      },
+    },
+  },
   trustedOrigins: [env.ADMIN_APP_URL, env.USER_APP_URL, "azimuth://"],
   user: {
     additionalFields: {

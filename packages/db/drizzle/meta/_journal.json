@@ -134,6 +134,13 @@
       "when": 1785520930106,
       "tag": "0018_staff_sessions_revoked",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785605260151,
+      "tag": "0019_wallets_for_every_user",
+      "breakpoints": true
     }
   ]
 }

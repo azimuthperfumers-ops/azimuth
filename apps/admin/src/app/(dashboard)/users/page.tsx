@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
+import { shortUserId } from "@/lib/format";
 
 function fmtDate(d: string | Date) {
   return new Date(d).toLocaleDateString("en-IN", {
@@ -70,7 +71,7 @@ export default function UsersPage() {
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
           className="pl-8 h-9 text-sm"
-          placeholder="Name, email, phone…"
+          placeholder="Name, email, phone, #ID…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -112,6 +113,11 @@ export default function UsersPage() {
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2">
                     <span className={u.deletedAt ? "text-muted-foreground" : undefined}>{u.name}</span>
+                    {/* The handle a customer quotes in a support ticket — the
+                        search box above matches it as a prefix. */}
+                    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-normal text-muted-foreground">
+                      {shortUserId(u.id)}
+                    </span>
                     {/* Tombstone: the row survives only because its orders do. */}
                     {u.deletedAt && <Badge variant="outline">Deleted</Badge>}
                   </div>

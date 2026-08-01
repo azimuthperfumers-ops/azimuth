@@ -4,7 +4,15 @@ import { use, useState } from "react";
 import Link from "next/link";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@azimuth/api";
-import { AlertTriangle, ArrowLeft, MapPin, RefreshCw, RotateCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  MapPin,
+  RefreshCw,
+  RotateCcw,
+  User as UserIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -213,6 +221,52 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-muted-foreground/50 mb-3">
       {children}
     </p>
+  );
+}
+
+/**
+ * The account behind the order, and the way through to its profile — orders,
+ * tickets and wallet all hang off that page, and the only route there used to be
+ * the Users list and a name search.
+ *
+ * Not a link for staff without customer access: the profile would 403 on them,
+ * so they get the same facts without a door that doesn't open.
+ */
+function CustomerCard({ customer, canView }: { customer: Order["customer"]; canView: boolean }) {
+  if (!customer) return null;
+
+  const phone = customer.phone ?? customer.phoneNumber;
+  const body = (
+    <div className="flex items-start gap-3">
+      <UserIcon className="size-3.5 shrink-0 text-muted-foreground/40 mt-0.5" />
+      <div className="min-w-0 space-y-0.5">
+        <p className="font-semibold truncate">{customer.name}</p>
+        <p className="text-muted-foreground truncate">{customer.email}</p>
+        {phone && <p className="text-muted-foreground">{phone}</p>}
+        {customer.deletedAt && (
+          <p className="text-[11px] text-destructive">Account deleted</p>
+        )}
+      </div>
+      {canView && (
+        <ArrowRight className="size-3.5 shrink-0 ml-auto mt-0.5 text-muted-foreground/30 group-hover:text-foreground transition-colors" />
+      )}
+    </div>
+  );
+
+  return (
+    <section>
+      <SectionLabel>Customer</SectionLabel>
+      {canView ? (
+        <Link
+          href={`/users/${customer.id}`}
+          className="group block border border-border p-4 text-[13px] hover:border-foreground/30 hover:bg-muted/40 transition-colors"
+        >
+          {body}
+        </Link>
+      ) : (
+        <div className="border border-border p-4 text-[13px]">{body}</div>
+      )}
+    </section>
   );
 }
 
@@ -871,6 +925,8 @@ export default function AdminOrderDetailPage({
               </div>
             </section>
           )}
+
+          <CustomerCard customer={order.customer} canView={can("customers")} />
 
           {/* Delivery address */}
           <section>

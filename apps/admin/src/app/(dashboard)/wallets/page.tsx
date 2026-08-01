@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/use-permissions";
-import { formatInr } from "@/lib/format";
+import { formatInr, shortUserId } from "@/lib/format";
 
 const PAGE = 50;
 const TXN_PAGE = 20;
@@ -40,10 +40,6 @@ const TXN_LABEL: Record<string, string> = {
   reversal: "Reversal",
   adjustment: "Adjustment",
 };
-
-// Short, deterministic handle for a user — the first 8 chars of their real id.
-// Searchable in the toolbar (with or without the #).
-const shortId = (id: string) => `#${id.slice(0, 8).toUpperCase()}`;
 
 function fmtDateTime(d: string | Date) {
   return new Date(d).toLocaleString("en-IN", {
@@ -223,7 +219,7 @@ function StatementDialog({
           <DialogTitle>
             Wallet statement — {target.name}{" "}
             <span className="align-middle rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-normal text-muted-foreground">
-              {shortId(target.userId)}
+              {shortUserId(target.userId)}
             </span>
           </DialogTitle>
           <DialogDescription>
@@ -365,7 +361,9 @@ export default function WalletsPage() {
             Wallets
           </div>
           <div className="mt-2 text-2xl font-bold tabular-nums">{total}</div>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">Customers who have used the wallet.</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            One per customer, from signup — {list.data?.funded ?? 0} holding a balance.
+          </p>
         </div>
       </div>
 
@@ -450,7 +448,7 @@ export default function WalletsPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{w.userName || "—"}</span>
                       <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {shortId(w.userId)}
+                        {shortUserId(w.userId)}
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">{w.userEmail}</div>

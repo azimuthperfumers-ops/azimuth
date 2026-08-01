@@ -420,7 +420,28 @@ export const orderRouter = router({
 
   adminGet: readOrders
     .input(z.object({ orderId: z.string().uuid() }))
-    .query(({ ctx, input }) => getOrderById(ctx.db, input.orderId)),
+    .query(async ({ ctx, input }) => {
+      const order = await getOrderById(ctx.db, input.orderId);
+      if (!order) return order;
+
+      // The account that placed the order, which is not the same thing as the
+      // delivery address — someone can ship to any name. Carried here so the
+      // admin can jump from an order to the customer without a second lookup.
+      const customer = await ctx.db.query.user.findFirst({
+        where: eq(schema.user.id, order.userId),
+        columns: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          phoneNumber: true,
+          createdAt: true,
+          deletedAt: true,
+        },
+      });
+
+      return { ...order, customer: customer ?? null };
+    }),
 
   // ── Admin: advance status ────────────────────────────────────────────────────
 

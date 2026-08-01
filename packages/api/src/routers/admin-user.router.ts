@@ -216,6 +216,9 @@ export const adminUserRouter = router({
         ctx.db
           .select({
             count: sql<number>`count(*)::int`,
+            // Every customer has a wallet now, so the row count says nothing about
+            // usage — this is the number actually holding credit.
+            funded: sql<number>`count(*) filter (where ${schema.wallets.balance} > 0)::int`,
             liability: sql<string>`coalesce(sum(${schema.wallets.balance}), 0)`,
           })
           .from(schema.wallets)
@@ -226,6 +229,7 @@ export const adminUserRouter = router({
       return {
         wallets: rows,
         total: Number(totals?.count ?? 0),
+        funded: Number(totals?.funded ?? 0),
         liability: Number(totals?.liability ?? 0),
       };
     }),

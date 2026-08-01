@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { authClient } from "@/lib/auth-client";
+import { STAFF_ACCOUNT_MESSAGE, canUseStorefront, type AccountLike } from "@/lib/account-access";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { emailSignInSchema, emailSignUpSchema } from "@/lib/validation";
 import { cn } from "@/lib/utils";
@@ -113,12 +114,21 @@ function EmailAuthForm({ next }: { next?: string }) {
     setPending(true);
     // Post-verify redirect: where the user was headed (rating link) or the account page
     const callbackURL = next ?? "/account";
-    const { error } =
+    const { data, error } =
       mode === "sign-up"
         ? await authClient.signUp.email({ email, password, name, callbackURL })
         : await authClient.signIn.email({ email, password });
     setPending(false);
     if (!error) {
+      // Staff signing in on the shop instead of the admin panel — end the session
+      // straight away and say where to go. Signing in already replaced whatever
+      // session they held, so there's nothing left to preserve. The Google route
+      // is handled in /auth/complete.
+      if (mode === "sign-in" && !canUseStorefront(data?.user as AccountLike)) {
+        await authClient.signOut();
+        toast.error(STAFF_ACCOUNT_MESSAGE);
+        return;
+      }
       if (mode === "sign-up") {
         // Account created but locked until the email is verified — link emailed
         toView("check-email");
@@ -273,7 +283,17 @@ export function AuthCard({ next }: { next?: string }) {
       {/* Google */}
       <button
         type="button"
-        onClick={() => authClient.signIn.social({ provider: "google", callbackURL: window.location.origin + (safeNext ?? "/") })}
+        // Via /auth/complete rather than straight to the destination: Google
+        // returns with a session already created, and that page is where the
+        // storefront's account rule gets applied before letting anyone in.
+        onClick={() =>
+          authClient.signIn.social({
+            provider: "google",
+            callbackURL: `${window.location.origin}/auth/complete${
+              safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""
+            }`,
+          })
+        }
         className="flex w-full items-center justify-center gap-3 border border-border py-3 text-[11px] font-semibold tracking-[0.14em] uppercase text-foreground transition-colors hover:bg-muted"
       >
         <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">

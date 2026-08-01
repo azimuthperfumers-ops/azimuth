@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { type FormEvent, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ChevronRight, Heart, LogOut, MapPin, Package, TicketIcon, Trash2, User } from "lucide-react";
+import { ChevronRight, Copy, Heart, LogOut, MapPin, Package, TicketIcon, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 
 import { AuthCard } from "@/components/auth-card";
@@ -14,6 +14,7 @@ import { ProductCard } from "@/components/product-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { authClient } from "@/lib/auth-client";
+import { shortUserId } from "@/lib/format";
 import { ORDER_STATUS_LABEL } from "@/lib/order-status";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -774,6 +775,22 @@ function AccountPageInner() {
               {session.user.name || "My Account"}
             </h1>
             <p className="mt-1.5 text-[13px] text-muted-foreground">{session.user.email}</p>
+            {/* Account handle. Support asks for this to find the right person, so
+                it's one tap to copy rather than something to transcribe. */}
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(shortUserId(session.user.id))
+                  .then(() => toast.success("Customer ID copied"))
+                  .catch(() => toast.error("Could not copy — select and copy it manually"));
+              }}
+              title="Copy your customer ID"
+              className="mt-2 inline-flex items-center gap-1.5 border border-border px-2 py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+            >
+              {shortUserId(session.user.id)}
+              <Copy className="size-3" />
+            </button>
           </div>
           <button
             onClick={signOut}
