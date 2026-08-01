@@ -130,7 +130,6 @@ function OrderRow({ order }: { order: Order }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -142,10 +141,17 @@ export default function OrdersPage() {
 
   const hasFilters = search || statusFilter !== "all" || dateFrom || dateTo || view;
 
+  // Filters live in the URL but never change what the server renders, so they go
+  // through the History API rather than router.replace(). On a page that was
+  // hard-loaded *with* a param (?view=booked, then F5), replace() to the same
+  // route resolves back to the prerendered entry and is silently dropped — the
+  // URL never moves and every filter looks dead. This is Next's documented
+  // escape hatch for search-param-only updates; useSearchParams() still updates.
   function setParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value); else params.delete(key);
-    router.replace(`${pathname}?${params.toString()}`);
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
   }
 
   function setSearch(v: string) { setParam("q", v); }
@@ -156,7 +162,7 @@ export default function OrdersPage() {
   function setView(v: string) { setParam("view", v === view ? "" : v); }
 
   function clearFilters() {
-    router.replace(pathname);
+    window.history.replaceState(null, "", pathname);
   }
 
   const { data: orders, isLoading } = trpc.order.adminList.useQuery({

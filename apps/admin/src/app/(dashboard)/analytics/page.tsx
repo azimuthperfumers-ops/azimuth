@@ -173,18 +173,26 @@ export default function AnalyticsPage() {
     return getInitialAnchor(zoom);
   }, [searchParams, zoom]);
 
+  // History API, not router.replace — see the note in orders/page.tsx. This page
+  // puts zoom+period in the URL on every interaction, so a reload or a bookmarked
+  // link left the zoom buttons and the period arrows completely dead.
+  function replaceQuery(params: URLSearchParams) {
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
+  }
+
   function setZoom(z: Zoom) {
     const params = new URLSearchParams();
     params.set("zoom", z);
     params.set("period", getInitialAnchor(z).toISOString().split("T")[0]);
-    router.replace(`${pathname}?${params.toString()}`);
+    replaceQuery(params);
   }
 
   function navigateAnchor(dir: -1 | 1) {
     const next = navigatePeriod(anchor, zoom, dir);
     const params = new URLSearchParams(searchParams.toString());
     params.set("period", next.toISOString().split("T")[0]);
-    router.replace(`${pathname}?${params.toString()}`);
+    replaceQuery(params);
   }
 
   const periodStart = anchor.toISOString();

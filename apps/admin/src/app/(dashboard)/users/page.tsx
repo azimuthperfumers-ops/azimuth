@@ -32,10 +32,14 @@ export default function UsersPage() {
 
   const search = searchParams.get("q") ?? "";
 
+  // History API, not router.replace — see the note in orders/page.tsx: after a
+  // hard load of /users?q=…, replace() to the same route is dropped and the box
+  // freezes mid-word.
   function setSearch(v: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (v) params.set("q", v); else params.delete("q");
-    router.replace(`${pathname}?${params.toString()}`);
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
   }
 
   const { data, isLoading } = trpc.adminUser.list.useQuery({
