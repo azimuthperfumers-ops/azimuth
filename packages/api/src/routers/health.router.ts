@@ -2,20 +2,21 @@ import { sql } from "drizzle-orm";
 import { publicProcedure, router } from "../trpc";
 import { adminProcedure } from "../middleware/auth.middleware";
 import { getRedis } from "../lib/redis";
+import { readWorkerHeartbeats } from "@azimuth/redis";
 import { orderQueue } from "../lib/order-queue";
-import { env } from "../env";
 
-async function pingWorker(): Promise<{ ok: boolean; uptimeSeconds?: number; error?: string }> {
-  const url = env.WORKER_URL;
-  if (!url) return { ok: false, error: "WORKER_URL not configured" };
-  try {
-    const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
-    const body = await res.json() as { uptime?: number };
-    return { ok: true, uptimeSeconds: body.uptime !== undefined ? Math.floor(body.uptime) : undefined };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
+// The worker container has no HTTP route the server can reach, so its liveness
+// comes from the heartbeat it writes to the shared Redis (see @azimuth/redis).
+async function pingWorker(): Promise<{
+  ok: boolean;
+  uptimeSeconds?: number;
+  instances?: number;
+  error?: string;
+}> {
+  const { ok, live, error } = await readWorkerHeartbeats();
+  if (!ok) return { ok: false, instances: 0, error: error ?? "worker unreachable" };
+  const oldest = live.reduce((a, b) => (a.uptimeSeconds > b.uptimeSeconds ? a : b));
+  return { ok: true, uptimeSeconds: oldest.uptimeSeconds, instances: live.length };
 }
 
 export const healthRouter = router({
@@ -43,8 +44,13 @@ export const healthRouter = router({
     const redis = redisR.status === "fulfilled" ? { ok: redisR.value.ok, error: null } : { ok: false, error: errStr(redisR) };
     const queue = queueR.status === "fulfilled" ? { ok: queueR.value.ok, error: null } : { ok: false, error: errStr(queueR) };
     const worker = workerR.status === "fulfilled"
-      ? { ok: workerR.value.ok, error: workerR.value.error ?? null, uptimeSeconds: workerR.value.uptimeSeconds }
-      : { ok: false, error: errStr(workerR), uptimeSeconds: undefined };
+      ? {
+          ok: workerR.value.ok,
+          error: workerR.value.error ?? null,
+          uptimeSeconds: workerR.value.uptimeSeconds,
+          instances: workerR.value.instances,
+        }
+      : { ok: false, error: errStr(workerR), uptimeSeconds: undefined, instances: undefined };
 
     const mem = process.memoryUsage();
 

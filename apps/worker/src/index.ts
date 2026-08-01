@@ -2,6 +2,7 @@ import "dotenv/config";
 import http from "node:http";
 import { assertCriticalEnv } from "@azimuth/api";
 import { scheduleExpirePendingPayments, startOrderWorker } from "@azimuth/queue";
+import { startWorkerHeartbeat } from "@azimuth/redis";
 
 // The worker books shipments and moves money — never start it half-configured.
 assertCriticalEnv();
@@ -19,6 +20,12 @@ const server = http.createServer((_req, res) => {
   res.end(JSON.stringify({ status: "ok", uptime: process.uptime() }));
 });
 server.listen(PORT, () => console.log(`[worker] health server on :${PORT}`));
+
+// Liveness for the admin System Health panel. The server can't reach this
+// container over HTTP, so report through the Redis both processes already share.
+// Same dead-man's-switch semantics as the Healthchecks.io ping below: if the
+// queue worker stops consuming, the heartbeat reports not-running.
+const stopHeartbeat = startWorkerHeartbeat({ isRunning: () => worker.isRunning() });
 
 console.log("[worker] Order worker started");
 
@@ -46,6 +53,7 @@ if (HEALTHCHECK_URL) {
 async function shutdown(signal: string) {
   console.log(`[worker] ${signal} received — draining and closing`);
   if (heartbeat) clearInterval(heartbeat);
+  await stopHeartbeat();
   await worker.close();
   server.close();
   console.log("[worker] Shutdown complete");

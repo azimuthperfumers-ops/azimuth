@@ -17,6 +17,7 @@ type CheckResult = {
   error?: string | null;
   uptimeSeconds?: number;
   memoryMb?: number;
+  instances?: number;
 };
 
 type HealthData = {
@@ -56,6 +57,7 @@ function HealthRow({ label, result }: { label: string; result: CheckResult }) {
           <p className="text-[11px] text-muted-foreground">
             Uptime: {Math.floor(result.uptimeSeconds / 3600)}h {Math.floor((result.uptimeSeconds % 3600) / 60)}m
             {result.memoryMb !== undefined && ` · RSS: ${result.memoryMb} MB`}
+            {result.instances !== undefined && result.instances > 1 && ` · ${result.instances} instances`}
           </p>
         )}
       </div>

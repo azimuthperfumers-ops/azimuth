@@ -27,3 +27,32 @@ export function getRedis(): Redis {
   }
   return _client;
 }
+
+/**
+ * getRedis() is lazyConnect with the offline queue disabled, so commands issued
+ * before the socket is up reject outright. Await this first where that matters
+ * (health probes, heartbeats) — callers that can silently degrade needn't.
+ */
+export async function ensureRedis(timeoutMs = 3000): Promise<Redis> {
+  const client = getRedis();
+  // read through a function so TS doesn't narrow away the status across awaits
+  const isReady = () => (client.status as string) === "ready";
+  if (isReady()) return client;
+  if ((client.status as string) === "wait") {
+    // connect() rejects if another caller already started it — the wait below covers us
+    await client.connect().catch(() => undefined);
+  }
+  if (isReady()) return client;
+
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      client.off("ready", done);
+      resolve();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    timer.unref?.();
+    client.once("ready", done);
+  });
+  return client;
+}

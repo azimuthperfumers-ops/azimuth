@@ -2,7 +2,9 @@ export default {
   async scheduled(_event, env, _ctx) {
     const targets = [
       { name: "server", url: env.SERVER_URL + "/health" },
-      { name: "worker", url: env.WORKER_URL + "/health" },
+      // The worker has no public hostname — Caddy proxies its health server
+      // under the API domain, so ping that route rather than a worker.* host.
+      { name: "worker", url: env.SERVER_URL + "/worker-health" },
     ];
 
     await Promise.all(

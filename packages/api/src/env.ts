@@ -24,8 +24,6 @@ const schema = z.object({
   SHIPROCKET_WAREHOUSE_STATE: z.string().optional(),
   SHIPROCKET_WAREHOUSE_ADDRESS: z.string().optional(),
   SHIPROCKET_LOCATION_ID: z.string().optional(),
-  // Worker service
-  WORKER_URL: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);
