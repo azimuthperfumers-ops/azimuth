@@ -7,6 +7,10 @@ import { tickets } from "./support";
 export const jobTypeEnum = pgEnum("job_type", [
   "book_shipment",
   "cancel_shipment",
+  // Recall of a single parcel's AWB, queued when that parcel is detached from
+  // Shiprocket for self-fulfilment. Separate from cancel_shipment, which recalls
+  // every parcel on the order and cancels the order with it.
+  "cancel_parcel",
   "initiate_refund",
   "return_shipment",
   "exchange_shipment",

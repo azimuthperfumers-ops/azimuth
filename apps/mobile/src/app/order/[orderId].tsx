@@ -92,7 +92,9 @@ export default function OrderDetailScreen() {
     ?? (order as { waybill?: string | null }).waybill;
   // Only parcels already handed to a courier can be tracked. Orders placed before
   // per-parcel shipping have none — those fall back to the order-level waybill.
-  const trackedPackages = (order.shipments ?? []).filter((s) => s.waybill);
+  const trackedPackages = (order.shipments ?? []).filter(
+    (s) => s.waybill || s.fulfillmentChannel === "manual",
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-[#F5F0E7]" edges={["bottom"]}>
@@ -192,22 +194,32 @@ export default function OrderDetailScreen() {
               </Text>
             )}
 
-            {trackedPackages.map((pkg, i) => (
-              <View key={pkg.id} className={i > 0 ? "mt-4 pt-4 border-t border-[#E3DDD1]" : ""}>
-                {trackedPackages.length > 1 && (
-                  <Text className="text-[11px] font-semibold text-[#57493A] mb-1">
-                    Package {pkg.packageNumber} · {pkg.productName} {pkg.sizeMl}ml
+            {trackedPackages.map((pkg, i) => {
+              // A package we ship ourselves (when the courier couldn't move it)
+              // has no waybill — its consignment number belongs to that carrier.
+              const selfShipped = pkg.fulfillmentChannel === "manual";
+              return (
+                <View key={pkg.id} className={i > 0 ? "mt-4 pt-4 border-t border-[#E3DDD1]" : ""}>
+                  {trackedPackages.length > 1 && (
+                    <Text className="text-[11px] font-semibold text-[#57493A] mb-1">
+                      Package {pkg.packageNumber} · {pkg.productName} {pkg.sizeMl}ml
+                    </Text>
+                  )}
+                  <Text className="text-[15px] font-semibold text-[#1B1611] tracking-widest">
+                    {(selfShipped ? pkg.manualTrackingNumber : pkg.waybill) ?? "Assigned on dispatch"}
                   </Text>
-                )}
-                <Text className="text-[15px] font-semibold text-[#1B1611] tracking-widest">
-                  {pkg.waybill}
-                </Text>
-                <Text className="text-[12px] text-[#57493A] mt-1">
-                  {PACKAGE_STATUS_LABEL[pkg.status] ?? "In progress"}
-                  {pkg.estimatedDeliveryDate ? ` · Expected ${pkg.estimatedDeliveryDate}` : ""}
-                </Text>
-              </View>
-            ))}
+                  {selfShipped && pkg.manualCourierName ? (
+                    <Text className="text-[12px] text-[#57493A] mt-1">
+                      Shipped via {pkg.manualCourierName}
+                    </Text>
+                  ) : null}
+                  <Text className="text-[12px] text-[#57493A] mt-1">
+                    {PACKAGE_STATUS_LABEL[pkg.status] ?? "In progress"}
+                    {pkg.estimatedDeliveryDate ? ` · Expected ${pkg.estimatedDeliveryDate}` : ""}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
         ) : (
           waybill && (

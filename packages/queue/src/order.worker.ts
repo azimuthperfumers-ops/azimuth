@@ -24,6 +24,7 @@ import type {
   BookShipmentJob,
   InitiateRefundJob,
   CancelShipmentJob,
+  CancelParcelJob,
 } from "./order.queue.js";
 
 // ── DB job tracking helpers ───────────────────────────────────────────────────
@@ -399,7 +400,11 @@ async function processBookShipment(data: BookShipmentJob) {
 
   // Everything already has an AWB — a duplicate job or a post-success retry.
   // Return without touching the order, so re-runs don't pad the audit trail.
-  const pending = shipments.filter((s) => !s.waybill && s.status !== "cancelled");
+  // A self-shipped parcel has no AWB and never will: it left Shiprocket on
+  // purpose, and re-booking it would put the same goods on two couriers.
+  const pending = shipments.filter(
+    (s) => !s.waybill && s.status !== "cancelled" && s.fulfillmentChannel !== "manual",
+  );
   if (pending.length === 0) {
     console.log(`[order-worker] Order ${order.orderNumber} already fully booked (${shipments.length} parcel(s)), skipping`);
     return { packageCount: shipments.length, waybills: shipments.map((s) => s.waybill).filter(Boolean) };
@@ -427,6 +432,7 @@ async function processBookShipment(data: BookShipmentJob) {
       continue;
     }
     if (shipment.status === "cancelled") continue;
+    if (shipment.fulfillmentChannel === "manual") continue; // we're carrying this one
 
     // Shiprocket keys orders by order_id and rejects duplicates, so each parcel
     // needs its own reference off the order number.
@@ -707,6 +713,75 @@ async function processCancelShipment(data: CancelShipmentJob) {
   return { cancelled };
 }
 
+/**
+ * Recall one parcel's AWB at Shiprocket after an admin detached it to ship the
+ * goods themselves. Deliberately narrow: it touches no order status and no other
+ * parcel — the order is still being fulfilled, just not by Shiprocket.
+ *
+ * Queued rather than done inline because Shiprocket being slow or down is the
+ * usual reason for detaching in the first place; the retry is the point. A
+ * Shiprocket-side "already cancelled" counts as success — the goal is that the
+ * AWB isn't live, not that we were the one to kill it.
+ */
+async function processCancelParcel(data: CancelParcelJob) {
+  const { orderId, shipmentId, waybill } = data;
+
+  const parcel = await db.query.orderShipments.findFirst({
+    where: eq(schema.orderShipments.id, shipmentId),
+  });
+  if (!parcel) {
+    throw new UnrecoverableError(`cancel_parcel: package ${shipmentId} not found`);
+  }
+  if (parcel.fulfillmentChannel !== "manual" || parcel.detachedWaybill !== waybill) {
+    // Re-attached, or detached again with a different AWB since this job was
+    // queued — recalling now would cancel a shipment someone is relying on.
+    console.log(
+      `[order-worker] cancel_parcel: package ${shipmentId} no longer detached at AWB ${waybill} — skipping`,
+    );
+    return { skipped: true };
+  }
+  if (parcel.courierCancelState === "cancelled") {
+    return { alreadyCancelled: true };
+  }
+
+  const logistics = createLogisticsService();
+  const result = await logistics.cancelShipment(waybill);
+
+  // "Already cancelled" is the outcome we wanted, so it must not retry forever.
+  // Matched narrowly on purpose: a plain "cancel" substring would also swallow
+  // "cancellation failed", marking a still-live AWB as recalled.
+  const alreadyDead = /already\s+cancell?ed|cancell?ed\s+already/i.test(result.message ?? "");
+  const success = result.cancelled || alreadyDead;
+
+  await db
+    .update(schema.orderShipments)
+    .set({
+      courierCancelState: success ? "cancelled" : "failed",
+      courierCancelNote: result.message ?? (success ? "Cancelled at Shiprocket" : "Shiprocket refused the cancellation"),
+    })
+    .where(eq(schema.orderShipments.id, shipmentId));
+
+  await db.insert(schema.orderShipmentEvents).values({
+    shipmentId,
+    orderId,
+    fromStatus: parcel.status,
+    toStatus: parcel.status,
+    note: success
+      ? `Shiprocket AWB ${waybill} recalled${result.message ? ` · ${result.message}` : ""}`
+      : `Shiprocket AWB ${waybill} recall FAILED · ${result.message ?? "unknown"}`,
+    actorId: "worker:order",
+  });
+
+  if (!success) {
+    // Retryable: the AWB is still live at Shiprocket and a courier could still
+    // pick it up, which is exactly the double-shipment we're trying to prevent.
+    throw new Error(`cancel_parcel: Shiprocket did not cancel AWB ${waybill}: ${result.message ?? "unknown"}`);
+  }
+
+  console.log(`[order-worker] cancel_parcel: AWB ${waybill} recalled for package ${shipmentId}`);
+  return { waybill, cancelled: true };
+}
+
 // ── Worker ────────────────────────────────────────────────────────────────────
 
 export function startOrderWorker() {
@@ -724,6 +799,8 @@ export function startOrderWorker() {
         return await processInitiateRefund(data);
       } else if (data.type === "cancel_shipment") {
         return await processCancelShipment(data);
+      } else if (data.type === "cancel_parcel") {
+        return await processCancelParcel(data);
       } else if (data.type === "expire_pending_payments") {
         return await processExpirePendingPayments();
       }

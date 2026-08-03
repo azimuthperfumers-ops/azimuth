@@ -154,9 +154,14 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
 
   const isComplete = TERMINAL_STATUSES.includes(order.status);
 
-  // Only parcels that are actually on their way have something to track. Orders
-  // placed before per-parcel shipping fall back to the single order waybill below.
-  const trackedPackages = (order.shipments ?? []).filter((s) => s.waybill);
+  // Only parcels that are actually on their way have something to track. A parcel
+  // we ship ourselves (when the courier couldn't move it) carries no AWB — its
+  // consignment number belongs to whoever is carrying it instead, and it must
+  // still appear here or the customer sees an order with no shipment at all.
+  // Orders placed before per-parcel shipping fall back to the single order waybill.
+  const trackedPackages = (order.shipments ?? []).filter(
+    (s) => s.waybill || s.fulfillmentChannel === "manual",
+  );
 
   return (
     <>
@@ -208,23 +213,39 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
               )}
 
               <div className="border border-border divide-y divide-border">
-                {trackedPackages.map((pkg) => (
+                {trackedPackages.map((pkg) => {
+                  // Shipped by us rather than through the courier integration: the
+                  // number to quote is the consignment number, and the tracking
+                  // link only exists if that carrier has one.
+                  const selfShipped = pkg.fulfillmentChannel === "manual";
+                  const trackingNumber = selfShipped ? pkg.manualTrackingNumber : pkg.waybill;
+                  const trackingHref = selfShipped ? pkg.manualTrackingUrl : pkg.trackingUrl;
+
+                  return (
                   <div key={pkg.id} className="p-4 flex flex-col gap-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.1em] font-semibold">
-                          {trackedPackages.length > 1 ? `Package ${pkg.packageNumber} · ` : ""}Waybill
+                          {trackedPackages.length > 1 ? `Package ${pkg.packageNumber} · ` : ""}
+                          {selfShipped ? "Tracking number" : "Waybill"}
                         </p>
-                        <p className="font-mono text-sm font-semibold mt-0.5">{pkg.waybill}</p>
+                        <p className="font-mono text-sm font-semibold mt-0.5">
+                          {trackingNumber ?? "Assigned on dispatch"}
+                        </p>
+                        {selfShipped && pkg.manualCourierName && (
+                          <p className="text-[12px] text-muted-foreground mt-1">
+                            Shipped via {pkg.manualCourierName}
+                          </p>
+                        )}
                         {trackedPackages.length > 1 && (
                           <p className="text-[12px] text-muted-foreground mt-1">
                             {pkg.productName} · {pkg.sizeMl}ml
                           </p>
                         )}
                       </div>
-                      {pkg.trackingUrl && (
+                      {trackingHref && (
                         <a
-                          href={pkg.trackingUrl}
+                          href={trackingHref}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 border border-foreground px-4 py-2 text-[10.5px] font-semibold tracking-[0.14em] uppercase hover:bg-foreground hover:text-background transition-all shrink-0"
@@ -252,7 +273,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           ) : (

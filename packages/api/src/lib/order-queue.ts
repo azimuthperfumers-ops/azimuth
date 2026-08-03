@@ -3,8 +3,10 @@ import { Queue } from "bullmq";
 export type BookShipmentJob = { type: "book_shipment"; dbJobId?: string; orderId: string };
 export type InitiateRefundJob = { type: "initiate_refund"; dbJobId?: string; orderId: string; razorpayPaymentId: string; amountPaise: number; reason: string };
 export type CancelShipmentJob = { type: "cancel_shipment"; dbJobId?: string; orderId: string; waybill: string };
+/** Recall one parcel's AWB after it was detached from Shiprocket for self-fulfilment. */
+export type CancelParcelJob = { type: "cancel_parcel"; dbJobId?: string; orderId: string; shipmentId: string; waybill: string };
 
-export type OrderJobPayload = BookShipmentJob | InitiateRefundJob | CancelShipmentJob;
+export type OrderJobPayload = BookShipmentJob | InitiateRefundJob | CancelShipmentJob | CancelParcelJob;
 
 function redisOpts() {
   const url = process.env.REDIS_URL ?? "redis://localhost:6379";

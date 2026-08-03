@@ -9,8 +9,10 @@ import {
   ArrowLeft,
   ArrowRight,
   MapPin,
+  PackageCheck,
   RefreshCw,
   RotateCcw,
+  Truck,
   User as UserIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -45,6 +47,11 @@ import {
   shipmentStatusBadge,
   shipmentStatusLabel,
 } from "@/lib/order-status";
+import {
+  SelfFulfilDialog,
+  selfFulfilCandidates,
+  type SelfFulfilPackage,
+} from "./self-fulfil-dialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -286,6 +293,7 @@ export default function AdminOrderDetailPage({
 }) {
   const { orderId } = use(params);
   const [statusDialog, setStatusDialog] = useState(false);
+  const [selfFulfilDialog, setSelfFulfilDialog] = useState(false);
   const [refundDialog, setRefundDialog] = useState(false);
   const [waiveDialog, setWaiveDialog] = useState(false);
   const [waiveReason, setWaiveReason] = useState("");
@@ -355,6 +363,19 @@ export default function AdminOrderDetailPage({
     onError: (err) => toast.error(err.message),
   });
 
+  // Self-shipped parcels have no courier pushing events at us, so their status is
+  // walked forward by hand — one button per parcel, spinner scoped to that parcel.
+  const [movingParcelId, setMovingParcelId] = useState<string | null>(null);
+  const moveParcel = trpc.order.updateParcelStatus.useMutation({
+    onMutate: (vars) => setMovingParcelId(vars.shipmentId),
+    onSuccess: async (res) => {
+      await utils.order.adminGet.invalidate({ orderId });
+      toast.success(`Package updated — order is now ${res.orderStatus.replace(/_/g, " ")}`);
+    },
+    onError: (err) => toast.error(err.message),
+    onSettled: () => setMovingParcelId(null),
+  });
+
   const reconcile = trpc.order.reconcileShiprocket.useMutation({
     onSuccess: async (res) => {
       await utils.order.adminGet.invalidate({ orderId });
@@ -400,18 +421,47 @@ export default function AdminOrderDetailPage({
   // Detect incomplete shipment booking. An order ships as one parcel per unit and
   // booking can succeed for some and fail for others, so the order-level waybill
   // being set no longer means the order is fully booked — check every parcel.
+  // A self-shipped parcel has no AWB on purpose and is not waiting on anything.
   const unbookedPackages = (order.shipments ?? []).filter(
-    (s) => !s.waybill && s.status !== "cancelled",
+    (s) => !s.waybill && s.status !== "cancelled" && s.fulfillmentChannel !== "manual",
   );
 
   // Booking state at a glance — "processing" alone doesn't say whether the parcels
-  // are booked, so we surface a per-package summary near the status.
+  // are booked, so we surface a per-package summary near the status. "Booked"
+  // here means "has a carrier": a Shiprocket AWB, or us.
   const activePackages = (order.shipments ?? []).filter((s) => s.status !== "cancelled");
-  const bookedPackages = activePackages.filter((s) => s.waybill);
+  const bookedPackages = activePackages.filter(
+    (s) => s.waybill || s.fulfillmentChannel === "manual",
+  );
   const fullyBooked = activePackages.length > 0 && bookedPackages.length === activePackages.length;
   const needsShipmentRetry =
     order.status === "processing" &&
-    (order.shipments && order.shipments.length > 0 ? unbookedPackages.length > 0 : !order.waybill);
+    (order.shipments && order.shipments.length > 0
+      ? unbookedPackages.length > 0
+      : !order.waybill);
+
+  // Packages we're carrying ourselves, and whether Shiprocket still owns any part
+  // of this order — the Sync button is meaningless once it doesn't.
+  const selfShipped = (order.shipments ?? []).filter((s) => s.fulfillmentChannel === "manual");
+  const shiprocketPackages = (order.shipments ?? []).filter(
+    (s) => s.fulfillmentChannel !== "manual",
+  );
+  const hasShiprocketTracking =
+    shiprocketPackages.some((s) => s.waybill) || (selfShipped.length === 0 && !!order.waybill);
+
+  // Offered whenever there's still something to ship — including on a cancelled
+  // order, which is exactly the case this exists for: Shiprocket cancelled it, the
+  // goods went out by post, and the order needs rescuing.
+  const selfFulfilPackages = selfFulfilCandidates(
+    (order.shipments ?? []) as unknown as SelfFulfilPackage[],
+  );
+  const canSelfFulfil =
+    canOrders &&
+    selfFulfilPackages.length > 0 &&
+    !order.refundMethod &&
+    !["delivered", "refund_processing", "refunded", "pending_payment", "payment_failed"].includes(
+      order.status,
+    );
 
   const bookingErrorEntry = needsShipmentRetry
     ? timeline.find(
@@ -421,6 +471,114 @@ export default function AdminOrderDetailPage({
           h.note.includes("booking failed"),
       )
     : undefined;
+
+  // ── Header actions ──────────────────────────────────────────────────────────
+  // Built as two lists rather than inlined, so the JSX below stays a layout and
+  // the "is this action available right now" logic reads in one place. `ATTENTION`
+  // is reserved for the single action the order is blocked on — spending colour on
+  // every button is what made the old row unreadable.
+  const ATTENTION = "border-orange-400 text-orange-700 hover:bg-orange-50 dark:text-orange-300";
+
+  const fulfilmentActions: React.ReactNode[] = [];
+  if (canOrders && needsShipmentRetry) {
+    fulfilmentActions.push(
+      <Button
+        key="retry"
+        size="sm"
+        variant="outline"
+        onClick={() => retryBooking.mutate({ orderId })}
+        disabled={retryBooking.isPending}
+        className={ATTENTION}
+      >
+        <RotateCcw className="size-3.5 mr-1.5" />
+        {retryBooking.isPending ? "Queueing…" : "Retry booking"}
+      </Button>,
+    );
+  }
+  if (canSelfFulfil) {
+    fulfilmentActions.push(
+      <Button
+        key="self-fulfil"
+        size="sm"
+        variant="outline"
+        onClick={() => setSelfFulfilDialog(true)}
+        title="Take this order off Shiprocket and ship it yourself"
+      >
+        <Truck className="size-3.5 mr-1.5" />
+        Ship it myself
+      </Button>,
+    );
+  }
+  if (canOrders && hasShiprocketTracking) {
+    fulfilmentActions.push(
+      <Button
+        key="sync"
+        size="sm"
+        variant="outline"
+        onClick={() => reconcile.mutate({ orderId })}
+        disabled={reconcile.isPending}
+        title="Pull the live status of every parcel from Shiprocket and update this order"
+      >
+        <RefreshCw className={`size-3.5 mr-1.5 ${reconcile.isPending ? "animate-spin" : ""}`} />
+        {reconcile.isPending ? "Syncing…" : "Sync Shiprocket"}
+      </Button>,
+    );
+  }
+
+  const moneyActions: React.ReactNode[] = [];
+  if (canPay && (order.status === "pending_payment" || order.status === "payment_failed")) {
+    moneyActions.push(
+      <Button
+        key="mark-paid"
+        size="sm"
+        variant="outline"
+        className={ATTENTION}
+        onClick={() => markPaid.mutate({ orderId })}
+        disabled={markPaid.isPending}
+      >
+        {markPaid.isPending ? "Processing…" : "Mark as paid"}
+      </Button>,
+    );
+  }
+  // Wallet-paid orders have no razorpayPaymentId but are still refundable (to wallet).
+  // Cancelled orders ARE refundable (courier cancellations move here and leave the
+  // refund as a manual decision) — we only hide the button once a refund exists.
+  if (
+    canPay &&
+    (order.razorpayPaymentId || order.paymentMethod === "wallet") &&
+    !order.refundMethod &&
+    !["refund_processing", "refunded", "pending_payment", "payment_failed"].includes(order.status)
+  ) {
+    moneyActions.push(
+      <Button
+        key="refund"
+        size="sm"
+        variant="outline"
+        className={isRefundDue(order) ? "border-red-400 text-red-700 hover:bg-red-50 dark:text-red-300" : undefined}
+        onClick={() => {
+          setRefundDest(order.paymentMethod === "wallet" ? "wallet" : "razorpay");
+          setRefundDialog(true);
+        }}
+      >
+        Issue refund
+      </Button>,
+    );
+  }
+  // The other half of the decision: this order owes nothing. Without it a
+  // reshipped or externally-settled order sits in "Refund due" forever.
+  if (canPay && isRefundDue(order)) {
+    moneyActions.push(
+      <Button
+        key="waive"
+        size="sm"
+        variant="outline"
+        onClick={() => setWaiveDialog(true)}
+        title="Clear this order from the Refund due queue without moving money"
+      >
+        No refund needed
+      </Button>,
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -448,76 +606,13 @@ export default function AdminOrderDetailPage({
               })}
             </p>
           </div>
+          {/* State and the one primary verb. Every other action lives in the bar
+              below — a header that ends in six competing buttons stops reading as
+              a hierarchy and becomes a wall. */}
           <div className="flex flex-wrap items-center gap-3">
             <Badge variant="outline" className={displayOrderStatus(order).badge}>
               {displayOrderStatus(order).label}
             </Badge>
-            {canOrders && needsShipmentRetry && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => retryBooking.mutate({ orderId })}
-                disabled={retryBooking.isPending}
-                className="border-orange-400 text-orange-700 hover:bg-orange-50"
-              >
-                <RotateCcw className="size-3.5 mr-1.5" />
-                {retryBooking.isPending ? "Queueing…" : "Retry shipment booking"}
-              </Button>
-            )}
-            {canPay && (order.status === "pending_payment" || order.status === "payment_failed") && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-green-500 text-green-700 hover:bg-green-50"
-                onClick={() => markPaid.mutate({ orderId })}
-                disabled={markPaid.isPending}
-              >
-                {markPaid.isPending ? "Processing…" : "Mark as paid"}
-              </Button>
-            )}
-            {/* Wallet-paid orders have no razorpayPaymentId but are still refundable (to wallet).
-                Cancelled orders ARE refundable (courier cancellations move here and leave the
-                refund as a manual decision) — we only hide the button once a refund exists. */}
-            {canPay &&
-              (order.razorpayPaymentId || order.paymentMethod === "wallet") &&
-              !order.refundMethod &&
-              !["refund_processing", "refunded", "pending_payment", "payment_failed"].includes(order.status) && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-red-400 text-red-700 hover:bg-red-50"
-                onClick={() => {
-                  setRefundDest(order.paymentMethod === "wallet" ? "wallet" : "razorpay");
-                  setRefundDialog(true);
-                }}
-              >
-                {order.status === "cancelled" ? "Issue refund (pending)" : "Issue refund"}
-              </Button>
-            )}
-            {/* The other half of the decision: this order owes nothing. Without it
-                a reshipped or externally-settled order sits in "Refund due" forever. */}
-            {canPay && isRefundDue(order) && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setWaiveDialog(true)}
-                title="Clear this order from the Refund due queue without moving money"
-              >
-                No refund needed
-              </Button>
-            )}
-            {canOrders && (order.shipments?.some((s) => s.waybill) || order.waybill) && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => reconcile.mutate({ orderId })}
-                disabled={reconcile.isPending}
-                title="Pull the live status of every parcel from Shiprocket and update this order"
-              >
-                <RefreshCw className={`size-3.5 mr-1.5 ${reconcile.isPending ? "animate-spin" : ""}`} />
-                {reconcile.isPending ? "Syncing…" : "Sync with Shiprocket"}
-              </Button>
-            )}
             {canOrders && (
               <Button size="sm" onClick={() => setStatusDialog(true)}>
                 Update status
@@ -526,10 +621,41 @@ export default function AdminOrderDetailPage({
           </div>
         </div>
 
+        {/* ── Actions ────────────────────────────────────────────────────────
+            Grouped by what they touch — the parcels, or the money — because
+            that's the distinction that matters when you're deciding under
+            pressure. Uniformly quiet: only the action the order is actually
+            waiting on gets colour, so it's the thing your eye lands on. */}
+        {(fulfilmentActions.length > 0 || moneyActions.length > 0) && (
+          <div className="mt-5 flex flex-col gap-3 border border-border p-3 sm:flex-row sm:items-center sm:gap-5">
+            {fulfilmentActions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-muted-foreground/40">
+                  Shipping
+                </span>
+                {fulfilmentActions}
+              </div>
+            )}
+
+            {fulfilmentActions.length > 0 && moneyActions.length > 0 && (
+              <span className="hidden h-5 w-px shrink-0 bg-border sm:block" />
+            )}
+
+            {moneyActions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-muted-foreground/40">
+                  Money
+                </span>
+                {moneyActions}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Booking summary — "processing" doesn't reveal booking state; show it here */}
         {activePackages.length > 0 && (
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-muted-foreground/50 mr-1">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-muted-foreground/40">
               Fulfilment
             </span>
             <span
@@ -543,19 +669,37 @@ export default function AdminOrderDetailPage({
                 ? `All ${activePackages.length} package${activePackages.length > 1 ? "s" : ""} booked`
                 : `${bookedPackages.length}/${activePackages.length} packages booked`}
             </span>
-            {activePackages.map((s) => (
-              <span
-                key={s.id}
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${
-                  s.waybill
-                    ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-                    : "bg-orange-50 text-orange-700 ring-1 ring-orange-200"
-                }`}
-                title={s.waybill ? `AWB ${s.waybill}` : "Not booked yet"}
-              >
-                P{s.packageNumber} {s.waybill ? "✓ booked" : "· not booked"}
+            {selfShipped.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-900">
+                <Truck className="size-3" />
+                {selfShipped.length} self-shipped
               </span>
-            ))}
+            )}
+            {activePackages.map((s) => {
+              const manual = s.fulfillmentChannel === "manual";
+              const carried = manual || !!s.waybill;
+              return (
+                <span
+                  key={s.id}
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${
+                    manual
+                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-900"
+                      : carried
+                        ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                        : "bg-orange-50 text-orange-700 ring-1 ring-orange-200"
+                  }`}
+                  title={
+                    manual
+                      ? `Self-shipped via ${s.manualCourierName ?? "own courier"}`
+                      : s.waybill
+                        ? `AWB ${s.waybill}`
+                        : "Not booked yet"
+                  }
+                >
+                  P{s.packageNumber} {manual ? "· self-shipped" : s.waybill ? "✓ booked" : "· not booked"}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>
@@ -792,6 +936,86 @@ export default function AdminOrderDetailPage({
                       </span>
                     </div>
 
+                    {/* Self-shipped: everything Shiprocket would have told us has to
+                        come from the admin instead, so the card shows what we're
+                        carrying it with and offers the next step by hand. */}
+                    {pkg.fulfillmentChannel === "manual" && (
+                      <div className="space-y-2 rounded border border-indigo-200 bg-indigo-50/60 p-2.5 dark:border-indigo-900 dark:bg-indigo-950/30">
+                        <p className="flex items-center gap-1.5 font-semibold text-indigo-800 dark:text-indigo-300">
+                          <Truck className="size-3.5" />
+                          Self-shipped — not on Shiprocket
+                        </p>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground shrink-0">Courier</span>
+                          <span className="text-right">{pkg.manualCourierName ?? "—"}</span>
+                        </div>
+                        {pkg.manualTrackingNumber && (
+                          <div className="flex justify-between gap-2">
+                            <span className="text-muted-foreground shrink-0">Tracking no.</span>
+                            <span className="font-mono">{pkg.manualTrackingNumber}</span>
+                          </div>
+                        )}
+                        {pkg.detachedWaybill && (
+                          <div className="flex justify-between gap-2">
+                            <span className="text-muted-foreground shrink-0">Old AWB</span>
+                            <span className="font-mono line-through text-muted-foreground/70">
+                              {pkg.detachedWaybill}
+                            </span>
+                          </div>
+                        )}
+                        {/* Whether the dead AWB was actually recalled decides if a
+                            courier could still turn up for this box. */}
+                        {pkg.courierCancelState !== "not_requested" && (
+                          <div className="flex justify-between gap-2">
+                            <span className="text-muted-foreground shrink-0">Shiprocket recall</span>
+                            <span
+                              className={
+                                pkg.courierCancelState === "cancelled"
+                                  ? "text-emerald-700 dark:text-emerald-400"
+                                  : pkg.courierCancelState === "failed"
+                                    ? "text-destructive"
+                                    : "text-amber-700 dark:text-amber-400"
+                              }
+                            >
+                              {pkg.courierCancelState === "cancelled"
+                                ? "Cancelled ✓"
+                                : pkg.courierCancelState === "failed"
+                                  ? "Failed — check Job Queue"
+                                  : "Queued…"}
+                            </span>
+                          </div>
+                        )}
+                        {pkg.courierCancelNote && pkg.courierCancelState === "failed" && (
+                          <p className="text-destructive break-words">{pkg.courierCancelNote}</p>
+                        )}
+                        {pkg.detachReason && (
+                          <p className="text-muted-foreground/70 italic break-words">{pkg.detachReason}</p>
+                        )}
+
+                        {canOrders && pkg.status !== "delivered" && (
+                          <div className="flex flex-wrap gap-1.5 pt-0.5">
+                            {(["in_transit", "out_for_delivery", "delivered"] as const)
+                              .filter((s) => s !== pkg.status)
+                              .map((s) => (
+                                <Button
+                                  key={s}
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-[11px]"
+                                  disabled={movingParcelId === pkg.id}
+                                  onClick={() =>
+                                    moveParcel.mutate({ shipmentId: pkg.id, status: s })
+                                  }
+                                >
+                                  {s === "delivered" && <PackageCheck className="size-3 mr-1" />}
+                                  Mark {shipmentStatusLabel(s).toLowerCase()}
+                                </Button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Each booked parcel prints its own label to paste on that box. */}
                     {canOrders && pkg.waybill && pkg.status !== "cancelled" && (
                       <Button
@@ -812,15 +1036,17 @@ export default function AdminOrderDetailPage({
                       </span>
                     </div>
 
-                    {pkg.waybill ? (
+                    {/* A self-shipped parcel has no AWB by design — its carrier and
+                        tracking number are in the panel above, so saying "not booked"
+                        here would read as a failure it isn't. */}
+                    {pkg.fulfillmentChannel !== "manual" && (
                       <div className="flex justify-between gap-2">
                         <span className="text-muted-foreground shrink-0">AWB</span>
-                        <span className="font-mono">{pkg.waybill}</span>
-                      </div>
-                    ) : (
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted-foreground shrink-0">AWB</span>
-                        <span className="text-destructive">not booked</span>
+                        {pkg.waybill ? (
+                          <span className="font-mono">{pkg.waybill}</span>
+                        ) : (
+                          <span className="text-destructive">not booked</span>
+                        )}
                       </div>
                     )}
 
@@ -954,6 +1180,15 @@ export default function AdminOrderDetailPage({
         hasPaid={!!order.razorpayPaymentId}
         open={statusDialog}
         onOpenChange={setStatusDialog}
+      />
+
+      <SelfFulfilDialog
+        orderId={order.id}
+        orderNumber={order.orderNumber}
+        orderStatus={order.status}
+        packages={selfFulfilPackages}
+        open={selfFulfilDialog}
+        onOpenChange={setSelfFulfilDialog}
       />
 
       <Dialog open={waiveDialog} onOpenChange={setWaiveDialog}>

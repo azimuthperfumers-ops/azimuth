@@ -346,19 +346,42 @@ type CustomerShipment = {
   errorMessage?: string | null;
   shippingCostActual?: string | null;
   shippingChargeQuoted?: string | null;
+  detachedWaybill?: string | null;
+  detachedBy?: string | null;
+  detachReason?: string | null;
+  courierCancelNote?: string | null;
 } & Record<string, unknown>;
 
-// Strips internal-only parcel fields: the raw courier failure text and what the
-// courier billed us (which is not what the customer paid). Generic so callers keep
-// the concrete parcel shape — clients read waybill/packageNumber off these rows.
+type InternalShipmentField =
+  | "errorMessage"
+  | "shippingCostActual"
+  | "detachedWaybill"
+  | "detachedBy"
+  | "detachReason"
+  | "courierCancelNote";
+
+// Strips internal-only parcel fields: the raw courier failure text, what the
+// courier billed us (which is not what the customer paid), and — for a parcel we
+// pulled off Shiprocket to ship ourselves — the dead AWB and the internal reason
+// for pulling it. What the customer keeps is the courier and tracking number they
+// can actually use. Generic so callers keep the concrete parcel shape — clients
+// read waybill/packageNumber off these rows.
 function toCustomerShipment<T extends CustomerShipment>(
   shipment: T,
-): Omit<T, "errorMessage" | "shippingCostActual"> {
-  const { errorMessage: _err, shippingCostActual: _cost, ...visible } = shipment;
+): Omit<T, InternalShipmentField> {
+  const {
+    errorMessage: _err,
+    shippingCostActual: _cost,
+    detachedWaybill: _awb,
+    detachedBy: _by,
+    detachReason: _why,
+    courierCancelNote: _note,
+    ...visible
+  } = shipment;
   return {
     ...visible,
     status: SHIPMENT_RTO_STATUSES.has(shipment.status) ? "cancelled" : shipment.status,
-  } as Omit<T, "errorMessage" | "shippingCostActual">;
+  } as Omit<T, InternalShipmentField>;
 }
 
 type OrderWithHistory = {

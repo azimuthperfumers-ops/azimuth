@@ -13,6 +13,8 @@ export type { ShipmentRow, ShipmentStatus } from "./repositories/shipment.reposi
 export { createWalletRepository } from "./repositories/wallet.repository";
 export { applyCourierStatus, reconcileOrderWithCourier } from "./services/shipment-sync.service";
 export type { CourierStatusUpdate, ApplyResult, ReconcileResult } from "./services/shipment-sync.service";
+export { selfFulfilOrder, setManualParcelStatus, MANUAL_PARCEL_STATUSES } from "./services/self-fulfilment.service";
+export type { SelfFulfilInput, SelfFulfilResult, ManualParcelStatus } from "./services/self-fulfilment.service";
 export { createRazorpayService } from "./services/razorpay.service";
 export type { IRazorpayService } from "./services/razorpay.service";
 export { createLogisticsService } from "./services/logistics.service";

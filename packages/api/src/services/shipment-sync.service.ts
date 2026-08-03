@@ -173,6 +173,22 @@ export async function applyCourierStatus(
     .filter(Boolean)
     .join(" · ");
 
+  // An AWB the admin deliberately pulled out of Shiprocket is dead to us: the
+  // parcel is in the post under our own courier. Shiprocket still emits events for
+  // it — the CANCELED that follows the recall above all — and acting on those
+  // would cancel an order that is genuinely on its way, show the customer
+  // "Cancelled" and put the order in the Refund due queue. Drop them here, before
+  // any lookup that could match the order another way.
+  const detached = await db.query.orderShipments.findFirst({
+    where: eq(schema.orderShipments.detachedWaybill, awb),
+  });
+  if (detached && detached.fulfillmentChannel === "manual") {
+    console.log(
+      `[shipment-sync] ignoring "${rawStatus}" for AWB=${awb} — package P${detached.packageNumber} was detached from Shiprocket and is being shipped by us`,
+    );
+    return { awb, matched: false, changed: false, message: "AWB detached — self-fulfilled package" };
+  }
+
   // The AWB identifies one parcel. Orders placed before per-parcel shipments
   // existed have no shipment row, so fall back to the order-level AWB.
   const shipment = await db.query.orderShipments.findFirst({
@@ -361,8 +377,10 @@ export async function reconcileOrderWithCourier(
   if (!order) throw new Error("Order not found");
 
   // Prefer per-parcel AWBs; fall back to the order-level AWB for legacy orders.
+  // Self-shipped parcels are skipped: Shiprocket no longer knows anything true
+  // about them, and their old AWB reads as CANCELED there.
   const awbs = order.shipments
-    .filter((s) => s.waybill && s.status !== "cancelled")
+    .filter((s) => s.waybill && s.status !== "cancelled" && s.fulfillmentChannel !== "manual")
     .map((s) => s.waybill!) as string[];
   if (awbs.length === 0 && order.waybill) awbs.push(order.waybill);
 

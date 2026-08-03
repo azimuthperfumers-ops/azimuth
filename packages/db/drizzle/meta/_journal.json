@@ -141,6 +141,13 @@
       "when": 1785605260151,
       "tag": "0019_wallets_for_every_user",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785767307671,
+      "tag": "0020_self_fulfilment",
+      "breakpoints": true
     }
   ]
 }

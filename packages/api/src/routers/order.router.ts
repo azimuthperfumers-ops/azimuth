@@ -16,6 +16,11 @@ import { createLogisticsService, quotePackages } from "../services/logistics.ser
 import { splitIntoPackages, type VariantDims } from "../services/packaging";
 import { getOrderContact, toOrderInfo } from "../services/order-notify";
 import { reconcileOrderWithCourier } from "../services/shipment-sync.service";
+import {
+  MANUAL_PARCEL_STATUSES,
+  selfFulfilOrder,
+  setManualParcelStatus,
+} from "../services/self-fulfilment.service";
 import { orderQueue } from "../lib/order-queue";
 import {
   advanceOrderStatus,
@@ -608,6 +613,77 @@ export const orderRouter = router({
       return result;
     }),
 
+  // ── Admin: take an order off Shiprocket and ship it ourselves ───────────────
+  // The escape hatch for a parcel Shiprocket won't move: unlink it, recall the
+  // AWB, record the courier we're actually using. Also the repair for an order a
+  // Shiprocket cancellation already marked cancelled + refund-due while the goods
+  // were on their way by post — re-deriving the status from the parcels lifts it
+  // back out of `cancelled`, which is what the customer sees and what the Refund
+  // due queue keys on.
+
+  selfFulfil: writeOrders
+    .input(
+      z.object({
+        orderId: z.string().uuid(),
+        courierName: z.string().trim().min(2, "Name the courier you are shipping with."),
+        reason: z
+          .string()
+          .trim()
+          .min(3, "A reason is required so the decision is traceable."),
+        parcels: z
+          .array(
+            z.object({
+              shipmentId: z.string().uuid(),
+              trackingNumber: z.string().trim().min(1).optional(),
+              trackingUrl: z.string().url().optional(),
+            }),
+          )
+          .min(1, "Select at least one package."),
+        cancelAtCourier: z.boolean().default(true),
+        markShipped: z.boolean().default(true),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await selfFulfilOrder(ctx.db, input, ctx.session.user.id);
+      } catch (err) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err instanceof Error ? err.message : "Could not switch this order to self-fulfilment",
+        });
+      }
+    }),
+
+  // ── Admin: move a self-shipped parcel along ────────────────────────────────
+  // No courier is pushing us events for these, so the admin walks them to
+  // delivered by hand. The order status is re-derived exactly as it is on the
+  // courier path, so a manual parcel completes an order the same way.
+
+  updateParcelStatus: writeOrders
+    .input(
+      z.object({
+        shipmentId: z.string().uuid(),
+        status: z.enum(MANUAL_PARCEL_STATUSES),
+        note: z.string().trim().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await setManualParcelStatus(
+          ctx.db,
+          input.shipmentId,
+          input.status,
+          ctx.session.user.id,
+          input.note,
+        );
+      } catch (err) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err instanceof Error ? err.message : "Could not update this package",
+        });
+      }
+    }),
+
   // ── Admin: manually retry shipment booking after all queue attempts exhausted ──
 
   retryShipmentBooking: writeOrders
@@ -624,7 +700,11 @@ export const orderRouter = router({
       // reason to refuse — only a fully-booked order is. The worker skips parcels
       // that already hold an AWB, so a retry re-attempts just the missing ones.
       const shipments = await getOrderShipments(ctx.db, input.orderId);
-      const unbooked = shipments.filter((s) => !s.waybill && s.status !== "cancelled");
+      // A self-shipped parcel has no AWB by design — it must never look "unbooked"
+      // here, or a retry would put the same goods on Shiprocket as well.
+      const unbooked = shipments.filter(
+        (s) => !s.waybill && s.status !== "cancelled" && s.fulfillmentChannel !== "manual",
+      );
       if (shipments.length > 0 && unbooked.length === 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "All parcels for this order are already booked" });
       }

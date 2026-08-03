@@ -44,6 +44,17 @@ export type CancelShipmentJob = {
   waybill: string;
 };
 
+// Recall of ONE parcel's AWB, queued when an admin detaches that parcel from
+// Shiprocket to ship it themselves. Unlike cancel_shipment it leaves the order
+// (and every other parcel) alone — the goods are still going to the customer.
+export type CancelParcelJob = {
+  type: "cancel_parcel";
+  dbJobId?: string;
+  orderId: string;
+  shipmentId: string;
+  waybill: string;
+};
+
 export type ExpirePendingPaymentsJob = {
   type: "expire_pending_payments";
 };
@@ -54,6 +65,7 @@ export type OrderJobData =
   | BookShipmentJob
   | InitiateRefundJob
   | CancelShipmentJob
+  | CancelParcelJob
   | ExpirePendingPaymentsJob;
 
 export const orderQueue = new Queue<OrderJobData>("order-events", {

@@ -165,6 +165,25 @@ export const shipmentStatusEnum = pgEnum("shipment_status", [
   "failed",
 ]);
 
+// Who is actually carrying the parcel. "shiprocket" is the normal path — booked
+// through the API, tracked by webhook. "manual" is the escape hatch: Shiprocket
+// sat on the parcel for days, so the admin pulled it out and posted it themselves
+// (India Post, a local courier, hand delivery). A manual parcel is invisible to
+// every Shiprocket code path — it is never re-booked, never reconciled, and
+// webhooks arriving for its old AWB are ignored.
+export const fulfillmentChannelEnum = pgEnum("fulfillment_channel", ["shiprocket", "manual"]);
+
+// Did the recall of the old AWB actually land at Shiprocket? Detaching must
+// succeed locally even when Shiprocket is unreachable (which is the very reason
+// the admin is detaching), so the recall is queued and its outcome tracked here —
+// otherwise a shipment nobody is watching stays live at the courier.
+export const courierCancelStateEnum = pgEnum("courier_cancel_state", [
+  "not_requested",
+  "pending",
+  "cancelled",
+  "failed",
+]);
+
 export const orderShipments = pgTable(
   "order_shipments",
   {
@@ -214,6 +233,30 @@ export const orderShipments = pgTable(
     // Last booking failure, kept so admin can see why a parcel has no AWB.
     errorMessage: text("error_message"),
 
+    // ── Self-fulfilment (parcel pulled out of Shiprocket, shipped by us) ──────
+    fulfillmentChannel: fulfillmentChannelEnum("fulfillment_channel").notNull().default("shiprocket"),
+
+    // What we ship it with once it's ours: the courier's name as the customer
+    // would recognise it ("India Post — Speed Post"), its consignment number, and
+    // a tracking page if that courier has one. trackingUrl/waybill above stay
+    // Shiprocket's — they're cleared on detach so nothing points at a dead AWB.
+    manualCourierName: text("manual_courier_name"),
+    manualTrackingNumber: text("manual_tracking_number"),
+    manualTrackingUrl: text("manual_tracking_url"),
+    manualShippedAt: timestamp("manual_shipped_at"),
+
+    // The AWB this parcel held at Shiprocket before it was detached. Kept rather
+    // than discarded for two reasons: it's the audit record of what was booked,
+    // and it's how a late webhook for that AWB is recognised and ignored instead
+    // of cancelling an order that is already on its way by other means.
+    detachedWaybill: text("detached_waybill"),
+    detachedAt: timestamp("detached_at"),
+    detachedBy: text("detached_by"),
+    detachReason: text("detach_reason"),
+
+    courierCancelState: courierCancelStateEnum("courier_cancel_state").notNull().default("not_requested"),
+    courierCancelNote: text("courier_cancel_note"),
+
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -227,6 +270,9 @@ export const orderShipments = pgTable(
     uniqueIndex("order_shipments_order_package_idx").on(t.orderId, t.packageNumber),
     // Courier webhooks arrive keyed only by AWB.
     uniqueIndex("order_shipments_waybill_idx").on(t.waybill),
+    // A webhook for a detached AWB has to find this row to be ignored — and the
+    // same AWB can only ever have belonged to one parcel.
+    index("order_shipments_detached_waybill_idx").on(t.detachedWaybill),
   ],
 );
 
