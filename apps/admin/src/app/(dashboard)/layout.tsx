@@ -29,11 +29,15 @@ import { trpc } from "@/lib/trpc";
 
 // Which nav item shows which pending-work count. `urgent` renders red (needs
 // action now); otherwise amber (worth a look).
-const BADGE_KEY: Record<string, { key: "tickets" | "orders" | "jobs" | "inventory"; urgent: boolean }> = {
+const BADGE_KEY: Record<
+  string,
+  { key: "tickets" | "orders" | "jobs" | "inventory" | "feedback"; urgent: boolean }
+> = {
   "/support": { key: "tickets", urgent: true },
   "/orders": { key: "orders", urgent: false },
   "/jobs": { key: "jobs", urgent: true },
   "/inventory": { key: "inventory", urgent: false },
+  "/feedback": { key: "feedback", urgent: false },
 };
 
 function NavBadge({ count, urgent }: { count: number; urgent: boolean }) {

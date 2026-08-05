@@ -3,7 +3,7 @@
 import { use, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, MapPin, Package } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, MapPin, Package } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -404,6 +404,15 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
                   </div>
                 ))}
               </div>
+              {/* Stars here are the one-tap path; the full form adds the
+                  delivery experience and written notes. */}
+              <Link
+                href={`/feedback/${orderId}`}
+                className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Share detailed feedback
+                <ArrowRight className="size-3" />
+              </Link>
             </section>
           )}
 

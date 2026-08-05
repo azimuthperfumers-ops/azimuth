@@ -148,6 +148,13 @@
       "when": 1785767307671,
       "tag": "0020_self_fulfilment",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785927860134,
+      "tag": "0021_feedback_and_half_star_ratings",
+      "breakpoints": true
     }
   ]
 }

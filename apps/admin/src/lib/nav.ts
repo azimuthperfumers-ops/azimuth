@@ -4,6 +4,7 @@ import {
   Cpu,
   FlaskConical,
   LayoutDashboard,
+  MessageSquareQuote,
   Package,
   Paintbrush,
   PercentCircle,
@@ -63,7 +64,10 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Support",
-    items: [{ href: "/support", label: "Tickets", icon: TicketIcon, resource: "tickets" }],
+    items: [
+      { href: "/support", label: "Tickets", icon: TicketIcon, resource: "tickets" },
+      { href: "/feedback", label: "Feedback", icon: MessageSquareQuote, resource: "feedback" },
+    ],
   },
   {
     label: "Config",

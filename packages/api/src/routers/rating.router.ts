@@ -10,6 +10,15 @@ import { publicProcedure, router } from "../trpc";
 // containing that product. Storefront display respects the per-product
 // rating_display_mode: "mock" shows admin-configured placeholder numbers until
 // enough real ratings accumulate; "real" shows the true aggregate.
+//
+// Scores are half-star (1, 1.5, 2 … 5), stored numeric(2,1). Drizzle hands
+// numerics back as strings, so reads convert with Number() here and every client
+// sees a plain number. Written reviews live alongside the score but are private —
+// they are returned only by feedback.router.ts, never by the public endpoints
+// below.
+
+// 1, 1.5, 2 … 5
+const halfStar = z.number().min(1).max(5).multipleOf(0.5);
 
 export const ratingRouter = router({
   // ── User: submit / update rating ────────────────────────────────────────────
@@ -19,7 +28,7 @@ export const ratingRouter = router({
       z.object({
         productId: z.string().uuid(),
         orderId: z.string().uuid(),
-        rating: z.number().int().min(1).max(5),
+        rating: halfStar,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -61,15 +70,15 @@ export const ratingRouter = router({
           productId: input.productId,
           userId,
           orderId: input.orderId,
-          rating: input.rating,
+          rating: String(input.rating),
         })
         .onConflictDoUpdate({
           target: [schema.productRatings.productId, schema.productRatings.userId],
-          set: { rating: input.rating, orderId: input.orderId, updatedAt: new Date() },
+          set: { rating: String(input.rating), orderId: input.orderId, updatedAt: new Date() },
         })
         .returning();
 
-      return saved;
+      return saved ? { ...saved, rating: Number(saved.rating) } : saved;
     }),
 
   // ── User: rateable products for an order + existing ratings ─────────────────
@@ -118,7 +127,7 @@ export const ratingRouter = router({
               ),
             )
         : [];
-      const mineMap = new Map(mine.map((m) => [m.productId, m.rating]));
+      const mineMap = new Map(mine.map((m) => [m.productId, Number(m.rating)]));
 
       // One entry per product (order may hold two variants of the same perfume)
       const seen = new Set<string>();
@@ -151,7 +160,7 @@ export const ratingRouter = router({
             inArray(schema.productRatings.productId, input.productIds),
           ),
         );
-      return Object.fromEntries(rows.map((r) => [r.productId, r.rating]));
+      return Object.fromEntries(rows.map((r) => [r.productId, Number(r.rating)]));
     }),
 
   // ── Public: display ratings for products (mock/real aware) ──────────────────

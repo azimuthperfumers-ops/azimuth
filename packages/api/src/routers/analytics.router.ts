@@ -258,15 +258,21 @@ export const analyticsRouter = router({
         const repeatBuyers = repeat.filter((r) => Number(r.orderCount) >= 2).length;
 
         // ── Ratings: real aggregate + 1–5 distribution ───────────────────────────
+        // Scores are half-star, so the histogram buckets on the ROUNDED value
+        // (4.5 counts as 5). Grouping on the raw score would leave the .5 rows
+        // out of the five buckets entirely and undercount the chart.
         const [ratingAgg] = await db
           .select({ avg: avg(schema.productRatings.rating), count: count() })
           .from(schema.productRatings)
           .where(eq(schema.productRatings.productId, input.productId));
         const distribution = await db
-          .select({ rating: schema.productRatings.rating, count: count() })
+          .select({
+            rating: sql<number>`round(${schema.productRatings.rating})::int`,
+            count: count(),
+          })
           .from(schema.productRatings)
           .where(eq(schema.productRatings.productId, input.productId))
-          .groupBy(schema.productRatings.rating);
+          .groupBy(sql`round(${schema.productRatings.rating})`);
 
         // ── Demand signals + share of store revenue ──────────────────────────────
         const [wishlisted] = await db
@@ -376,18 +382,21 @@ export const analyticsRouter = router({
         orders: number;
         jobs: number;
         inventory: number;
+        feedback: number;
       }>(sql`
         SELECT
           (SELECT count(*)::int FROM support_tickets WHERE status IN ('open', 'awaiting_admin')) AS tickets,
           (SELECT count(*)::int FROM orders WHERE status IN ('paid', 'processing')) AS orders,
           (SELECT count(*)::int FROM background_jobs WHERE status = 'failed') AS jobs,
-          (SELECT count(*)::int FROM product_variants WHERE status = 'active' AND stock_cached <= 5) AS inventory
+          (SELECT count(*)::int FROM product_variants WHERE status = 'active' AND stock_cached <= 5) AS inventory,
+          (SELECT count(*)::int FROM order_feedback WHERE status = 'new' AND rating IS NOT NULL) AS feedback
       `);
       return {
         tickets: Number(row?.tickets ?? 0), // open / awaiting your reply
         orders: Number(row?.orders ?? 0), // paid or processing — need fulfillment
         jobs: Number(row?.jobs ?? 0), // failed background jobs
         inventory: Number(row?.inventory ?? 0), // active variants at/below low-stock threshold (5)
+        feedback: Number(row?.feedback ?? 0), // rated feedback nobody has triaged yet
       };
     }),
   ),

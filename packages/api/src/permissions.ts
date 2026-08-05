@@ -32,6 +32,8 @@ export const RESOURCES = [
   "customers",
   "wallets",
   "tickets",
+  // Customer feedback inbox: order-experience ratings + private written notes.
+  "feedback",
   "content",
   "settings",
   "staff",
@@ -64,6 +66,7 @@ const ROLE_ACCESS: Record<Exclude<StaffRole, "owner">, Partial<Record<Resource, 
     inventory: "write",
     customers: "read",
     tickets: "read",
+    feedback: "read",
   },
   cataloging: {
     // No overview at all — cataloging works from the catalog sections, not the
@@ -76,6 +79,8 @@ const ROLE_ACCESS: Record<Exclude<StaffRole, "owner">, Partial<Record<Resource, 
     discounts: "write",
     coupons: "write",
     content: "write",
+    // Fragrance reviews feed straight back into catalog copy.
+    feedback: "read",
   },
   accounts: {
     dashboard: "read",
@@ -94,6 +99,8 @@ const ROLE_ACCESS: Record<Exclude<StaffRole, "owner">, Partial<Record<Resource, 
     orders: "read",
     wallets: "read",
     tickets: "write",
+    // Support fields the calls and messages, so they also log feedback for customers.
+    feedback: "write",
   },
 };
 

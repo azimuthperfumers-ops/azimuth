@@ -18,6 +18,7 @@ import { settingsRouter } from "./settings.router";
 import { contentRouter } from "./content.router";
 import { jobRouter } from "./job.router";
 import { ratingRouter } from "./rating.router";
+import { feedbackRouter } from "./feedback.router";
 import { walletRouter } from "./wallet.router";
 import { staffRouter } from "./staff.router";
 
@@ -41,6 +42,7 @@ export const appRouter = router({
   content: contentRouter,
   job: jobRouter,
   rating: ratingRouter,
+  feedback: feedbackRouter,
   wallet: walletRouter,
   staff: staffRouter,
 });

@@ -5,11 +5,12 @@ export const dynamic = "force-dynamic";
 import { type FormEvent, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ChevronRight, Copy, Heart, LogOut, MapPin, Package, TicketIcon, Trash2, User } from "lucide-react";
+import { ChevronRight, Copy, Heart, LogOut, MapPin, MessageSquareQuote, Package, TicketIcon, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 
 import { AuthCard } from "@/components/auth-card";
 import { DeleteAccountPanel } from "@/components/delete-account-panel";
+import { FeedbackNudge } from "@/components/feedback/feedback-nudge";
 import { ProductCard } from "@/components/product-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -542,6 +543,9 @@ function OrdersTab() {
         <p className="mt-1 text-[13px] text-muted-foreground">Your purchase history.</p>
       </div>
 
+      {/* Renders itself away when there's nothing recent left to rate */}
+      <FeedbackNudge />
+
       {isLoading && (
         <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground/40 uppercase animate-pulse">
           Loading…
@@ -721,6 +725,7 @@ const TABS = [
   { id: "addresses", label: "Addresses", icon: MapPin },
   { id: "orders", label: "Orders", icon: Package },
   { id: "wishlist", label: "Wishlist", icon: Heart },
+  { id: "feedback", label: "Feedback", icon: MessageSquareQuote },
   { id: "support", label: "Support", icon: TicketIcon },
   { id: "delete", label: "Delete account", icon: Trash2 },
 ] as const;
@@ -834,6 +839,25 @@ function AccountPageInner() {
             {activeTab === "addresses" && <AddressesTab />}
             {activeTab === "orders" && <OrdersTab />}
             {activeTab === "wishlist" && <WishlistTab />}
+            {activeTab === "feedback" && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-lg font-semibold">Feedback</h2>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    Rate a delivery and tell us how the fragrance wears. Read by
+                    the studio only — never shown to other customers.
+                  </p>
+                </div>
+                <FeedbackNudge limit={20} />
+                <Link
+                  href="/feedback"
+                  className="inline-flex items-center gap-2 border border-foreground px-5 py-2.5 text-[11px] font-semibold tracking-[0.14em] uppercase transition-all hover:bg-foreground hover:text-background"
+                >
+                  <MessageSquareQuote className="size-3.5" />
+                  All my feedback
+                </Link>
+              </div>
+            )}
             {activeTab === "support" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold">Support</h2>
