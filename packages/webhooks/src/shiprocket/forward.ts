@@ -29,6 +29,7 @@ export async function processForwardShipment(body: ShiprocketBody) {
       courierName: body.courier_name,
       etd: body.etd,
       pod: body.pod,
+      podStatus: body.pod_status,
       pickupScheduledDate: body.pickup_scheduled_date,
     },
     "webhook:shiprocket",

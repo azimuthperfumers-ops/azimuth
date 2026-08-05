@@ -380,8 +380,15 @@ export default function AdminOrderDetailPage({
     onSuccess: async (res) => {
       await utils.order.adminGet.invalidate({ orderId });
       const changed = res.updates.filter((u) => u.changed).length;
+      // The POD is worth its own line: on a delivered order it's usually the only
+      // thing a sync brings back, and without it the toast reads "no change".
+      const pods = res.podsFound > 0 ? ` · proof of delivery for ${res.podsFound} parcel(s)` : "";
       if (changed > 0) {
-        toast.success(`Synced with Shiprocket — order is now ${res.finalStatus.replace(/_/g, " ")}`);
+        toast.success(
+          `Synced with Shiprocket — order is now ${res.finalStatus.replace(/_/g, " ")}${pods}`,
+        );
+      } else if (res.podsFound > 0) {
+        toast.success(`Proof of delivery pulled for ${res.podsFound} parcel(s)`);
       } else {
         toast(`No change — order is ${res.finalStatus.replace(/_/g, " ")} (${res.checked} parcel(s) checked)`);
       }
@@ -520,7 +527,7 @@ export default function AdminOrderDetailPage({
         variant="outline"
         onClick={() => reconcile.mutate({ orderId })}
         disabled={reconcile.isPending}
-        title="Pull the live status of every parcel from Shiprocket and update this order"
+        title="Pull the live status and proof of delivery of every parcel from Shiprocket"
       >
         <RefreshCw className={`size-3.5 mr-1.5 ${reconcile.isPending ? "animate-spin" : ""}`} />
         {reconcile.isPending ? "Syncing…" : "Sync Shiprocket"}

@@ -68,7 +68,30 @@ export type TrackingResult = {
   statusDetail: string;
   scannedAt?: string;
   location?: string;
+  /** Courier's proof-of-delivery image, once delivered and the courier uploads one. */
+  podUrl?: string;
 };
+
+/**
+ * The first argument that is actually a link.
+ *
+ * Couriers are careless about which field carries the proof-of-delivery image:
+ * Shiprocket returns both `pod` and `pod_status`, one holding the availability
+ * word ("Available" / "Not Available") and the other the S3 image URL — and
+ * which is which is not something to bet on. Storing the word instead of the URL
+ * put src="Available" in the admin: a broken image that, being relative,
+ * navigated to /orders/Available when clicked.
+ *
+ * So we don't trust field names, only shape. Anything that isn't an absolute
+ * http(s) URL means "no POD".
+ */
+export function podImageFrom(...candidates: (string | undefined | null)[]): string | null {
+  for (const candidate of candidates) {
+    const value = String(candidate ?? "").trim();
+    if (/^https?:\/\//i.test(value)) return value;
+  }
+  return null;
+}
 
 export type ShippingRateResult = {
   available: boolean;

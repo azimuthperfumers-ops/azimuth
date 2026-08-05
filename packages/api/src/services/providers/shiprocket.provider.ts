@@ -18,6 +18,7 @@ import type {
   TrackingResult,
   LabelResult,
 } from "../logistics.service";
+import { podImageFrom } from "../logistics.service";
 import { env } from "../../env";
 import { MIN_BILLABLE_GRAMS } from "../packaging";
 import { PERFUME_HSN } from "../invoice/seller.js";
@@ -453,7 +454,15 @@ export class ShiprocketProvider implements ILogisticsService {
       type TrackResp = {
         tracking_data?: {
           track_status?: number;
-          shipment_track?: { current_status?: string; delivered_date?: string }[];
+          // `pod` and `pod_status` both appear on a delivered shipment: one holds
+          // the availability word, the other the S3 image URL. podImageFrom picks
+          // whichever is actually a link rather than trusting the names.
+          shipment_track?: {
+            current_status?: string;
+            delivered_date?: string;
+            pod?: string;
+            pod_status?: string;
+          }[];
           shipment_track_activities?: {
             date?: string;
             activity?: string;
@@ -473,6 +482,7 @@ export class ShiprocketProvider implements ILogisticsService {
         statusDetail: latestActivity?.activity ?? latest?.current_status ?? "No details",
         scannedAt: latestActivity?.date ?? undefined,
         location: latestActivity?.location ?? undefined,
+        podUrl: podImageFrom(latest?.pod, latest?.pod_status) ?? undefined,
       };
     } catch (err) {
       console.error("[shiprocket] track error:", err);

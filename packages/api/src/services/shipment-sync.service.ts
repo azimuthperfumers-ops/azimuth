@@ -23,7 +23,7 @@ import {
   deriveOrderStatus,
   getOrderShipments,
 } from "../repositories/shipment.repository";
-import { createLogisticsService } from "./logistics.service";
+import { createLogisticsService, podImageFrom } from "./logistics.service";
 import { getOrderContact, toOrderInfo } from "./order-notify";
 
 type OrderRow = typeof schema.orders.$inferSelect;
@@ -133,24 +133,15 @@ export interface CourierStatusUpdate {
   currentStatus: string;
   courierName?: string;
   etd?: string;
+  /**
+   * Proof-of-delivery candidates, straight off the courier. Both are passed
+   * because only one of them holds the image URL and it isn't always the same
+   * one — podImageFrom decides by shape, not by name.
+   */
   pod?: string;
+  podStatus?: string;
   /** When the courier is scheduled to collect (Shiprocket sends this on every event). */
   pickupScheduledDate?: string;
-}
-
-/**
- * Shiprocket's `pod` field is not always a link. On most delivered events it
- * carries the *availability* word — "Available" / "Not Available" — and only
- * sometimes the actual image URL. Storing the word put `src="Available"` in the
- * admin, which the browser resolved against the current page: a broken image
- * that navigated to /orders/Available when clicked.
- *
- * So: a POD is only a POD if it's an http(s) URL. Anything else means the
- * courier has one on file but didn't hand it over, and we show nothing.
- */
-export function podImageFrom(pod: string | undefined | null): string | null {
-  const value = String(pod ?? "").trim();
-  return /^https?:\/\//i.test(value) ? value : null;
 }
 
 export interface ApplyResult {
@@ -244,7 +235,7 @@ export async function applyCourierStatus(
 
     const parcelStatus = SHIPMENT_STATUS_MAP[rawStatus];
     if (parcelStatus) {
-      const podUrl = parcelStatus === "delivered" ? podImageFrom(update.pod) : null;
+      const podUrl = parcelStatus === "delivered" ? podImageFrom(update.pod, update.podStatus) : null;
       if (podUrl) {
         await db.update(schema.orderShipments).set({ podImageUrl: podUrl }).where(eq(schema.orderShipments.id, shipment.id));
       }
@@ -267,7 +258,7 @@ export async function applyCourierStatus(
     if (update.etd) {
       await db.update(schema.orders).set({ estimatedDeliveryDate: update.etd }).where(eq(schema.orders.id, order.id));
     }
-    const podUrl = targetStatus === "delivered" ? podImageFrom(update.pod) : null;
+    const podUrl = targetStatus === "delivered" ? podImageFrom(update.pod, update.podStatus) : null;
     if (podUrl) {
       await db.update(schema.orders).set({ podImageUrl: podUrl }).where(eq(schema.orders.id, order.id));
     }
@@ -374,6 +365,8 @@ export interface ReconcileResult {
   checked: number;
   updates: ApplyResult[];
   finalStatus: OurOrderStatus;
+  /** Parcels that came back with a proof-of-delivery image on this pull. */
+  podsFound: number;
 }
 
 /**
@@ -382,6 +375,34 @@ export interface ReconcileResult {
  * Recovers orders whose webhook was missed (e.g. a dashboard cancellation that
  * never reached us).
  */
+/**
+ * Store a proof-of-delivery image against whatever the AWB identifies — the
+ * parcel if we have a row for it, else the legacy order-level AWB. Writes only
+ * when the value would change, so a repeated Sync doesn't churn the row.
+ */
+async function savePodUrl(db: Database, awb: string, podUrl: string): Promise<void> {
+  const shipment = await db.query.orderShipments.findFirst({
+    where: eq(schema.orderShipments.waybill, awb),
+  });
+  if (shipment) {
+    if (shipment.podImageUrl !== podUrl) {
+      await db
+        .update(schema.orderShipments)
+        .set({ podImageUrl: podUrl })
+        .where(eq(schema.orderShipments.id, shipment.id));
+    }
+    return;
+  }
+
+  const order = await db.query.orders.findFirst({ where: eq(schema.orders.waybill, awb) });
+  if (order && order.podImageUrl !== podUrl) {
+    await db
+      .update(schema.orders)
+      .set({ podImageUrl: podUrl })
+      .where(eq(schema.orders.id, order.id));
+  }
+}
+
 export async function reconcileOrderWithCourier(
   db: Database,
   orderId: string,
@@ -403,10 +424,22 @@ export async function reconcileOrderWithCourier(
 
   const logistics = createLogisticsService();
   const updates: ApplyResult[] = [];
+  let podsFound = 0;
 
   for (const awb of awbs) {
     try {
       const tracking = await logistics.trackShipment(awb);
+
+      // The POD is uploaded by the courier after the fact, often hours after the
+      // DELIVERED webhook — and that webhook may not have carried it at all. So
+      // capture it here, before the status handling below, which returns early on
+      // an order that is already delivered. This pull is the only way a POD ever
+      // reaches a finished order.
+      if (tracking.podUrl) {
+        await savePodUrl(db, awb, tracking.podUrl);
+        podsFound += 1;
+      }
+
       if (!tracking.status || tracking.status.toUpperCase() === "UNKNOWN") {
         updates.push({ awb, matched: true, changed: false, message: "no courier status yet" });
         continue;
@@ -433,5 +466,6 @@ export async function reconcileOrderWithCourier(
     checked: awbs.length,
     updates,
     finalStatus: fresh?.status ?? order.status,
+    podsFound,
   };
 }
