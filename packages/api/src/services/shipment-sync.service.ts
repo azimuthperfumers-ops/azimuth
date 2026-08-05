@@ -138,6 +138,21 @@ export interface CourierStatusUpdate {
   pickupScheduledDate?: string;
 }
 
+/**
+ * Shiprocket's `pod` field is not always a link. On most delivered events it
+ * carries the *availability* word — "Available" / "Not Available" — and only
+ * sometimes the actual image URL. Storing the word put `src="Available"` in the
+ * admin, which the browser resolved against the current page: a broken image
+ * that navigated to /orders/Available when clicked.
+ *
+ * So: a POD is only a POD if it's an http(s) URL. Anything else means the
+ * courier has one on file but didn't hand it over, and we show nothing.
+ */
+export function podImageFrom(pod: string | undefined | null): string | null {
+  const value = String(pod ?? "").trim();
+  return /^https?:\/\//i.test(value) ? value : null;
+}
+
 export interface ApplyResult {
   awb: string;
   matched: boolean;
@@ -229,8 +244,9 @@ export async function applyCourierStatus(
 
     const parcelStatus = SHIPMENT_STATUS_MAP[rawStatus];
     if (parcelStatus) {
-      if (parcelStatus === "delivered" && update.pod && update.pod !== "Not Available") {
-        await db.update(schema.orderShipments).set({ podImageUrl: update.pod }).where(eq(schema.orderShipments.id, shipment.id));
+      const podUrl = parcelStatus === "delivered" ? podImageFrom(update.pod) : null;
+      if (podUrl) {
+        await db.update(schema.orderShipments).set({ podImageUrl: podUrl }).where(eq(schema.orderShipments.id, shipment.id));
       }
       await advanceShipmentStatus(db, shipment.id, parcelStatus, actorId, note || undefined);
     }
@@ -251,8 +267,9 @@ export async function applyCourierStatus(
     if (update.etd) {
       await db.update(schema.orders).set({ estimatedDeliveryDate: update.etd }).where(eq(schema.orders.id, order.id));
     }
-    if (targetStatus === "delivered" && update.pod && update.pod !== "Not Available") {
-      await db.update(schema.orders).set({ podImageUrl: update.pod }).where(eq(schema.orders.id, order.id));
+    const podUrl = targetStatus === "delivered" ? podImageFrom(update.pod) : null;
+    if (podUrl) {
+      await db.update(schema.orders).set({ podImageUrl: podUrl }).where(eq(schema.orders.id, order.id));
     }
   }
 

@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { podImageSrc } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import { useTicketUpload } from "@/hooks/use-ticket-upload";
 
@@ -373,15 +374,15 @@ export default function AdminTicketPage({ params }: { params: Promise<{ ticketId
           )}
 
           {/* Courier delivery proof — compare against customer's photos before refunding */}
-          {ticket.order?.podImageUrl && (
+          {podImageSrc(ticket.order?.podImageUrl) && (
             <div className="border border-border p-4 space-y-2">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">
                 Delivery proof (courier)
               </p>
-              <a href={ticket.order.podImageUrl} target="_blank" rel="noopener noreferrer">
+              <a href={podImageSrc(ticket.order?.podImageUrl)!} target="_blank" rel="noopener noreferrer">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={ticket.order.podImageUrl}
+                  src={podImageSrc(ticket.order?.podImageUrl)!}
                   alt="Proof of delivery"
                   className="w-full border border-border object-cover"
                 />

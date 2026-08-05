@@ -36,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatInr } from "@/lib/format";
+import { formatInr, podImageSrc } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
@@ -462,6 +462,9 @@ export default function AdminOrderDetailPage({
     !["delivered", "refund_processing", "refunded", "pending_payment", "payment_failed"].includes(
       order.status,
     );
+
+  // Order-level POD, only if the courier actually gave us an image (see podImageSrc).
+  const orderPod = podImageSrc(order.podImageUrl);
 
   const bookingErrorEntry = needsShipmentRetry
     ? timeline.find(
@@ -1090,11 +1093,11 @@ export default function AdminOrderDetailPage({
                       </a>
                     )}
 
-                    {pkg.podImageUrl && (
-                      <a href={pkg.podImageUrl} target="_blank" rel="noopener noreferrer">
+                    {podImageSrc(pkg.podImageUrl) && (
+                      <a href={podImageSrc(pkg.podImageUrl)!} target="_blank" rel="noopener noreferrer">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={pkg.podImageUrl}
+                          src={podImageSrc(pkg.podImageUrl)!}
                           alt={`Proof of delivery — package ${pkg.packageNumber}`}
                           className="max-h-40 border border-border object-contain hover:opacity-80 transition-opacity"
                         />
@@ -1107,7 +1110,7 @@ export default function AdminOrderDetailPage({
           )}
 
           {/* Shipping */}
-          {(order.waybill || order.trackingUrl || order.podImageUrl) && (
+          {(order.waybill || order.trackingUrl || orderPod) && (
             <section>
               <SectionLabel>Shipping</SectionLabel>
               <div className="border border-border p-4 space-y-2 text-[12px]">
@@ -1133,15 +1136,15 @@ export default function AdminOrderDetailPage({
                     {order.trackingUrl}
                   </a>
                 )}
-                {order.podImageUrl && (
+                {orderPod && (
                   <div className="pt-1 space-y-1">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50">
                       Proof of delivery
                     </p>
-                    <a href={order.podImageUrl} target="_blank" rel="noopener noreferrer">
+                    <a href={orderPod} target="_blank" rel="noopener noreferrer">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={order.podImageUrl}
+                        src={orderPod}
                         alt="Proof of delivery"
                         className="max-h-48 border border-border object-contain hover:opacity-80 transition-opacity"
                       />
