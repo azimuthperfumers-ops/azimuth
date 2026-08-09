@@ -144,7 +144,8 @@ const STATE_ALIASES: Record<string, IndianState> = {
 
 /**
  * Maps free text onto the canonical spelling, or returns null when it isn't a
- * state at all. Case, spacing and "&" vs "and" are all forgiven.
+ * state at all. Case, spacing, "&" vs "and" and the dots in an abbreviation
+ * ("M.P.", "U.P.") are all forgiven — no state's real name contains a period.
  */
 export function normalizeState(raw: string): IndianState | null {
   const key = collapseSpaces(raw).toLowerCase();
@@ -152,9 +153,9 @@ export function normalizeState(raw: string): IndianState | null {
   const exact = INDIAN_STATES.find((s) => s.toLowerCase() === key);
   if (exact) return exact;
   if (STATE_ALIASES[key]) return STATE_ALIASES[key];
-  const loosened = key.replace(/&/g, "and").replace(/\s+/g, " ");
+  const loosened = collapseSpaces(key.replace(/&/g, "and").replace(/\./g, " "));
   const loose = INDIAN_STATES.find((s) => s.toLowerCase() === loosened);
-  return loose ?? STATE_ALIASES[loosened] ?? null;
+  return loose ?? STATE_ALIASES[loosened] ?? STATE_ALIASES[loosened.replace(/\s/g, "")] ?? null;
 }
 
 // ─── Field-level checks ──────────────────────────────────────────────────────
