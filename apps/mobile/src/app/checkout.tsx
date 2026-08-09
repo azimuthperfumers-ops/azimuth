@@ -35,6 +35,8 @@ import {
   type AddressForm,
   AddressFormFields,
   EMPTY_ADDRESS_FORM,
+  normalizeAddressForm,
+  sanitizeAddressValue,
   validateAddressForm,
 } from "@/lib/address-form";
 
@@ -309,7 +311,7 @@ export default function CheckoutScreen() {
   const needsPincode = currentPincode.length < 6;
 
   function changeNewForm<K extends keyof AddressForm>(key: K, value: AddressForm[K]) {
-    setNewForm((prev) => ({ ...prev, [key]: value }));
+    setNewForm((prev) => ({ ...prev, [key]: sanitizeAddressValue(key, value) }));
     if (newFormErrors[key]) setNewFormErrors((p) => { const n = { ...p }; delete n[key]; return n; });
   }
 
@@ -326,12 +328,26 @@ export default function CheckoutScreen() {
       return;
     }
 
-    if (showNewForm) {
-      const errs = validateAddressForm(addr);
-      if (Object.keys(errs).length > 0) {
+    // Saved addresses go through the same checks — some were stored before these
+    // rules existed, and a bad phone or state only fails at the courier, by which
+    // point the customer has already paid.
+    const shipTo = normalizeAddressForm(addr);
+    const errs = validateAddressForm(shipTo);
+    if (Object.keys(errs).length > 0) {
+      if (showNewForm) {
         setNewFormErrors(errs);
-        return;
+      } else {
+        const [field, message] = Object.entries(errs)[0]!;
+        const LABELS: Record<string, string> = {
+          fullName: "name", phone: "phone number", line1: "address",
+          city: "city", state: "state", pincode: "pincode",
+        };
+        Alert.alert(
+          "Address needs fixing",
+          `This saved address needs a valid ${LABELS[field] ?? field} — ${message.toLowerCase()}. Edit it under Account → Addresses.`,
+        );
       }
+      return;
     }
 
     if (activeItems.length === 0) {
@@ -363,14 +379,14 @@ export default function CheckoutScreen() {
     try {
       if (showNewForm && saveToAccount) {
         await addAddressMut.mutateAsync({
-          label: addr.label,
-          fullName: addr.fullName.trim(),
-          phone: addr.phone.trim(),
-          line1: addr.line1.trim(),
-          line2: addr.line2.trim() || undefined,
-          city: addr.city.trim(),
-          state: addr.state.trim(),
-          pincode: addr.pincode.trim(),
+          label: shipTo.label,
+          fullName: shipTo.fullName,
+          phone: shipTo.phone,
+          line1: shipTo.line1,
+          line2: shipTo.line2 || undefined,
+          city: shipTo.city,
+          state: shipTo.state,
+          pincode: shipTo.pincode,
           isDefault: savedAddresses.length === 0,
         });
         await utils.userData.listAddresses.invalidate();
@@ -378,13 +394,13 @@ export default function CheckoutScreen() {
 
       const order = await createOrder.mutateAsync({
         shippingAddress: {
-          fullName: addr.fullName.trim(),
-          phone: addr.phone.trim(),
-          line1: addr.line1.trim(),
-          line2: addr.line2.trim() || null,
-          city: addr.city.trim(),
-          state: addr.state.trim(),
-          pincode: addr.pincode.trim(),
+          fullName: shipTo.fullName,
+          phone: shipTo.phone,
+          line1: shipTo.line1,
+          line2: shipTo.line2 || null,
+          city: shipTo.city,
+          state: shipTo.state,
+          pincode: shipTo.pincode,
         },
         items: activeItems.map((item) => ({
           variantId: item.variantId,
@@ -427,8 +443,8 @@ export default function CheckoutScreen() {
         description: `Order ${rzpData.orderNumber}`,
         order_id: rzpData.razorpayOrderId,
         prefill: {
-          name: addr.fullName.trim(),
-          contact: addr.phone.trim(),
+          name: shipTo.fullName,
+          contact: shipTo.phone,
           email: session?.user?.email ?? "",
         },
         theme: { color: "#0a0a0a" },

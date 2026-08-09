@@ -21,6 +21,14 @@ import {
   selfFulfilOrder,
   setManualParcelStatus,
 } from "../services/self-fulfilment.service";
+import {
+  collapseSpaces,
+  isValidPhone,
+  isValidPincode,
+  normalizeState,
+  sanitizePhone,
+  sanitizePincode,
+} from "../lib/address-validation";
 import { orderQueue } from "../lib/order-queue";
 import {
   advanceOrderStatus,
@@ -40,14 +48,20 @@ import { router } from "../trpc";
 
 type OrderRow = typeof schema.orders.$inferSelect;
 
+// The snapshot stored on the order *is* what gets handed to the courier, so it
+// is held to the same bookable-address rules as a saved address — a booking that
+// fails validation at Shiprocket does so after the customer has already paid.
 const addressSchema = z.object({
-  fullName: z.string().min(1),
-  phone: z.string().min(10),
-  line1: z.string().min(1),
-  line2: z.string().optional().nullable(),
-  city: z.string().min(1),
-  state: z.string().min(1),
-  pincode: z.string().length(6),
+  fullName: z.string().transform(collapseSpaces).refine((v) => v.length >= 2, "Enter the full name"),
+  phone: z.string().transform(sanitizePhone).refine(isValidPhone, "Enter a valid 10-digit mobile number"),
+  line1: z.string().transform(collapseSpaces).refine((v) => v.length >= 5, "Enter the house / building and street"),
+  line2: z.string().transform(collapseSpaces).optional().nullable(),
+  city: z.string().transform(collapseSpaces).refine((v) => v.length >= 2, "Enter a valid city"),
+  state: z
+    .string()
+    .transform((v) => normalizeState(v) ?? collapseSpaces(v))
+    .refine((v) => normalizeState(v) !== null, "Choose a valid Indian state"),
+  pincode: z.string().transform(sanitizePincode).refine(isValidPincode, "Enter a valid 6-digit pincode"),
   label: z.string().optional(),
 });
 

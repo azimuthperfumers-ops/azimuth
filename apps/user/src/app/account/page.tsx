@@ -8,6 +8,14 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { ChevronRight, Copy, Heart, LogOut, MapPin, MessageSquareQuote, Package, TicketIcon, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  INDIAN_STATES,
+  isValidPhone,
+  normalizeState,
+  sanitizeAddressField,
+  sanitizePhone,
+  validateAddress,
+} from "@/lib/address";
 import { AuthCard } from "@/components/auth-card";
 import { DeleteAccountPanel } from "@/components/delete-account-panel";
 import { FeedbackNudge } from "@/components/feedback/feedback-nudge";
@@ -36,11 +44,12 @@ function SectionEmpty({ icon: Icon, title, sub }: { icon: React.ElementType; tit
 
 function PersonalInfoTab({ user }: { user: { name: string; email: string; image?: string | null; phone?: string | null } }) {
   const [name, setName] = useState(user.name ?? "");
-  const [phone, setPhone] = useState((user as any).phone ?? "");
+  const [phone, setPhone] = useState(sanitizePhone((user as any).phone ?? ""));
   const [pending, setPending] = useState(false);
   const [nameError, setNameError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
 
-  const isDirty = name.trim() !== user.name || phone.trim() !== ((user as any).phone ?? "");
+  const isDirty = name.trim() !== user.name || phone !== sanitizePhone((user as any).phone ?? "");
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -48,11 +57,17 @@ function PersonalInfoTab({ user }: { user: { name: string; email: string; image?
       setNameError("Full name is required");
       return;
     }
+    // A half-typed number is worse than none — delivery SMS would never arrive.
+    if (phone && !isValidPhone(phone)) {
+      setPhoneError("Enter a valid 10-digit mobile number");
+      return;
+    }
     setNameError("");
+    setPhoneError("");
     setPending(true);
     const { error } = await (authClient as any).updateUser({
       name: name.trim(),
-      phone: phone.trim() || null,
+      phone: phone || null,
     });
     setPending(false);
     if (error) toast.error("Couldn't update profile. Please try again.");
@@ -91,11 +106,19 @@ function PersonalInfoTab({ user }: { user: { name: string; email: string; image?
           <input
             type="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+91 98765 43210"
-            className="w-full border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-foreground focus:outline-none"
+            onChange={(e) => { setPhone(sanitizePhone(e.target.value)); setPhoneError(""); }}
+            placeholder="9876543210"
+            inputMode="numeric"
+            maxLength={10}
+            autoComplete="tel-national"
+            className={cn(
+              "w-full border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none",
+              phoneError ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+            )}
           />
-          <p className="text-[11px] text-muted-foreground/50">Used for order delivery updates.</p>
+          {phoneError
+            ? <p className="mt-1 text-[11px] text-primary">{phoneError}</p>
+            : <p className="text-[11px] text-muted-foreground/50">10-digit mobile, used for order delivery updates.</p>}
         </div>
 
         <div className="space-y-1.5">
@@ -129,6 +152,97 @@ function PersonalInfoTab({ user }: { user: { name: string; email: string; image?
 }
 
 // ─── Addresses tab ───────────────────────────────────────────────────────────
+
+/**
+ * The address fields, rendered identically for "add" and "edit". Every value is
+ * cleaned as it is typed and the state is picked from a list, so the form can
+ * only ever produce an address the courier will accept — see @/lib/address.
+ */
+function AddressFields({
+  form,
+  errors,
+  onChange,
+  compact = false,
+}: {
+  form: Record<string, string | boolean>;
+  errors: Record<string, string>;
+  onChange: (key: string, value: string) => void;
+  compact?: boolean;
+}) {
+  const val = (key: string) => (typeof form[key] === "string" ? (form[key] as string) : "");
+  const labelCls = cn(
+    "font-semibold tracking-[0.1em] uppercase text-muted-foreground flex items-baseline justify-between gap-2",
+    compact ? "text-[10px]" : "text-[11px]",
+  );
+  const fieldCls = (key: string) =>
+    cn(
+      "w-full border bg-background px-3 py-2 text-sm focus:outline-none",
+      errors[key] ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+    );
+  const wrapCls = compact ? "space-y-1" : "space-y-1.5";
+
+  return (
+    <>
+      {[
+        { key: "fullName", label: "Full name", type: "text", autoComplete: "name" },
+        { key: "phone", label: "Phone", type: "tel", hint: "10-digit mobile", autoComplete: "tel-national",
+          inputMode: "numeric" as const, maxLength: 10, placeholder: "9876543210" },
+        { key: "line1", label: "Address line 1", type: "text", autoComplete: "address-line1" },
+        { key: "line2", label: "Address line 2 (optional)", type: "text", autoComplete: "address-line2" },
+        { key: "city", label: "City", type: "text", autoComplete: "address-level2", maxLength: 60 },
+      ].map(({ key, label, type, hint, ...rest }) => (
+        <div key={key} className={wrapCls}>
+          <label className={labelCls}>
+            {label}
+            {hint && !errors[key] && (
+              <span className="text-[10px] normal-case font-normal tracking-normal text-muted-foreground/50">{hint}</span>
+            )}
+          </label>
+          <input
+            type={type}
+            value={val(key)}
+            onChange={(e) => onChange(key, e.target.value)}
+            className={fieldCls(key)}
+            {...rest}
+          />
+          {errors[key] && <p className="mt-1 text-[11px] text-primary">{errors[key]}</p>}
+        </div>
+      ))}
+
+      {/* Picked, never typed — the courier matches on exact state spelling. */}
+      <div className={wrapCls}>
+        <label className={labelCls}>State</label>
+        <select
+          value={normalizeState(val("state")) ?? ""}
+          onChange={(e) => onChange("state", e.target.value)}
+          autoComplete="address-level1"
+          className={cn(fieldCls("state"), !val("state") && "text-muted-foreground/60")}
+        >
+          <option value="">Select state</option>
+          {INDIAN_STATES.map((st) => (
+            <option key={st} value={st}>{st}</option>
+          ))}
+        </select>
+        {errors.state && <p className="mt-1 text-[11px] text-primary">{errors.state}</p>}
+      </div>
+
+      <div className={wrapCls}>
+        <label className={labelCls}>Pincode</label>
+        <input
+          type="text"
+          value={val("pincode")}
+          onChange={(e) => onChange("pincode", e.target.value)}
+          inputMode="numeric"
+          maxLength={6}
+          placeholder="560001"
+          autoComplete="postal-code"
+          className={fieldCls("pincode")}
+        />
+        {errors.pincode && <p className="mt-1 text-[11px] text-primary">{errors.pincode}</p>}
+      </div>
+    </>
+  );
+}
 
 type Address = {
   id: string;
@@ -182,21 +296,12 @@ function AddressCard({
   });
 
   function f(key: string, val: string) {
-    setForm((prev) => ({ ...prev, [key]: val }));
+    setForm((prev) => ({ ...prev, [key]: sanitizeAddressField(key, val) }));
     if (addrErrors[key]) setAddrErrors((p) => { const n = { ...p }; delete n[key]; return n; });
   }
 
-  function validateAddr() {
-    const errs: Record<string, string> = {};
-    if (!form.fullName.trim()) errs.fullName = "Required";
-    if (!form.phone.trim()) errs.phone = "Required";
-    else if (!/^\d{10}$/.test(form.phone.replace(/[\s-]/g, ""))) errs.phone = "Enter a valid 10-digit number";
-    if (!form.line1.trim()) errs.line1 = "Required";
-    if (!form.city.trim()) errs.city = "Required";
-    if (!form.state.trim()) errs.state = "Required";
-    if (!form.pincode.trim()) errs.pincode = "Required";
-    else if (!/^\d{6}$/.test(form.pincode)) errs.pincode = "Enter a valid 6-digit pincode";
-    return errs;
+  function validateAddr(): Record<string, string> {
+    return validateAddress(form);
   }
 
   if (!editing) {
@@ -281,33 +386,7 @@ function AddressCard({
           </button>
         ))}
       </div>
-      {[
-        { key: "fullName", label: "Full name", type: "text" },
-        { key: "phone", label: "Phone", type: "tel" },
-        { key: "line1", label: "Address line 1", type: "text" },
-        { key: "line2", label: "Address line 2 (optional)", type: "text" },
-        { key: "city", label: "City", type: "text" },
-        { key: "state", label: "State", type: "text" },
-        { key: "pincode", label: "Pincode", type: "text", hint: undefined },
-      ].map(({ key, label, type, hint }) => (
-        <div key={key} className="space-y-1">
-          <label className="text-[10px] font-semibold tracking-[0.1em] uppercase text-muted-foreground flex items-baseline justify-between gap-2">
-            {label}
-            {hint && <span className="text-[10px] normal-case font-normal tracking-normal text-muted-foreground/50">{hint}</span>}
-          </label>
-          <input
-            type={type}
-            value={(form as any)[key]}
-            onChange={(e) => f(key, e.target.value)}
-            maxLength={key === "pincode" ? 6 : undefined}
-            className={cn(
-              "w-full border bg-background px-3 py-2 text-sm focus:outline-none",
-              addrErrors[key] ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
-            )}
-          />
-          {addrErrors[key] && <p className="mt-1 text-[11px] text-primary">{addrErrors[key]}</p>}
-        </div>
-      ))}
+      <AddressFields form={form} errors={addrErrors} onChange={f} compact />
       <div className="flex gap-3 pt-1">
         <button
           type="submit"
@@ -346,21 +425,12 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
   });
 
   function f(key: string, val: string | boolean) {
-    setForm((prev) => ({ ...prev, [key]: val }));
+    setForm((prev) => ({ ...prev, [key]: typeof val === "string" ? sanitizeAddressField(key, val) : val }));
     if (typeof val === "string" && errors[key]) setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
   }
 
-  function validate() {
-    const errs: Record<string, string> = {};
-    if (!form.fullName.trim()) errs.fullName = "Required";
-    if (!form.phone.trim()) errs.phone = "Required";
-    else if (!/^\d{10}$/.test(form.phone.replace(/[\s-]/g, ""))) errs.phone = "Enter a valid 10-digit number";
-    if (!form.line1.trim()) errs.line1 = "Required";
-    if (!form.city.trim()) errs.city = "Required";
-    if (!form.state.trim()) errs.state = "Required";
-    if (!form.pincode.trim()) errs.pincode = "Required";
-    else if (!/^\d{6}$/.test(form.pincode)) errs.pincode = "Enter a valid 6-digit pincode";
-    return errs;
+  function validate(): Record<string, string> {
+    return validateAddress(form);
   }
 
   if (!add) {
@@ -394,32 +464,7 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
           </button>
         ))}
       </div>
-      {[
-        { key: "fullName", label: "Full name", type: "text", hint: undefined },
-        { key: "phone", label: "Phone", type: "tel", hint: undefined },
-        { key: "line1", label: "Address line 1", type: "text", hint: undefined },
-        { key: "line2", label: "Address line 2 (optional)", type: "text", hint: undefined },
-        { key: "city", label: "City", type: "text", hint: undefined },
-        { key: "state", label: "State", type: "text", hint: undefined },
-        { key: "pincode", label: "Pincode", type: "text", hint: undefined },
-      ].map(({ key, label, type, hint }) => (
-        <div key={key} className="space-y-1.5">
-          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground flex items-baseline justify-between gap-2">
-            {label}
-            {hint && <span className="text-[10px] normal-case font-normal tracking-normal text-muted-foreground/50">{hint}</span>}
-          </label>
-          <input
-            type={type}
-            value={(form as any)[key]}
-            onChange={(e) => f(key, e.target.value)}
-            className={cn(
-              "w-full border bg-background px-3 py-2 text-sm focus:outline-none",
-              errors[key] ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
-            )}
-          />
-          {errors[key] && <p className="mt-1 text-[11px] text-primary">{errors[key]}</p>}
-        </div>
-      ))}
+      <AddressFields form={form} errors={errors} onChange={f} />
       <label className="flex items-center gap-2 text-[13px]">
         <input type="checkbox" checked={form.isDefault} onChange={(e) => f("isDefault", e.target.checked)} />
         Set as default address

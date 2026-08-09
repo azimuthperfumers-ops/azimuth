@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, Lock, MapPin, Plus, Tag } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  INDIAN_STATES,
+  normalizeAddress,
+  normalizeState,
+  sanitizeAddressField,
+  validateAddress as validateAddressFields,
+} from "@/lib/address";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { AuthCard } from "@/components/auth-card";
@@ -175,9 +182,9 @@ function NewAddressForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
-          { key: "fullName" as const, label: "Full name", type: "text" },
-          { key: "phone" as const, label: "Phone", type: "tel", hint: "10-digit mobile" },
-        ].map(({ key, label, type, hint }) => (
+          { key: "fullName" as const, label: "Full name", type: "text", autoComplete: "name" },
+          { key: "phone" as const, label: "Phone", type: "tel", hint: "10-digit mobile", autoComplete: "tel-national" },
+        ].map(({ key, label, type, hint, autoComplete }) => (
           <div key={key} className="space-y-1.5">
             <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">{label}</label>
             <input
@@ -185,6 +192,10 @@ function NewAddressForm({
               type={type}
               value={form[key]}
               onChange={(e) => onChange(key, e.target.value)}
+              autoComplete={autoComplete}
+              {...(key === "phone"
+                ? { inputMode: "numeric" as const, maxLength: 10, placeholder: "9876543210" }
+                : {})}
               className={cn(
                 "w-full border bg-background px-3 py-2.5 text-sm focus:outline-none transition-colors",
                 errors[key] ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
@@ -225,29 +236,60 @@ function NewAddressForm({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[
-          { key: "city" as const, label: "City", hint: undefined },
-          { key: "state" as const, label: "State", hint: undefined },
-          { key: "pincode" as const, label: "Pincode", maxLength: 6, hint: undefined },
-        ].map(({ key, label, maxLength, hint }) => (
-          <div key={key} className="space-y-1.5">
-            <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground flex items-baseline justify-between gap-2">
-              {label}
-              {!errors[key] && hint && <span className="text-[10px] normal-case font-normal tracking-normal text-muted-foreground/50">{hint}</span>}
-            </label>
-            <input
-              type="text"
-              value={form[key]}
-              onChange={(e) => onChange(key, e.target.value)}
-              maxLength={maxLength}
-              className={cn(
-                "w-full border bg-background px-3 py-2.5 text-sm focus:outline-none transition-colors",
-                errors[key] ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
-              )}
-            />
-            {errors[key] && <p className="mt-1 text-[11px] text-primary">{errors[key]}</p>}
-          </div>
-        ))}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">City</label>
+          <input
+            type="text"
+            value={form.city}
+            onChange={(e) => onChange("city", e.target.value)}
+            maxLength={60}
+            autoComplete="address-level2"
+            className={cn(
+              "w-full border bg-background px-3 py-2.5 text-sm focus:outline-none transition-colors",
+              errors.city ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+            )}
+          />
+          {errors.city && <p className="mt-1 text-[11px] text-primary">{errors.city}</p>}
+        </div>
+
+        {/* Picked, never typed — the courier matches on exact state spelling. */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">State</label>
+          <select
+            value={normalizeState(form.state) ?? ""}
+            onChange={(e) => onChange("state", e.target.value)}
+            autoComplete="address-level1"
+            className={cn(
+              "w-full border bg-background px-3 py-2.5 text-sm focus:outline-none transition-colors",
+              errors.state ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+              !form.state && "text-muted-foreground/60",
+            )}
+          >
+            <option value="">Select state</option>
+            {INDIAN_STATES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          {errors.state && <p className="mt-1 text-[11px] text-primary">{errors.state}</p>}
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground">Pincode</label>
+          <input
+            type="text"
+            value={form.pincode}
+            onChange={(e) => onChange("pincode", e.target.value)}
+            maxLength={6}
+            inputMode="numeric"
+            placeholder="560001"
+            autoComplete="postal-code"
+            className={cn(
+              "w-full border bg-background px-3 py-2.5 text-sm focus:outline-none transition-colors",
+              errors.pincode ? "border-primary focus:border-primary" : "border-border focus:border-foreground",
+            )}
+          />
+          {errors.pincode && <p className="mt-1 text-[11px] text-primary">{errors.pincode}</p>}
+        </div>
       </div>
 
       <label className="flex items-center gap-2 text-[12px] text-muted-foreground cursor-pointer select-none">
@@ -593,7 +635,7 @@ export default function CheckoutPage() {
   }, [session]);
 
   function setNewFormField(key: keyof AddressForm, value: string) {
-    setNewForm((prev) => ({ ...prev, [key]: value }));
+    setNewForm((prev) => ({ ...prev, [key]: sanitizeAddressField(key, value) }));
     if (newFormErrors[key]) setNewFormErrors((p) => { const n = { ...p }; delete n[key]; return n; });
   }
 
@@ -643,15 +685,13 @@ export default function CheckoutPage() {
     return null;
   }
 
-  function validateAddress(addr: AddressForm): boolean {
-    return !!(
-      addr.fullName.trim() &&
-      addr.phone.trim() &&
-      addr.line1.trim() &&
-      addr.city.trim() &&
-      addr.state.trim() &&
-      addr.pincode.trim()
-    );
+  /**
+   * Saved addresses are held to the same rules as a freshly typed one — some were
+   * stored before these checks existed, and a malformed phone or state only fails
+   * at the courier, long after the customer has paid.
+   */
+  function addressErrors(addr: AddressForm) {
+    return validateAddressFields(addr);
   }
 
   async function handlePay() {
@@ -665,21 +705,23 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!validateAddress(addr)) {
+    // Canonical form is what gets saved, ordered and sent to the gateway.
+    const shipTo = { ...addr, ...normalizeAddress(addr) };
+
+    const errs = addressErrors(shipTo);
+    if (Object.keys(errs).length > 0) {
       if (showNewForm) {
-        const errs: Partial<Record<keyof AddressForm, string>> = {};
-        if (!addr.fullName.trim()) errs.fullName = "Required";
-        if (!addr.phone.trim()) errs.phone = "Required";
-        else if (!/^\d{10}$/.test(addr.phone.replace(/[\s-]/g, ""))) errs.phone = "Enter a valid 10-digit number";
-        if (!addr.line1.trim()) errs.line1 = "Required";
-        if (!addr.city.trim()) errs.city = "Required";
-        if (!addr.state.trim()) errs.state = "Required";
-        if (!addr.pincode.trim()) errs.pincode = "Required";
-        else if (!/^\d{6}$/.test(addr.pincode)) errs.pincode = "Enter a valid 6-digit pincode";
         setNewFormErrors(errs);
         newFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       } else {
-        toast.error("Fill in all required address fields");
+        // The saved address itself is the problem — point at the one broken field
+        // and send them somewhere they can fix it.
+        const [field, message] = Object.entries(errs)[0]!;
+        const LABELS: Record<string, string> = {
+          fullName: "name", phone: "phone number", line1: "address",
+          city: "city", state: "state", pincode: "pincode",
+        };
+        toast.error(`This saved address needs a valid ${LABELS[field] ?? field} — ${message.toLowerCase()}. Edit it under Account → Addresses.`);
       }
       return;
     }
@@ -711,14 +753,14 @@ export default function CheckoutPage() {
       // Optionally save new address to account first
       if (showNewForm && saveToAccount) {
         await addAddressMut.mutateAsync({
-          label: addr.label,
-          fullName: addr.fullName.trim(),
-          phone: addr.phone.trim(),
-          line1: addr.line1.trim(),
-          line2: addr.line2.trim() || undefined,
-          city: addr.city.trim(),
-          state: addr.state.trim(),
-          pincode: addr.pincode.trim(),
+          label: shipTo.label,
+          fullName: shipTo.fullName,
+          phone: shipTo.phone,
+          line1: shipTo.line1,
+          line2: shipTo.line2 || undefined,
+          city: shipTo.city,
+          state: shipTo.state,
+          pincode: shipTo.pincode,
           isDefault: (savedAddresses ?? []).length === 0,
         });
         await utils.userData.listAddresses.invalidate();
@@ -737,13 +779,13 @@ export default function CheckoutPage() {
       const order = await createOrder.mutateAsync({
         paymentMethod: method,
         shippingAddress: {
-          fullName: addr.fullName.trim(),
-          phone: addr.phone.trim(),
-          line1: addr.line1.trim(),
-          line2: addr.line2.trim() || null,
-          city: addr.city.trim(),
-          state: addr.state.trim(),
-          pincode: addr.pincode.trim(),
+          fullName: shipTo.fullName,
+          phone: shipTo.phone,
+          line1: shipTo.line1,
+          line2: shipTo.line2 || null,
+          city: shipTo.city,
+          state: shipTo.state,
+          pincode: shipTo.pincode,
         },
         items: items.map((item) => ({
           variantId: item.variantId,
@@ -786,8 +828,8 @@ export default function CheckoutPage() {
           description: `Order ${rzpData.orderNumber}`,
           order_id: rzpData.razorpayOrderId,
           prefill: {
-            name: addr.fullName.trim(),
-            contact: addr.phone.trim(),
+            name: shipTo.fullName,
+            contact: shipTo.phone,
             email: session?.user?.email ?? "",
           },
           theme: { color: "#0a0a0a" },

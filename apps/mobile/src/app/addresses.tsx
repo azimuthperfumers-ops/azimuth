@@ -10,6 +10,7 @@ import {
   type AddressForm,
   AddressFormFields,
   EMPTY_ADDRESS_FORM,
+  normalizeAddressForm,
   validateAddressForm,
 } from "@/lib/address-form";
 
@@ -32,18 +33,19 @@ function AddAddressForm({ onDone }: { onDone: () => void }) {
   }
 
   function submit() {
-    const errs = validateAddressForm(form);
+    const addr = normalizeAddressForm(form);
+    const errs = validateAddressForm(addr);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     add.mutate({
-      label: form.label,
-      fullName: form.fullName.trim(),
-      phone: form.phone.trim(),
-      line1: form.line1.trim(),
-      line2: form.line2.trim() || undefined,
-      city: form.city.trim(),
-      state: form.state.trim(),
-      pincode: form.pincode.trim(),
-      isDefault: form.isDefault,
+      label: addr.label,
+      fullName: addr.fullName,
+      phone: addr.phone,
+      line1: addr.line1,
+      line2: addr.line2 || undefined,
+      city: addr.city,
+      state: addr.state,
+      pincode: addr.pincode,
+      isDefault: addr.isDefault,
     });
   }
 
@@ -132,18 +134,19 @@ function EditAddressForm({ address, onDone }: { address: Address; onDone: () => 
   }
 
   function submit() {
-    const errs = validateAddressForm(form);
+    const addr = normalizeAddressForm(form);
+    const errs = validateAddressForm(addr);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     update.mutate({
       id: address.id,
-      label: form.label,
-      fullName: form.fullName.trim(),
-      phone: form.phone.trim(),
-      line1: form.line1.trim(),
-      line2: form.line2.trim() || null,
-      city: form.city.trim(),
-      state: form.state.trim(),
-      pincode: form.pincode.trim(),
+      label: addr.label,
+      fullName: addr.fullName,
+      phone: addr.phone,
+      line1: addr.line1,
+      line2: addr.line2 || null,
+      city: addr.city,
+      state: addr.state,
+      pincode: addr.pincode,
     });
   }
 
