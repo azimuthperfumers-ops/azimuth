@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { isDiscountLive } from "@/lib/discount-status";
 import { formatInr } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -61,9 +62,11 @@ export default function ProductsPage() {
     enabled: can("discounts"),
   });
 
+  // Only discounts the storefront would actually apply right now — an expired or
+  // not-yet-started one must not strike through a price here.
   const discountMap = new Map(
     (linkedVariants.data ?? [])
-      .filter((lv) => lv.discount.isActive)
+      .filter((lv) => isDiscountLive(lv.discount))
       .map((lv) => [lv.variantId, { type: lv.discount.type, value: Number(lv.discount.value) }]),
   );
 

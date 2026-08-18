@@ -84,7 +84,18 @@ export function createDiscountRepository(db: Database) {
       return db.query.discountProducts.findMany({
         with: {
           discount: {
-            columns: { id: true, name: true, type: true, value: true, isActive: true },
+            // startsAt/endsAt travel with the row so the admin can tell a running
+            // discount from a scheduled or expired one — see isDiscountLive in
+            // apps/admin/src/lib/discount-status.ts.
+            columns: {
+              id: true,
+              name: true,
+              type: true,
+              value: true,
+              isActive: true,
+              startsAt: true,
+              endsAt: true,
+            },
           },
         },
       });

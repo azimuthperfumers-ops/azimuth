@@ -34,6 +34,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DISCOUNT_STATUS_LABEL,
+  DISCOUNT_STATUS_VARIANT,
+  discountStatus,
+} from "@/lib/discount-status";
 import { trpc } from "@/lib/trpc";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -258,7 +263,9 @@ export default function DiscountsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {discounts.data.map((d) => (
+                {discounts.data.map((d) => {
+                  const status = discountStatus(d);
+                  return (
                   <TableRow
                     key={d.id}
                     className="cursor-pointer"
@@ -277,8 +284,8 @@ export default function DiscountsPage() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={d.isActive ? "default" : "secondary"}>
-                        {d.isActive ? "Active" : "Inactive"}
+                      <Badge variant={DISCOUNT_STATUS_VARIANT[status]}>
+                        {DISCOUNT_STATUS_LABEL[status]}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -310,7 +317,8 @@ export default function DiscountsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}

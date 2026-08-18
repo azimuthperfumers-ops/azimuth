@@ -27,6 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DISCOUNT_STATUS_LABEL,
+  DISCOUNT_STATUS_VARIANT,
+  discountStatus,
+} from "@/lib/discount-status";
 import { formatInr } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -496,8 +501,8 @@ export default function DiscountDetailPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Badge variant={d.isActive ? "default" : "secondary"}>
-              {d.isActive ? "Active" : "Inactive"}
+            <Badge variant={DISCOUNT_STATUS_VARIANT[discountStatus(d)]}>
+              {DISCOUNT_STATUS_LABEL[discountStatus(d)]}
             </Badge>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
               <Pencil className="size-3.5 mr-1.5" /> Edit

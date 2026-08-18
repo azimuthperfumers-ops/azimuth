@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { isDiscountLive } from "@/lib/discount-status";
 import { formatInr } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -44,10 +45,11 @@ export default function ProductDetailPage() {
   const [removeStockVariantId, setRemoveStockVariantId] = useState<string | null>(null);
   const [editVariantId, setEditVariantId] = useState<string | null>(null);
 
-  // variantId → { id, name, type, value } (active only)
+  // variantId → { id, name, type, value }, limited to the discounts the
+  // storefront is actually applying right now (toggle on and inside its window).
   const discountByVariant = new Map(
     (variantDiscounts.data ?? [])
-      .filter((d) => d.discount.isActive)
+      .filter((d) => isDiscountLive(d.discount))
       .map((d) => [
         d.variantId,
         { id: d.discount.id, name: d.discount.name, type: d.discount.type, value: Number(d.discount.value) },
