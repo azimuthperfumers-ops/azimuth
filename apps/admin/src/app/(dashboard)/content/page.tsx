@@ -472,13 +472,28 @@ export default function ContentPage() {
             </div>
           )}
 
+          {/* Field for field, top to bottom, the same blocks the page renders. */}
           {surface === "story" && (
             <div className="space-y-4">
-              <Field label="Page subtitle"><Textarea rows={2} value={story.draft.headerSubtitle} onChange={(e) => story.setDraft((d) => ({ ...d, headerSubtitle: e.target.value }))} className="resize-y text-sm" /></Field>
-              <Field label="Origin blockquote"><Textarea rows={3} value={story.draft.originBlockquote} onChange={(e) => story.setDraft((d) => ({ ...d, originBlockquote: e.target.value }))} className="resize-y text-sm" /></Field>
-              <Field label="Origin body" hint="Blank line between paragraphs"><Textarea rows={6} value={story.draft.originBody} onChange={(e) => story.setDraft((d) => ({ ...d, originBody: e.target.value }))} className="resize-y text-sm" /></Field>
-              <Field label="Dark-section pullquote"><Textarea rows={3} value={story.draft.pullquote} onChange={(e) => story.setDraft((d) => ({ ...d, pullquote: e.target.value }))} className="resize-y text-sm" /></Field>
-              <Field label="Founder's note" hint="Blank line between paragraphs"><Textarea rows={6} value={story.draft.founderBody} onChange={(e) => story.setDraft((d) => ({ ...d, founderBody: e.target.value }))} className="resize-y text-sm" /></Field>
+              <Field label="Eyebrow" hint="Small caps line above the title"><Input value={story.draft.eyebrow} onChange={(e) => story.setDraft((d) => ({ ...d, eyebrow: e.target.value }))} className="h-9" /></Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Title line 1"><Input value={story.draft.titleLine1} onChange={(e) => story.setDraft((d) => ({ ...d, titleLine1: e.target.value }))} className="h-9" /></Field>
+                <Field label="Title line 2" hint="Set in italic accent"><Input value={story.draft.titleItalic} onChange={(e) => story.setDraft((d) => ({ ...d, titleItalic: e.target.value }))} className="h-9" /></Field>
+              </div>
+              <Field label="Statement" hint="The large centred quote — one line each"><Textarea rows={2} value={story.draft.statement} onChange={(e) => story.setDraft((d) => ({ ...d, statement: e.target.value }))} className="resize-y text-sm" /></Field>
+              <Field label="Story body" hint="Blank line between paragraphs"><Textarea rows={8} value={story.draft.body} onChange={(e) => story.setDraft((d) => ({ ...d, body: e.target.value }))} className="resize-y text-sm" /></Field>
+              <Field label="Closing line"><Textarea rows={2} value={story.draft.closingLine} onChange={(e) => story.setDraft((d) => ({ ...d, closingLine: e.target.value }))} className="resize-y text-sm" /></Field>
+
+              {/* The phone app tells the same story in a different shape, so its
+                  two pieces of copy have no block on the web page to preview. */}
+              <div className="space-y-4 border-t border-border pt-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Phone app only
+                </p>
+                <Field label="Intro paragraph" hint="Under the founder portrait"><Textarea rows={3} value={story.draft.originBlockquote} onChange={(e) => story.setDraft((d) => ({ ...d, originBlockquote: e.target.value }))} className="resize-y text-sm" /></Field>
+                <Field label="Founder pullquote"><Textarea rows={3} value={story.draft.pullquote} onChange={(e) => story.setDraft((d) => ({ ...d, pullquote: e.target.value }))} className="resize-y text-sm" /></Field>
+              </div>
+
               <SaveBar onSave={story.persist} saving={story.saving} dirty />
             </div>
           )}

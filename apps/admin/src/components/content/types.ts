@@ -50,31 +50,56 @@ export const SHOP_COVER_DEFAULTS: ShopCover = {
   subheading: "Every Azimuth fragrance, currently live in the catalog.",
 };
 
+/**
+ * One stored section, two very different pages read it.
+ *
+ * The first six fields are the web Our Story page, block for block — see
+ * apps/user/src/app/our-story/page.tsx. Anything editable there is here, and
+ * nothing here is invented: the preview and the live page render the same copy
+ * in the same order.
+ *
+ * The last two belong to the phone app (apps/mobile/src/app/our-story.tsx),
+ * which tells the story through a different layout — a stat grid and a founder
+ * pullquote that the web page has no equivalent of. They keep their original
+ * keys so copy already saved against them survives untouched.
+ */
 export type OurStory = {
-  headerSubtitle: string;
+  eyebrow: string;
+  titleLine1: string;
+  titleItalic: string;
+  statement: string;
+  body: string;
+  closingLine: string;
   originBlockquote: string;
-  originBody: string;
   pullquote: string;
-  founderBody: string;
 };
 
 export const OUR_STORY_DEFAULTS: OurStory = {
-  headerSubtitle:
-    "We make perfume the slow way. No shortcuts, no synthetic proxies pretending to be naturals. Only raw materials with stories, blended until something true emerges.",
+  eyebrow: "Azimuth Perfumers — Est. 2019",
+  titleLine1: "Our",
+  titleItalic: "Story.",
+  // Rendered one line per newline — the page breaks it deliberately.
+  statement: ["A perfume is not what you wear.", "It’s what you leave behind."].join("\n"),
+  body: [
+    "We founded this house to capture moments too fleeting for photographs. The trace of someone’s hair as they turn. The warmth of sand after sunset. The way rain smells different at 3am.",
+    "Each composition begins as a feeling, then becomes a formula. We source rare absolutes, age our blends like fine wine, and hand-finish every bottle. Because true luxury isn’t logo or price. It’s the quiet confidence of being unforgettable.",
+  ].join("\n\n"),
+  closingLine: "This is our craft. Your signature awaits.",
   originBlockquote:
     "An azimuth is a bearing — a precise angle from true north. We chose that name because every fragrance we build is a direction, not a decoration.",
-  originBody: [
-    "Azimuth Perfumers began in a single room in 2019 — a rented space, secondhand glassware, and a notebook filled with the kind of obsessive notes that either become something great or remain quietly embarrassing.",
-    "We make our accords entirely in India, from materials sourced directly from Indian farmers and distillers. Each batch is under two hundred units. Nothing is rushed.",
-    "The result is a house of slow perfumery — uncompromising, small, and stubbornly itself.",
-  ].join("\n\n"),
   pullquote:
     "Most fragrance is built to please everyone and so pleases no one deeply. We build to please the one person who has been looking for exactly this.",
-  founderBody: [
-    "I have been asked many times why we don't scale. Why we cap batches. Why we refuse to move to a larger facility and simply make more.",
-    "When you wear an Azimuth fragrance, I want you to know that a human being paid close attention to it. Not a machine, not a process, not an algorithm.",
-  ].join("\n\n"),
 };
+
+/** Paragraph split shared by the preview and the storefront page. */
+export function splitParagraphs(body: string): string[] {
+  return body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+}
+
+/** Line split for copy whose line breaks are part of the design. */
+export function splitLines(text: string): string[] {
+  return text.split("\n").map((l) => l.trim()).filter(Boolean);
+}
 
 // Landing imagery — the real ingredient/mood photos drifting in the landing
 // "small batch" CTA. Bundled webp defaults live in the storefront; leaving this

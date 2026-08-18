@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { FONT_PREVIEW_CLASS, FONT_VAR } from "./fonts";
+import { splitLines, splitParagraphs } from "./types";
 import type { HomeHero, OurStory, ShopCover, Surface, ThemeTokens } from "./types";
 
 export type ProductLite = {
@@ -156,25 +157,53 @@ export function LivePreview({ surface, theme: t, home, shopCover, story, feature
           </>
         )}
 
+        {/* Mirrors apps/user/src/app/our-story/page.tsx: masthead over a rule,
+            then one centred column — statement, hairline, body, closing line. */}
         {surface === "story" && (
           <>
-            <p className="mb-4 text-[9px] font-semibold uppercase tracking-[0.32em]" style={{ color: t.inkMuted }}>
-              Azimuth Perfumers — Est. 2019
-            </p>
-            <h2 style={{ color: t.ink }} className="text-[46px] font-semibold leading-[0.9]">
-              Our
-              <br />
-              <span style={{ fontFamily: serif, fontStyle: "italic", color: t.accent }}>Story.</span>
-            </h2>
-            <p className="mt-5 text-[12px] leading-relaxed" style={{ color: t.inkMuted }}>
-              {story.headerSubtitle}
-            </p>
-            <blockquote
-              style={{ fontFamily: serif, color: t.ink, borderLeft: `2px solid ${t.accent}` }}
-              className="mt-6 pl-4 text-[18px] italic leading-snug"
-            >
-              “{story.originBlockquote}”
-            </blockquote>
+            <div className="pb-6" style={{ borderBottom: `1px solid ${t.border}` }}>
+              <p
+                className="mb-4 text-[9px] font-semibold uppercase tracking-[0.32em]"
+                style={{ color: t.inkMuted }}
+              >
+                {story.eyebrow}
+              </p>
+              <h2 style={{ color: t.ink }} className="text-[46px] font-semibold leading-[0.88]">
+                {story.titleLine1}
+                <br />
+                <span style={{ fontFamily: serif, fontStyle: "italic", color: t.accent }}>
+                  {story.titleItalic}
+                </span>
+              </h2>
+            </div>
+
+            <div className="mx-auto max-w-[420px] pt-9 text-center">
+              <blockquote
+                style={{ fontFamily: serif, color: t.ink }}
+                className="text-[22px] font-medium italic leading-[1.18]"
+              >
+                {splitLines(story.statement).map((line, i) => (
+                  <span key={i} className="block">
+                    {line}
+                  </span>
+                ))}
+              </blockquote>
+
+              <div className="mx-auto mt-6 h-px w-10" style={{ background: t.accent }} />
+
+              <div className="mt-7 space-y-4 text-left text-[11px] leading-[1.9]" style={{ color: t.inkMuted }}>
+                {splitParagraphs(story.body).map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
+              </div>
+
+              <p
+                style={{ fontFamily: serif, color: t.ink }}
+                className="mt-8 text-[15px] font-medium italic opacity-80"
+              >
+                {story.closingLine}
+              </p>
+            </div>
           </>
         )}
 
