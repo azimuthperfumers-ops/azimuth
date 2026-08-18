@@ -1,7 +1,15 @@
 import type { Database } from "@azimuth/db";
 import { TRPCError } from "@trpc/server";
 
-import { CacheKey, cacheDel, cacheGetOrSet } from "../lib/redis";
+import {
+  CacheKey,
+  CacheNs,
+  CacheTtl,
+  cacheBumpVersion,
+  cacheDel,
+  cacheGetOrSet,
+  cacheGetOrSetNs,
+} from "../lib/redis";
 import { createCatalogRepository } from "../repositories/catalog.repository";
 import { env } from "../env";
 import type {
@@ -65,16 +73,32 @@ export function withUrl<T extends { key: string }>(img: T) {
   return { ...img, url: imageUrl(img.key) };
 }
 
+/**
+ * Every catalog write invalidates every cached catalog read — one INCR bumps the
+ * namespace version, orphaning all `catalog:v<n>:*` keys at once. Coarse on
+ * purpose: writes are rare (an admin editing the shop), reads are constant, and
+ * a wrong stale price costs more than a redundant query.
+ */
+async function invalidating<T>(work: Promise<T> | T): Promise<T> {
+  const result = await work;
+  await cacheBumpVersion(CacheNs.catalog);
+  return result;
+}
+
 export function createCatalogService(db: Database) {
   const catalogRepository = createCatalogRepository(db);
 
   return {
     createCategory(input: CreateCategoryInput) {
-      return guardUnique(() => catalogRepository.createCategory(input), "category slug already exists");
+      return invalidating(
+        guardUnique(() => catalogRepository.createCategory(input), "category slug already exists"),
+      );
     },
 
     listCategories() {
-      return catalogRepository.listCategories();
+      return cacheGetOrSetNs(CacheNs.catalog, "categories", CacheTtl.catalog, () =>
+        catalogRepository.listCategories(),
+      );
     },
 
     async listCategoriesWithCount() {
@@ -102,28 +126,37 @@ export function createCatalogService(db: Database) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
+      await cacheBumpVersion(CacheNs.catalog);
       return category;
     },
 
     deleteCategory(input: DeleteCategoryInput) {
-      return guardReferenced(
-        () => catalogRepository.deleteCategory(input.id),
-        "category still has products assigned to it",
+      return invalidating(
+        guardReferenced(
+          () => catalogRepository.deleteCategory(input.id),
+          "category still has products assigned to it",
+        ),
       );
     },
 
     createFragranceNote(input: CreateFragranceNoteInput) {
-      return guardUnique(() => catalogRepository.createFragranceNote(input), "note name already exists");
+      return invalidating(
+        guardUnique(() => catalogRepository.createFragranceNote(input), "note name already exists"),
+      );
     },
 
     listFragranceNotes() {
-      return catalogRepository.listFragranceNotes();
+      return cacheGetOrSetNs(CacheNs.catalog, "notes", CacheTtl.catalog, () =>
+        catalogRepository.listFragranceNotes(),
+      );
     },
 
     deleteFragranceNote(input: DeleteFragranceNoteInput) {
-      return guardReferenced(
-        () => catalogRepository.deleteFragranceNote(input.id),
-        "This note is used by one or more products — remove it from them first.",
+      return invalidating(
+        guardReferenced(
+          () => catalogRepository.deleteFragranceNote(input.id),
+          "This note is used by one or more products — remove it from them first.",
+        ),
       );
     },
 
@@ -133,6 +166,7 @@ export function createCatalogService(db: Database) {
         "product slug already exists",
       );
       await cacheDel(CacheKey.categoryProductCount(input.categoryId));
+      await cacheBumpVersion(CacheNs.catalog);
       return product;
     },
 
@@ -152,6 +186,7 @@ export function createCatalogService(db: Database) {
       }
       // Always invalidate the product's own category (product.categoryId)
       await cacheDel(CacheKey.categoryProductCount(product.categoryId));
+      await cacheBumpVersion(CacheNs.catalog);
 
       return product;
     },
@@ -182,12 +217,22 @@ export function createCatalogService(db: Database) {
       }
       await catalogRepository.deleteProduct(id);
       await cacheDel(CacheKey.categoryProductCount(product.categoryId));
+      await cacheBumpVersion(CacheNs.catalog);
       return { deleted: true };
     },
 
     async listProducts(filters: ListProductsInput) {
-      const products = await catalogRepository.listProducts(filters);
-      return products.map((p) => ({ ...p, images: p.images.map(withUrl) }));
+      const fetch = async () => {
+        const products = await catalogRepository.listProducts(filters);
+        return products.map((p) => ({ ...p, images: p.images.map(withUrl) }));
+      };
+
+      // Admin search is high-cardinality and barely reused — caching it would
+      // fill Redis with keys nobody reads a second time.
+      if (filters.search) return fetch();
+
+      const key = `products:${filters.status ?? "any"}:${filters.categoryId ?? "any"}:${filters.limit}`;
+      return cacheGetOrSetNs(CacheNs.catalog, key, CacheTtl.catalog, fetch);
     },
 
     async getProduct(input: GetProductInput) {
@@ -200,18 +245,25 @@ export function createCatalogService(db: Database) {
       return { ...product, images: product.images.map(withUrl) };
     },
 
-    async getProductBySlug(slug: string) {
-      const product = await catalogRepository.getProductBySlug(slug);
+    // The public product page. The NOT_FOUND throw lives inside the fallback on
+    // purpose: cacheGetOrSet only stores a value it received, so a 404 is never
+    // cached and a newly published product appears immediately.
+    getProductBySlug(slug: string) {
+      return cacheGetOrSetNs(CacheNs.catalog, `product:slug:${slug}`, CacheTtl.catalog, async () => {
+        const product = await catalogRepository.getProductBySlug(slug);
 
-      if (!product) {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }
+        if (!product) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
 
-      return { ...product, images: product.images.map(withUrl) };
+        return { ...product, images: product.images.map(withUrl) };
+      });
     },
 
     createVariant(input: CreateVariantInput) {
-      return guardUnique(() => catalogRepository.createVariant(input), "SKU or barcode already exists");
+      return invalidating(
+        guardUnique(() => catalogRepository.createVariant(input), "SKU or barcode already exists"),
+      );
     },
 
     async updateVariant(input: UpdateVariantInput) {
@@ -224,18 +276,21 @@ export function createCatalogService(db: Database) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
+      await cacheBumpVersion(CacheNs.catalog);
       return variant;
     },
 
     async addImage(input: AddProductImageInput) {
       try {
-        const img = await catalogRepository.addImage(input);
+        const img = await invalidating(catalogRepository.addImage(input));
         return img ? withUrl(img) : img;
       } catch (err) {
         if (hasPgErrorCode(err, "23505") && (input.isPrimary || input.isSecondary)) {
           // Primary/secondary slot already taken — insert as plain gallery image
           // rather than surfacing a conflict to the user.
-          const img = await catalogRepository.addImage({ ...input, isPrimary: false, isSecondary: false });
+          const img = await invalidating(
+            catalogRepository.addImage({ ...input, isPrimary: false, isSecondary: false }),
+          );
           return img ? withUrl(img) : img;
         }
         if (hasPgErrorCode(err, "23505")) {
@@ -246,26 +301,28 @@ export function createCatalogService(db: Database) {
     },
 
     deleteImage(input: DeleteImageInput) {
-      return catalogRepository.deleteImage(input.id);
+      return invalidating(catalogRepository.deleteImage(input.id));
     },
 
     setPrimaryImage(input: SetPrimaryImageInput) {
-      return catalogRepository.setPrimaryImage(input);
+      return invalidating(catalogRepository.setPrimaryImage(input));
     },
 
     setSecondaryImage(input: SetSecondaryImageInput) {
-      return catalogRepository.setSecondaryImage(input);
+      return invalidating(catalogRepository.setSecondaryImage(input));
     },
 
     addProductNote(input: AddProductNoteInput) {
-      return guardUnique(
-        () => catalogRepository.addProductNote(input),
-        "note already added at that position",
+      return invalidating(
+        guardUnique(
+          () => catalogRepository.addProductNote(input),
+          "note already added at that position",
+        ),
       );
     },
 
     removeProductNote(input: RemoveProductNoteInput) {
-      return catalogRepository.removeProductNote(input.id);
+      return invalidating(catalogRepository.removeProductNote(input.id));
     },
   };
 }

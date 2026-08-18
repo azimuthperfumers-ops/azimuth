@@ -1,6 +1,7 @@
 import type { Database } from "@azimuth/db";
 import { TRPCError } from "@trpc/server";
 
+import { CacheNs, cacheBumpVersion } from "../lib/redis";
 import { createDiscountRepository } from "../repositories/discount.repository";
 import type {
   AddDiscountProductInput,
@@ -20,12 +21,24 @@ function hasPgErrorCode(err: unknown, code: string): boolean {
   return typeof cause === "object" && cause !== null && "code" in cause && cause.code === code;
 }
 
+/**
+ * Discounts feed `effectivePrice` on cached product lists and product pages, so
+ * every discount write invalidates the catalog namespace. Without this an admin
+ * could publish a sale and watch the storefront keep quoting the old price for
+ * the rest of the TTL.
+ */
+async function invalidating<T>(work: Promise<T> | T): Promise<T> {
+  const result = await work;
+  await cacheBumpVersion(CacheNs.catalog);
+  return result;
+}
+
 export function createDiscountService(db: Database) {
   const repo = createDiscountRepository(db);
 
   return {
     createDiscount(input: CreateDiscountInput) {
-      return repo.createDiscount(input);
+      return invalidating(repo.createDiscount(input));
     },
 
     listDiscounts(input: ListDiscountsInput) {
@@ -41,16 +54,17 @@ export function createDiscountService(db: Database) {
     async updateDiscount(input: UpdateDiscountInput) {
       const row = await repo.updateDiscount(input);
       if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+      await cacheBumpVersion(CacheNs.catalog);
       return row;
     },
 
     deleteDiscount(input: DeleteDiscountInput) {
-      return repo.deleteDiscount(input.id);
+      return invalidating(repo.deleteDiscount(input.id));
     },
 
     async addProduct(input: AddDiscountProductInput) {
       try {
-        return await repo.addProduct(input);
+        return await invalidating(repo.addProduct(input));
       } catch (err) {
         if (hasPgErrorCode(err, "23505")) {
           throw new TRPCError({ code: "CONFLICT", message: "variant is already linked to another discount" });
@@ -60,7 +74,7 @@ export function createDiscountService(db: Database) {
     },
 
     removeProduct(input: RemoveDiscountProductInput) {
-      return repo.removeProduct(input.id);
+      return invalidating(repo.removeProduct(input.id));
     },
 
     listDiscountsForProduct(input: ListForProductInput) {

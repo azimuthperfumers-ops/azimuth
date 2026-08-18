@@ -1,5 +1,16 @@
 export { getRedis, ensureRedis } from "./client";
-export { cacheGet, cacheSet, cacheDel, cacheGetOrSet, CacheKey } from "./cache";
+export {
+  cacheGet,
+  cacheSet,
+  cacheDel,
+  cacheGetOrSet,
+  cacheGetOrSetNs,
+  cacheVersion,
+  cacheBumpVersion,
+  CacheKey,
+  CacheNs,
+  CacheTtl,
+} from "./cache";
 export { rateLimit } from "./rate-limit";
 export type { RateLimitResult } from "./rate-limit";
 export {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { schema } from "@azimuth/db";
 import { asc, desc, eq } from "drizzle-orm";
+import { CacheKey, CacheTtl, cacheDel, cacheGetOrSet } from "../lib/redis";
 import { permissionProcedure } from "../middleware/auth.middleware";
 import { publicProcedure, router } from "../trpc";
 
@@ -8,14 +9,18 @@ const readContent = permissionProcedure("content", "read");
 const writeContent = permissionProcedure("content", "write");
 
 export const contentRouter = router({
+  // Cached per section. This is the storefront's hottest read — every page
+  // pulls its CMS copy through here — and it only changes via updateSection.
   getSection: publicProcedure
     .input(z.object({ section: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const row = await ctx.db.query.siteContent.findFirst({
-        where: eq(schema.siteContent.section, input.section),
-      });
-      return (row?.data ?? {}) as Record<string, unknown>;
-    }),
+    .query(async ({ ctx, input }) =>
+      cacheGetOrSet(CacheKey.contentSection(input.section), CacheTtl.content, async () => {
+        const row = await ctx.db.query.siteContent.findFirst({
+          where: eq(schema.siteContent.section, input.section),
+        });
+        return (row?.data ?? {}) as Record<string, unknown>;
+      }),
+    ),
 
   updateSection: writeContent
     .input(z.object({ section: z.string(), data: z.record(z.string(), z.unknown()) }))
@@ -27,17 +32,21 @@ export const contentRouter = router({
           target: schema.siteContent.section,
           set: { data: input.data, updatedAt: new Date() },
         });
+      await cacheDel(CacheKey.contentSection(input.section));
       return { ok: true };
     }),
 
+  // Cached per page — the hero renders these on every home/shop view.
   listBanners: publicProcedure
     .input(z.object({ page: z.enum(["home", "shop"]) }))
-    .query(async ({ ctx, input }) => {
-      return ctx.db.query.banners.findMany({
-        where: eq(schema.banners.page, input.page),
-        orderBy: [asc(schema.banners.sortOrder)],
-      });
-    }),
+    .query(async ({ ctx, input }) =>
+      cacheGetOrSet(CacheKey.banners(input.page), CacheTtl.content, async () =>
+        ctx.db.query.banners.findMany({
+          where: eq(schema.banners.page, input.page),
+          orderBy: [asc(schema.banners.sortOrder)],
+        }),
+      ),
+    ),
 
   listAllBanners: readContent.query(async ({ ctx }) => {
     return ctx.db.query.banners.findMany({
@@ -62,6 +71,7 @@ export const contentRouter = router({
         .insert(schema.banners)
         .values({ page: input.page, imageUrl: input.imageUrl, alt: input.alt, sortOrder: nextOrder })
         .returning();
+      await cacheDel(CacheKey.banners(input.page));
       return banner!;
     }),
 
@@ -79,6 +89,8 @@ export const contentRouter = router({
       if (rest.active !== undefined) set.active = rest.active;
       if (rest.sortOrder !== undefined) set.sortOrder = rest.sortOrder;
       await ctx.db.update(schema.banners).set(set).where(eq(schema.banners.id, id));
+      // update/delete carry only an id, so clear both pages — one Redis call, always correct.
+      await cacheDel(CacheKey.banners("home"), CacheKey.banners("shop"));
       return { ok: true };
     }),
 
@@ -86,6 +98,7 @@ export const contentRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db.delete(schema.banners).where(eq(schema.banners.id, input.id));
+      await cacheDel(CacheKey.banners("home"), CacheKey.banners("shop"));
       return { ok: true };
     }),
 });
