@@ -57,6 +57,9 @@ export type CancelParcelJob = {
 
 export type ExpirePendingPaymentsJob = {
   type: "expire_pending_payments";
+  /** Set by `scheduleOrderPaymentExpiry` — the one order this timer was armed
+   *  for. Absent on the safety-net sweep, which scans every pending order. */
+  orderId?: string;
 };
 
 export type OrderJobData =
@@ -78,10 +81,22 @@ export const orderQueue = new Queue<OrderJobData>("order-events", {
   },
 });
 
+/**
+ * Safety net only — the real work is done by the per-order timers armed at
+ * checkout (`scheduleOrderPaymentExpiry` in @azimuth/api). This exists purely to
+ * catch orders whose timer was lost, e.g. if Redis were flushed between the
+ * order being placed and its window closing.
+ *
+ * Deliberately 6-hourly, not minutes. Neon autosuspends the compute after 5
+ * minutes idle, so anything polling faster than that pins the database awake
+ * around the clock — this used to run `every: 5 * 60 * 1000` and cost ~6
+ * CU-hrs/day doing nothing. Four wake-ups a day is a rounding error, and a
+ * lost timer only delays failing an already-abandoned checkout.
+ */
 export async function scheduleExpirePendingPayments() {
   await orderQueue.upsertJobScheduler(
     "expire-pending-payments",
-    { every: 5 * 60 * 1000 },
+    { every: 6 * 60 * 60 * 1000 },
     { name: "expire_pending_payments", data: { type: "expire_pending_payments" } },
   );
 }

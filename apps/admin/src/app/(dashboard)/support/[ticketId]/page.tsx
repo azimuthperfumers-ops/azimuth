@@ -152,7 +152,7 @@ export default function AdminTicketPage({ params }: { params: Promise<{ ticketId
 
   const { data: ticket, isLoading } = trpc.ticket.get.useQuery(
     { ticketId },
-    { refetchInterval: 5000 },
+    { refetchInterval: 30_000 },
   );
 
   const send = trpc.ticket.adminSendMessage.useMutation({

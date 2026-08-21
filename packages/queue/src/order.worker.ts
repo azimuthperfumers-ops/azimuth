@@ -299,11 +299,22 @@ async function failStaleOrder(order: typeof schema.orders.$inferSelect, note: st
     );
 }
 
-async function processExpirePendingPayments() {
+/**
+ * @param orderId when set (the normal path), check only the order this job was
+ * armed for. Unset means the 6-hourly safety-net sweep over everything pending.
+ * Both re-check status and cutoff in SQL, so an order that paid in the meantime
+ * simply drops out and the job no-ops.
+ */
+async function processExpirePendingPayments(orderId?: string) {
   const cutoff = new Date(Date.now() - PENDING_PAYMENT_TIMEOUT_MS);
 
+  const pending = and(
+    eq(schema.orders.status, "pending_payment"),
+    lt(schema.orders.createdAt, cutoff),
+  );
+
   const stale = await db.query.orders.findMany({
-    where: and(eq(schema.orders.status, "pending_payment"), lt(schema.orders.createdAt, cutoff)),
+    where: orderId ? and(eq(schema.orders.id, orderId), pending) : pending,
   });
 
   let failedCount = 0;
@@ -802,7 +813,7 @@ export function startOrderWorker() {
       } else if (data.type === "cancel_parcel") {
         return await processCancelParcel(data);
       } else if (data.type === "expire_pending_payments") {
-        return await processExpirePendingPayments();
+        return await processExpirePendingPayments(data.orderId);
       }
       return {};
     },

@@ -19,7 +19,7 @@ import { trpc } from "@/lib/trpc";
 // be sold offline. In-transit units have already left the building.
 export default function BookedStockPage() {
   const booked = trpc.inventory.bookedStock.useQuery(undefined, {
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
   });
 
   const rows = booked.data ?? [];

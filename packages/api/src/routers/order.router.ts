@@ -29,7 +29,7 @@ import {
   sanitizePhone,
   sanitizePincode,
 } from "../lib/address-validation";
-import { orderQueue } from "../lib/order-queue";
+import { orderQueue, scheduleOrderPaymentExpiry } from "../lib/order-queue";
 import {
   advanceOrderStatus,
   applyOrderStockMovement,
@@ -243,6 +243,13 @@ export const orderRouter = router({
         total: serverTotal,
         userId: ctx.session.user.id,
       });
+
+      // Arm this order's expiry timer now, while we know its deadline. Done for
+      // every order, not just gateway ones: the wallet path below can leave the
+      // order pending_payment if the debit throws, and that case needs the same
+      // 30-minute backstop. If the order does get paid, the timer fires, sees a
+      // non-pending status and no-ops.
+      await scheduleOrderPaymentExpiry(order.id);
 
       // Bank/card orders stay pending_payment — the client opens Razorpay next.
       if (input.paymentMethod !== "wallet") return order;

@@ -93,7 +93,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // server caches the query in Redis for 30s anyway.
   const badges = trpc.analytics.sidebarBadges.useQuery(undefined, {
     enabled: isAdmin,
-    refetchInterval: 120_000,
+    refetchInterval: 600_000,
     staleTime: 60_000,
   });
 

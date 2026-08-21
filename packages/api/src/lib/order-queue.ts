@@ -6,7 +6,24 @@ export type CancelShipmentJob = { type: "cancel_shipment"; dbJobId?: string; ord
 /** Recall one parcel's AWB after it was detached from Shiprocket for self-fulfilment. */
 export type CancelParcelJob = { type: "cancel_parcel"; dbJobId?: string; orderId: string; shipmentId: string; waybill: string };
 
-export type OrderJobPayload = BookShipmentJob | InitiateRefundJob | CancelShipmentJob | CancelParcelJob;
+/**
+ * Fail one abandoned checkout once its payment window closes. Carries the order
+ * it was queued for so the worker reads a single row instead of scanning the
+ * table — see `scheduleOrderPaymentExpiry`. `orderId` is optional because the
+ * worker's 6-hourly safety-net sweep reuses this same job type unscoped.
+ */
+export type ExpirePendingPaymentsJob = { type: "expire_pending_payments"; orderId?: string };
+
+export type OrderJobPayload =
+  | BookShipmentJob
+  | InitiateRefundJob
+  | CancelShipmentJob
+  | CancelParcelJob
+  | ExpirePendingPaymentsJob;
+
+/** Payment window. Mirrors PENDING_PAYMENT_TIMEOUT_MS in @azimuth/queue — the
+ *  producer can't import the worker package (circular dep). */
+const PENDING_PAYMENT_TIMEOUT_MS = 30 * 60 * 1000;
 
 function redisOpts() {
   const url = process.env.REDIS_URL ?? "redis://localhost:6379";
@@ -33,3 +50,27 @@ export const orderQueue = new Queue<OrderJobPayload>("order-events", {
     removeOnFail: { count: 500 },
   },
 });
+
+/**
+ * Arm a one-shot timer to expire this order when its payment window closes.
+ *
+ * Replaces what used to be a blind 5-minute sweep. That sweep queried Postgres
+ * 288x/day whether or not any order was actually pending, which kept the Neon
+ * compute permanently awake (it autosuspends after 5 minutes idle) and burned
+ * the entire free compute allowance on finding nothing. A checkout's deadline
+ * is known the moment it starts, so schedule against it instead of hunting.
+ *
+ * `jobId` keys the timer to the order, so a retried mutation can't arm two.
+ */
+export async function scheduleOrderPaymentExpiry(orderId: string) {
+  await orderQueue.add(
+    "expire_pending_payments",
+    { type: "expire_pending_payments", orderId },
+    {
+      // A minute past the window so the worker's own cutoff check can't lose a race.
+      delay: PENDING_PAYMENT_TIMEOUT_MS + 60_000,
+      jobId: `expire:${orderId}`,
+      attempts: 3,
+    },
+  );
+}
