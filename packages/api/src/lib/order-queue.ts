@@ -23,7 +23,7 @@ export type OrderJobPayload =
 
 /** Payment window. Mirrors PENDING_PAYMENT_TIMEOUT_MS in @azimuth/queue — the
  *  producer can't import the worker package (circular dep). */
-const PENDING_PAYMENT_TIMEOUT_MS = 30 * 60 * 1000;
+export const PENDING_PAYMENT_TIMEOUT_MS = 30 * 60 * 1000;
 
 function redisOpts() {
   const url = process.env.REDIS_URL ?? "redis://localhost:6379";
@@ -61,16 +61,59 @@ export const orderQueue = new Queue<OrderJobPayload>("order-events", {
  * is known the moment it starts, so schedule against it instead of hunting.
  *
  * `jobId` keys the timer to the order, so a retried mutation can't arm two.
+ * It uses `-`, not `:`: BullMQ builds its Redis keys as `bull:<queue>:<jobId>`
+ * and rejects any custom id containing a colon ("Custom Id cannot contain :").
+ *
+ * Never throws and never hangs. This runs after the order row is already
+ * committed, so letting it fail would 500 a checkout whose order exists —
+ * the customer sees a generic error, retries, and mints duplicates while the
+ * payment window they were told about never opens. A timer that was never
+ * armed only delays failing an abandoned checkout until the worker's 6-hourly
+ * safety-net sweep (`scheduleExpirePendingPayments` in @azimuth/queue), which
+ * exists for exactly this case.
+ *
+ * The timeout is not belt-and-braces: `redisOpts()` sets
+ * `maxRetriesPerRequest: null` and leaves ioredis' offline queue enabled, so a
+ * command issued while the socket is down waits indefinitely instead of
+ * rejecting. try/catch alone would let checkout stall on it.
  */
+const ARM_TIMER_TIMEOUT_MS = 3000;
+
 export async function scheduleOrderPaymentExpiry(orderId: string) {
-  await orderQueue.add(
+  const add = orderQueue.add(
     "expire_pending_payments",
     { type: "expire_pending_payments", orderId },
     {
       // A minute past the window so the worker's own cutoff check can't lose a race.
       delay: PENDING_PAYMENT_TIMEOUT_MS + 60_000,
-      jobId: `expire:${orderId}`,
+      jobId: `expire-${orderId}`,
       attempts: 3,
     },
   );
+
+  // Swallow a late rejection too — the race below leaves `add` unhandled otherwise.
+  add.catch(() => undefined);
+
+  const timedOut = Symbol("timeout");
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const result = await Promise.race([
+      add,
+      new Promise<typeof timedOut>((resolve) => {
+        timer = setTimeout(() => resolve(timedOut), ARM_TIMER_TIMEOUT_MS);
+        timer.unref?.();
+      }),
+    ]);
+    if (result === timedOut) {
+      console.warn(
+        `[order-queue] expiry timer not armed for ${orderId}: redis did not respond in ${ARM_TIMER_TIMEOUT_MS}ms — 6-hourly sweep will settle it`,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[order-queue] expiry timer not armed for ${orderId}: ${(err as Error).message} — 6-hourly sweep will settle it`,
+    );
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

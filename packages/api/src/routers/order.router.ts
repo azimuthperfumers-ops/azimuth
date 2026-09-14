@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { schema } from "@azimuth/db";
-import { and, count, eq, gte, inArray, notInArray, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, notInArray, sql, sum } from "drizzle-orm";
 import { computeEffectivePrice, fetchActiveDiscountMap } from "../utils/pricing";
 import { createCouponService } from "../services/coupon.service";
 import {
@@ -29,7 +29,11 @@ import {
   sanitizePhone,
   sanitizePincode,
 } from "../lib/address-validation";
-import { orderQueue, scheduleOrderPaymentExpiry } from "../lib/order-queue";
+import {
+  PENDING_PAYMENT_TIMEOUT_MS,
+  orderQueue,
+  scheduleOrderPaymentExpiry,
+} from "../lib/order-queue";
 import {
   advanceOrderStatus,
   applyOrderStockMovement,
@@ -122,6 +126,84 @@ const ORDER_STATUS_VALUES = [
   "rto_initiated",
   "rto_delivered",
 ] as const;
+
+/**
+ * Find an unpaid order this checkout would merely duplicate.
+ *
+ * A checkout can fail after its order row is committed (a gateway hiccup, a lost
+ * response, the customer hitting Pay twice), and the customer's only recourse is
+ * to submit the same cart again — which used to mint a fresh order every time and
+ * leave a column of identical "Awaiting payment" rows in admin. The earlier order
+ * is still perfectly payable: `payment.createRazorpayOrder` reuses whatever
+ * `razorpayOrderId` is already attached to it.
+ *
+ * Only an exact match is reused — same payment method, same coupon, same address
+ * snapshot, same lines, same total, all taken from server-recomputed values and
+ * never from the client. Anything the customer actually changed falls through to
+ * a new order.
+ */
+async function findReusablePendingOrder(
+  db: Parameters<typeof advanceOrderStatus>[0],
+  userId: string,
+  candidate: {
+    paymentMethod: "razorpay" | "wallet";
+    couponId: string | null;
+    shippingAddress: unknown;
+    total: number;
+    items: { variantId: string; quantity: number }[];
+  },
+) {
+  const windowStart = new Date(Date.now() - PENDING_PAYMENT_TIMEOUT_MS);
+
+  const recent = await db.query.orders.findMany({
+    where: and(
+      eq(schema.orders.userId, userId),
+      eq(schema.orders.status, "pending_payment"),
+      gte(schema.orders.createdAt, windowStart),
+    ),
+    orderBy: [desc(schema.orders.createdAt)],
+    limit: 5,
+  });
+  if (recent.length === 0) return null;
+
+  const wantAddress = stableJson(candidate.shippingAddress);
+  const wantLines = lineKey(candidate.items);
+
+  for (const order of recent) {
+    if (order.paymentMethod !== candidate.paymentMethod) continue;
+    if ((order.couponId ?? null) !== candidate.couponId) continue;
+    if (Math.abs(Number(order.total) - candidate.total) > 0.009) continue;
+    if (stableJson(order.shippingAddress) !== wantAddress) continue;
+
+    const items = await db.query.orderItems.findMany({
+      where: eq(schema.orderItems.orderId, order.id),
+      columns: { variantId: true, quantity: true },
+    });
+    if (items.some((i) => i.variantId == null)) continue; // variant deleted since — don't reuse
+    if (lineKey(items as { variantId: string; quantity: number }[]) !== wantLines) continue;
+
+    return order;
+  }
+
+  return null;
+}
+
+/** Key-sorted JSON so two equal address snapshots compare equal regardless of key order. */
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_k, v) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : v,
+  );
+}
+
+/** Order-independent fingerprint of a set of order lines. */
+function lineKey(items: { variantId: string; quantity: number }[]): string {
+  return items
+    .map((i) => `${i.variantId}x${i.quantity}`)
+    .sort()
+    .join("|");
+}
 
 const readOrders = permissionProcedure("orders", "read");
 const writeOrders = permissionProcedure("orders", "write");
@@ -233,22 +315,38 @@ export const orderRouter = router({
         }
       }
 
-      const order = await createOrder(ctx.db, {
-        ...input,
-        items: serverItems,
-        subtotal: serverSubtotal,
-        discountAmount: serverDiscountAmount,
-        shippingCharge: serverShipping,
-        taxAmount: 0,
+      // A retry of a checkout that died after its order was committed must land on
+      // that same order, not a fresh one — see findReusablePendingOrder.
+      const reusable = await findReusablePendingOrder(ctx.db, ctx.session.user.id, {
+        paymentMethod: input.paymentMethod,
+        couponId: input.couponId ?? null,
+        shippingAddress: input.shippingAddress,
         total: serverTotal,
-        userId: ctx.session.user.id,
+        items: serverItems.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
       });
+
+      const order =
+        reusable ??
+        (await createOrder(ctx.db, {
+          ...input,
+          items: serverItems,
+          subtotal: serverSubtotal,
+          discountAmount: serverDiscountAmount,
+          shippingCharge: serverShipping,
+          taxAmount: 0,
+          total: serverTotal,
+          userId: ctx.session.user.id,
+        }));
 
       // Arm this order's expiry timer now, while we know its deadline. Done for
       // every order, not just gateway ones: the wallet path below can leave the
       // order pending_payment if the debit throws, and that case needs the same
       // 30-minute backstop. If the order does get paid, the timer fires, sees a
       // non-pending status and no-ops.
+      //
+      // The order is already committed at this point, so this call never throws
+      // and never hangs — Redis being down must not fail a checkout. The worker's
+      // 6-hourly sweep is the backstop for a timer that was never armed.
       await scheduleOrderPaymentExpiry(order.id);
 
       // Bank/card orders stay pending_payment — the client opens Razorpay next.

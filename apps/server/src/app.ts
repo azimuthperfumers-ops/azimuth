@@ -56,7 +56,23 @@ app.post("/webhooks/tracking", shiprocketWebhookHandler);
 
 app.use(
   "/trpc",
-  createExpressMiddleware({ router: appRouter, createContext }),
+  createExpressMiddleware({
+    router: appRouter,
+    createContext,
+    // The client only ever sees "Something went wrong on our end." for a 500
+    // (masked in @azimuth/api's errorFormatter), so without this an unexpected
+    // throw leaves no trace anywhere. Business errors (4xx) are expected and
+    // already legible to the caller — don't log those. Never log the input:
+    // it carries addresses and phone numbers.
+    onError({ error, path, type }) {
+      if (error.code !== "INTERNAL_SERVER_ERROR") return;
+      const cause = error.cause;
+      console.error(
+        `[trpc] ${type} ${path ?? "<no path>"} failed:`,
+        cause instanceof Error ? (cause.stack ?? cause.message) : (cause ?? error.stack ?? error.message),
+      );
+    },
+  }),
 );
 
 
