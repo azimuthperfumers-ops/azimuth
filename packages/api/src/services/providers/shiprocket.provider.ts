@@ -24,7 +24,12 @@ import { MIN_BILLABLE_GRAMS } from "../packaging";
 import { PERFUME_HSN } from "../invoice/seller.js";
 import { cacheGet, cacheSet, cacheDel } from "@azimuth/redis";
 
-const BASE = "https://apiv2.shiprocket.in/v1/external";
+// SHIPROCKET_BASE_URL points at the egress relay (deploy/shiprocket-relay) when
+// Shiprocket's load balancer blocks the server IP; the relay key authenticates us to it.
+const BASE = `${(env.SHIPROCKET_BASE_URL ?? "https://apiv2.shiprocket.in").replace(/\/+$/, "")}/v1/external`;
+const RELAY_HEADERS: Record<string, string> = env.SHIPROCKET_RELAY_KEY
+  ? { "x-relay-key": env.SHIPROCKET_RELAY_KEY }
+  : {};
 
 // ── Serviceability response ───────────────────────────────────────────────────
 
@@ -95,7 +100,7 @@ async function getToken(): Promise<string> {
 
   const res = await fetch(`${BASE}/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...RELAY_HEADERS },
     body: JSON.stringify({
       email: env.SHIPROCKET_EMAIL,
       password: env.SHIPROCKET_PASSWORD,
@@ -137,7 +142,7 @@ async function getToken(): Promise<string> {
 async function apiGet<T>(path: string): Promise<T> {
   const token = await getToken();
   const res = await fetch(`${BASE}${path}`, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...RELAY_HEADERS },
   });
   if (res.status === 401) {
     // Force token refresh on next call — drop both in-memory and Redis copies
@@ -157,7 +162,7 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const token = await getToken();
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...RELAY_HEADERS },
     body: JSON.stringify(body),
   });
   if (res.status === 401) {

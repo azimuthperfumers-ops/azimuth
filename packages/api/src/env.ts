@@ -24,6 +24,10 @@ const schema = z.object({
   SHIPROCKET_WAREHOUSE_STATE: z.string().optional(),
   SHIPROCKET_WAREHOUSE_ADDRESS: z.string().optional(),
   SHIPROCKET_LOCATION_ID: z.string().optional(),
+  // Optional egress relay (deploy/shiprocket-relay) for when Shiprocket blocks
+  // the server's IP. Unset = call apiv2.shiprocket.in directly.
+  SHIPROCKET_BASE_URL: z.string().url().optional(),
+  SHIPROCKET_RELAY_KEY: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);

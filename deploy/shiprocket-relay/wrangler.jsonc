@@ -1,0 +1,11 @@
+{
+  // Shiprocket egress relay — see index.js for why this exists.
+  //   cd deploy/shiprocket-relay
+  //   npx wrangler deploy
+  //   npx wrangler secret put RELAY_KEY
+  "name": "azimuth-shiprocket-relay",
+  "main": "index.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "preview_urls": false
+}
