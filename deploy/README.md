@@ -145,6 +145,20 @@ bash scripts/deploy.sh <sha-or-latest>   # manual rollout
 
 Every `git push` to `master` that touches backend paths auto-deploys.
 
+## Editing env vars
+
+From your laptop (uses your SSH key, binds to 127.0.0.1 only):
+
+```bash
+pnpm env:edit                    # VPS_HOST=<ip> pnpm env:edit for another box
+```
+
+Opens a local page to view / add / edit / delete keys in
+`/opt/azimuth/deploy/.env.production`. Each save backs up the previous file on
+the VPS (`.env.production.bak-*`, last 10 kept) and refuses if the file changed
+since you loaded it. **Apply** recreates `server` + `worker` on the running
+image tag so they pick up the new values.
+
 ## Disk hygiene (already automated)
 
 - Container logs capped at 10m × 3 (`daemon.json`).

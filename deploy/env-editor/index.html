@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VPS env editor</title>
+<style>
+  :root {
+    --bg: #fafaf9; --fg: #1c1917; --muted: #78716c; --line: #e7e5e4; --card: #fff;
+    --accent: #9f1239; --warn: #b45309; --ok: #15803d; --bad: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c0a09; --fg: #e7e5e4; --muted: #a8a29e; --line: #292524; --card: #1c1917;
+      --accent: #e11d48; --warn: #fbbf24; --ok: #4ade80; --bad: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, sans-serif; padding: 24px 16px; }
+  main { max-width: 1000px; margin: 0 auto; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+  h1 { font-size: 18px; margin: 0; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .muted { color: var(--muted); }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  input, button { font: inherit; color: inherit; }
+  input { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; min-width: 0; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input.bad { border-color: var(--bad); }
+  input.dup { border-color: var(--warn); }
+  button { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .45; cursor: default; }
+  #search { flex: 1; width: auto; min-width: 160px; }
+  .row { display: grid; grid-template-columns: minmax(140px, 280px) 1fr auto auto; gap: 6px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 1fr auto auto; }
+    .row .key { grid-column: 1 / -1; }
+  }
+  #dirty { color: var(--warn); font-size: 13px; }
+  #status { min-height: 20px; margin: 12px 0; font-size: 13px; white-space: pre-wrap; }
+  #status.ok { color: var(--ok); }
+  #status.err { color: var(--bad); }
+  pre { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; font-size: 12px; }
+  .empty { padding: 24px 0; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>VPS env editor</h1>
+    <span id="target" class="mono muted"></span>
+  </header>
+
+  <div class="bar">
+    <input id="search" type="search" placeholder="Filter keys…" autocomplete="off">
+    <button id="reveal">Show values</button>
+    <button id="add">+ Add variable</button>
+    <button id="reload">Reload</button>
+  </div>
+
+  <div id="list"></div>
+
+  <div class="bar" style="margin-top:16px">
+    <button id="save" class="primary" disabled>Save to VPS</button>
+    <button id="apply" title="Recreate server + worker so they read the new values">Apply (restart server + worker)</button>
+    <span id="dirty"></span>
+  </div>
+  <div id="status"></div>
+  <pre id="output" hidden></pre>
+</main>
+
+<script>
+  const KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+  const token = new URLSearchParams(location.search).get("t");
+  const $ = (id) => document.getElementById(id);
+
+  let state = { sha: null, lines: [] };
+  let original = "[]";
+  let revealAll = false;
+
+  // ── api ──
+  async function api(path, body) {
+    const res = await fetch(path, {
+      method: body ? "POST" : "GET",
+      headers: { "content-type": "application/json", "x-token": token },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({ error: res.statusText }));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    return data;
+  }
+
+  function setStatus(msg, kind = "") {
+    $("status").textContent = msg;
+    $("status").className = kind;
+  }
+
+  const isDirty = () => JSON.stringify(state.lines) !== original;
+  const vars = () => state.lines.filter((l) => "key" in l);
+  const hasInvalid = () => vars().some((l) => !KEY_RE.test(l.key));
+
+  function take(data) {
+    state = { sha: data.sha, lines: data.lines };
+    original = JSON.stringify(data.lines);
+    $("target").textContent = `${data.host}:${data.file}`;
+  }
+
+  // ── actions ──
+  async function load() {
+    if (isDirty() && !confirm("Discard unsaved changes?")) return;
+    setStatus("Loading from VPS…");
+    try {
+      take(await api("/api/env"));
+      render();
+      setStatus(`Loaded ${vars().length} variables.`, "ok");
+    } catch (e) {
+      setStatus(e.message, "err");
+    }
+  }
+
+  async function save() {
+    $("save").disabled = true;
+    setStatus("Saving…");
+    try {
+      take(await api("/api/env", { sha: state.sha, lines: state.lines }));
+      render();
+      setStatus("Saved (previous version backed up on the VPS). Running containers still use the old values until you Apply.", "ok");
+    } catch (e) {
+      setStatus(e.message, "err");
+      refresh();
+    }
+  }
+
+  async function apply() {
+    if (isDirty()) return setStatus("Save your changes first.", "err");
+    if (!confirm("Restart server + worker on the VPS now? The API blips for a few seconds.")) return;
+    $("apply").disabled = true;
+    setStatus("Recreating server + worker…");
+    $("output").hidden = true;
+    try {
+      const { output } = await api("/api/apply", {});
+      $("output").textContent = output;
+      $("output").hidden = false;
+      setStatus("Applied.", "ok");
+    } catch (e) {
+      setStatus(e.message, "err");
+    } finally {
+      $("apply").disabled = false;
+    }
+  }
+
+  function addVar() {
+    state.lines.push({ key: "", value: "" });
+    $("search").value = "";
+    render();
+    const keys = document.querySelectorAll(".row .key");
+    keys[keys.length - 1]?.focus();
+  }
+
+  // ── render ──
+  function el(tag, props = {}) {
+    return Object.assign(document.createElement(tag), props);
+  }
+
+  function render() {
+    const q = $("search").value.trim().toLowerCase();
+    const counts = {};
+    for (const l of vars()) counts[l.key] = (counts[l.key] || 0) + 1;
+
+    const list = $("list");
+    list.replaceChildren();
+
+    state.lines.forEach((line, i) => {
+      if (!("key" in line)) return;
+      if (q && !line.key.toLowerCase().includes(q)) return;
+
+      const key = el("input", { className: "key mono", value: line.key, placeholder: "KEY_NAME", spellcheck: false, autocomplete: "off" });
+      const markKey = () => {
+        key.classList.toggle("bad", !KEY_RE.test(key.value));
+        key.classList.toggle("dup", counts[key.value] > 1);
+        key.title = counts[key.value] > 1 ? "Duplicate key: the last one in the file wins" : "";
+      };
+      markKey();
+      key.addEventListener("input", () => { line.key = key.value; markKey(); refresh(); });
+      key.addEventListener("change", render);
+
+      const value = el("input", { className: "mono", value: line.value, type: revealAll ? "text" : "password", spellcheck: false, autocomplete: "new-password", placeholder: "value" });
+      value.addEventListener("input", () => { line.value = value.value; refresh(); });
+
+      const eye = el("button", { textContent: revealAll ? "hide" : "show" });
+      eye.addEventListener("click", () => {
+        const hidden = value.type === "password";
+        value.type = hidden ? "text" : "password";
+        eye.textContent = hidden ? "hide" : "show";
+      });
+
+      const del = el("button", { className: "danger", textContent: "delete", title: `Delete ${line.key}` });
+      del.addEventListener("click", () => { state.lines.splice(i, 1); render(); });
+
+      const row = el("div", { className: "row" });
+      row.append(key, value, eye, del);
+      list.append(row);
+    });
+
+    if (!list.children.length) {
+      list.append(el("div", { className: "empty muted", textContent: q ? "No keys match." : "No variables." }));
+    }
+    refresh();
+  }
+
+  function refresh() {
+    const dirty = isDirty();
+    const invalid = hasInvalid();
+    $("save").disabled = !dirty || invalid;
+    $("dirty").textContent = invalid ? "Fix invalid key names (letters, digits, _)." : dirty ? "Unsaved changes" : "";
+  }
+
+  // ── wire up ──
+  $("search").addEventListener("input", render);
+  $("reveal").addEventListener("click", () => {
+    revealAll = !revealAll;
+    $("reveal").textContent = revealAll ? "Hide values" : "Show values";
+    render();
+  });
+  $("add").addEventListener("click", addVar);
+  $("reload").addEventListener("click", load);
+  $("save").addEventListener("click", save);
+  $("apply").addEventListener("click", apply);
+  window.addEventListener("beforeunload", (e) => { if (isDirty()) e.preventDefault(); });
+
+  load();
+</script>
+</body>
+</html>

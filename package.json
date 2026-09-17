@@ -16,7 +16,8 @@
     "db:seed": "pnpm --filter @azimuth/db seed",
     "db:seed:perfumes": "pnpm --filter @azimuth/db seed:perfumes",
     "db:seed:images": "pnpm --filter @azimuth/db seed:images",
-    "db:seed:admin": "pnpm --filter @azimuth/server seed:admin"
+    "db:seed:admin": "pnpm --filter @azimuth/server seed:admin",
+    "env:edit": "node deploy/env-editor/server.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
